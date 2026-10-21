@@ -1,0 +1,490 @@
+"""P2-A/B: Native-backed TorchRL EnvBase over the pinned PA3 Rust engine.
+
+Ownership (see PA4-P2-DESIGN-v1.0 §1.1):
+  * This env owns native handles, reset/step, TensorDict specs, terminal/winner
+    translation and per-episode accounting.
+  * It never generates legality. Every candidate comes from the Rust engine.
+  * It never rewrites game state. Rust `step_batch` is the only transition.
+
+One TorchRL `step` == one native battle advance attempt, not a branch choice and
+not a match.
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+from dataclasses import dataclass, field
+
+import torch
+from tensordict import TensorDict
+from torchrl.data import Binary, Categorical, Composite, Unbounded
+from torchrl.envs import EnvBase
+
+# --- inherited contract constants (verified against the built module) -------
+OBSERVATION_TOKENS = 96
+CATEGORY_COUNT = 32
+FLOAT_COUNT = 50
+FLAG_COUNT = 40
+MAX_BRANCHES = 4
+ACTION_FIELDS = 6
+NUM_SEATS = 2
+
+KIND_PREVIEW = 0
+KIND_NORMAL = 1
+KIND_REPLACEMENT = 2
+KIND_WAIT = 3
+KIND_FINISHED = 4
+POLICY_KINDS = frozenset({KIND_PREVIEW, KIND_NORMAL, KIND_REPLACEMENT})
+KIND_LABELS = {0: "Preview", 1: "Normal", 2: "Replacement", 3: "Wait", 4: "Finished"}
+
+DEFAULT_DATA_DIR = "/home/pa4/.pa3_build/engine/data"
+DEFAULT_PY_PKG = "/home/pa4/.pa3_build/engine/python"
+DEFAULT_PA3_REF = "/home/pa4/projects/_pa3_ref"
+
+
+def _ensure_paths() -> None:
+    for p in (os.environ.get("PA4_ENGINE_SO_DIR", DEFAULT_PY_PKG), DEFAULT_PA3_REF):
+        if p and p not in sys.path:
+            sys.path.insert(0, p)
+
+
+def _load_engine():
+    _ensure_paths()
+    import pa3_engine  # noqa: PLC0415
+
+    return pa3_engine
+
+
+@dataclass
+class SlotState:
+    """Native handle + per-row accounting for one battle slot."""
+
+    slot: int = 0
+    generation: int = 0
+    episode_id: int = 0
+    step_index: int = 0
+    request_seq: int = 0
+    request_ids: tuple[int, int] = (1, 1)
+    match_committed: bool = False
+    last_kinds: tuple[int, int] = (KIND_PREVIEW, KIND_PREVIEW)
+    completed_matches: int = 0
+
+
+class PA4EnvBase(EnvBase):
+    """TorchRL environment backed by real PA3 Rust battles."""
+
+    def __init__(self, batch_size: int = 2, workers: int = 2, device: str = "cpu",
+                 data_dir: str = DEFAULT_DATA_DIR,
+                 teams_json: str | None = None,
+                 teams: list[tuple[int, int]] | None = None,
+                 seed: int = 0, auto_reset: bool = False):
+        super().__init__(device=torch.device(device), batch_size=torch.Size([batch_size]))
+        self._mod = _load_engine()
+        self._data_dir = data_dir
+        self._teams_json = teams_json or os.path.join(data_dir, "a10-training-teams.json")
+        self._engine = self._mod.NativeEngine(self._data_dir, self._teams_json, workers)
+        self._workers = workers
+        self._auto_reset = auto_reset
+        self._teams = list(teams) if teams else [(0, 1)] * batch_size
+        self._seed = int(seed)
+        self._slots: list[SlotState] = [SlotState(slot=i) for i in range(batch_size)]
+        self._batch = int(batch_size)
+        self._make_specs()
+
+    # -- paths used by the driver/tests ---------------------------------
+    @property
+    def engine(self):
+        return self._engine
+
+    @property
+    def module(self):
+        return self._mod
+
+    def verify_contract(self) -> None:
+        expected = {
+            "SCHEMA_VERSION": 2,
+            "OBSERVATION_TOKENS": 96,
+            "CATEGORY_COUNT": 32,
+            "FLOAT_COUNT": 50,
+            "FLAG_COUNT": 40,
+            "OBSERVATION_FIXED_BYTES": 41986,
+            "CONTRACT_HASH": "dd723dc687a60b0568302fa0b09cfb110cbe67eac2c7022f2b4ffe4dff373e35",
+        }
+        for name, want in expected.items():
+            got = getattr(self._mod, name)
+            if got != want:
+                raise RuntimeError(f"PA3 contract mismatch {name}: {got!r} != {want!r}")
+
+    # -- specs ----------------------------------------------------------
+    def _player_obs_keys(self, n_unbatched) -> dict:
+        """Per-seat observation leaves. n_unbatched=[2] because both seats."""
+        return {
+            "token_mask": Unbounded(shape=(*n_unbatched, OBSERVATION_TOKENS), dtype=torch.bool),
+            "categories": Unbounded(shape=(*n_unbatched, OBSERVATION_TOKENS, CATEGORY_COUNT),
+                                    dtype=torch.long),
+            "category_known": Unbounded(shape=(*n_unbatched, OBSERVATION_TOKENS, CATEGORY_COUNT),
+                                        dtype=torch.bool),
+            "floats": Unbounded(shape=(*n_unbatched, OBSERVATION_TOKENS, FLOAT_COUNT),
+                                dtype=torch.float32),
+            "float_known": Unbounded(shape=(*n_unbatched, OBSERVATION_TOKENS, FLOAT_COUNT),
+                                     dtype=torch.bool),
+            "flags": Unbounded(shape=(*n_unbatched, OBSERVATION_TOKENS, FLAG_COUNT),
+                               dtype=torch.bool),
+            "flag_known": Unbounded(shape=(*n_unbatched, OBSERVATION_TOKENS, FLAG_COUNT),
+                                    dtype=torch.bool),
+            "role_ids": Unbounded(shape=(*n_unbatched, OBSERVATION_TOKENS), dtype=torch.long),
+            "side_ids": Unbounded(shape=(*n_unbatched, OBSERVATION_TOKENS), dtype=torch.long),
+            "observation_valid": Unbounded(shape=n_unbatched, dtype=torch.bool),
+            "request_kind": Unbounded(shape=n_unbatched, dtype=torch.long),
+            "decision_required": Unbounded(shape=n_unbatched, dtype=torch.bool),
+            "request_id": Unbounded(shape=n_unbatched, dtype=torch.long),
+            "branch_count": Unbounded(shape=n_unbatched, dtype=torch.long),
+        }
+
+    def _make_specs(self) -> None:
+        n = [self._batch]
+        self.observation_spec = Composite(
+            players=Composite(**self._player_obs_keys([self._batch, NUM_SEATS]),
+                              shape=[*n, NUM_SEATS]),
+            native_slot=Unbounded(shape=n, dtype=torch.long),
+            native_generation=Unbounded(shape=n, dtype=torch.long),
+            episode_id=Unbounded(shape=n, dtype=torch.long),
+            step_index=Unbounded(shape=n, dtype=torch.long),
+            request_revised=Unbounded(shape=n, dtype=torch.bool),
+            match_completed=Unbounded(shape=n, dtype=torch.bool),
+            winner=Unbounded(shape=n, dtype=torch.long),
+            shape=n,
+        )
+        self.action_spec = Composite(
+            action=Unbounded(shape=(*n, NUM_SEATS, MAX_BRANCHES, ACTION_FIELDS), dtype=torch.long),
+            action_branch_count=Unbounded(shape=(*n, NUM_SEATS), dtype=torch.long),
+            action_present=Unbounded(shape=(*n, NUM_SEATS), dtype=torch.bool),
+            action_request_id=Unbounded(shape=(*n, NUM_SEATS), dtype=torch.long),
+            shape=n,
+        )
+        self.reward_spec = Unbounded(shape=(*n, NUM_SEATS, 1), dtype=torch.float32)
+        self.done_spec = Composite(
+            done=Unbounded(shape=(*n, 1), dtype=torch.bool),
+            terminated=Unbounded(shape=(*n, 1), dtype=torch.bool),
+            truncated=Unbounded(shape=(*n, 1), dtype=torch.bool),
+            shape=n,
+        )
+
+    # -- native helpers --------------------------------------------------
+    def _kinds(self, st: SlotState) -> tuple[int, int]:
+        return (
+            int(self._engine.request_kind(st.slot, st.generation, 0)),
+            int(self._engine.request_kind(st.slot, st.generation, 1)),
+        )
+
+    def _branch_counts(self, st: SlotState) -> tuple[int, int]:
+        return tuple(
+            len(bytes(self._engine.request_branches(st.slot, st.generation, side)))
+            for side in range(NUM_SEATS)
+        )
+
+    def _candidates(self, st: SlotState, side: int, prefix) -> list[tuple]:
+        out = self._engine.candidates_batch([(st.slot, st.generation, side, list(prefix))])
+        return [tuple(int(v) for v in row) for row in out[0]]
+
+    # -- TorchRL API -----------------------------------------------------
+    def _set_seed(self, seed: int | None) -> None:
+        self._seed = int(seed) if seed is not None else 0
+
+    def seed_for(self, row: int) -> tuple[int, int, int, int]:
+        s = self._seed + 1000 * row + 7919 * self._slots[row].episode_id
+        return (s & 0xFFFF, (s >> 4) & 0xFFFF, (s >> 8) & 0xFFFF, (s >> 12) & 0xFFFF)
+
+    def _do_reset(self, rows: list[int], tensordict: TensorDict | None) -> TensorDict:
+        fresh = [r for r in rows]
+        if not fresh:
+            return self._observation_td()
+        n = len(fresh)
+        team_a = [self._teams[r][0] for r in fresh]
+        team_b = [self._teams[r][1] for r in fresh]
+        seeds = [self.seed_for(r) for r in fresh]
+        role_map = [(0, 1)] * n
+        handles = self._engine.reset_batch(team_a, team_b, seeds, role_map)
+        for r, (slot, gen) in zip(fresh, handles):
+            prev = self._slots[r]
+            self._slots[r] = SlotState(
+                slot=int(slot), generation=int(gen),
+                episode_id=prev.episode_id + 1, step_index=0, request_seq=0,
+                request_ids=(1, 1), match_committed=False,
+                completed_matches=prev.completed_matches,
+            )
+        return self._observation_td()
+
+    def _reset(self, tensordict: TensorDict | None = None, **kwargs) -> TensorDict:
+        rows = list(range(self._batch))
+        mask = None
+        if tensordict is not None and "_reset" in tensordict.keys():
+            mask = tensordict["_reset"].reshape(self._batch).to(torch.bool)
+        if mask is not None:
+            rows = [i for i in range(self._batch) if bool(mask[i])]
+        return self._do_reset(rows, tensordict)
+
+    # -- observation assembly -------------------------------------------
+    def _empty_players(self) -> dict:
+        n = self._batch
+        return {
+            "token_mask": torch.zeros((n, NUM_SEATS, OBSERVATION_TOKENS), dtype=torch.bool),
+            "categories": torch.zeros((n, NUM_SEATS, OBSERVATION_TOKENS, CATEGORY_COUNT), dtype=torch.long),
+            "category_known": torch.zeros((n, NUM_SEATS, OBSERVATION_TOKENS, CATEGORY_COUNT), dtype=torch.bool),
+            "floats": torch.zeros((n, NUM_SEATS, OBSERVATION_TOKENS, FLOAT_COUNT), dtype=torch.float32),
+            "float_known": torch.zeros((n, NUM_SEATS, OBSERVATION_TOKENS, FLOAT_COUNT), dtype=torch.bool),
+            "flags": torch.zeros((n, NUM_SEATS, OBSERVATION_TOKENS, FLAG_COUNT), dtype=torch.bool),
+            "flag_known": torch.zeros((n, NUM_SEATS, OBSERVATION_TOKENS, FLAG_COUNT), dtype=torch.bool),
+            "role_ids": torch.zeros((n, NUM_SEATS, OBSERVATION_TOKENS), dtype=torch.long),
+            "side_ids": torch.zeros((n, NUM_SEATS, OBSERVATION_TOKENS), dtype=torch.long),
+            "observation_valid": torch.zeros((n, NUM_SEATS), dtype=torch.bool),
+            "request_kind": torch.zeros((n, NUM_SEATS), dtype=torch.long),
+            "decision_required": torch.zeros((n, NUM_SEATS), dtype=torch.bool),
+            "request_id": torch.zeros((n, NUM_SEATS), dtype=torch.long),
+            "branch_count": torch.zeros((n, NUM_SEATS), dtype=torch.long),
+        }
+
+    def _observation_td(self) -> TensorDict:
+        players = self._empty_players()
+        slots = torch.zeros(self._batch, dtype=torch.long)
+        gens = torch.zeros(self._batch, dtype=torch.long)
+        eps = torch.zeros(self._batch, dtype=torch.long)
+        steps = torch.zeros(self._batch, dtype=torch.long)
+
+        for r, st in enumerate(self._slots):
+            slots[r] = st.slot
+            gens[r] = st.generation
+            eps[r] = st.episode_id
+            steps[r] = st.step_index
+            kinds = self._kinds(st)
+            counts = self._branch_counts(st)
+            st.last_kinds = kinds
+            for side in range(NUM_SEATS):
+                kind = kinds[side]
+                players["request_kind"][r, side] = kind
+                players["decision_required"][r, side] = kind in POLICY_KINDS
+                players["branch_count"][r, side] = counts[side] if kind in POLICY_KINDS else 0
+                players["request_id"][r, side] = st.request_ids[side]
+                if kind in POLICY_KINDS:
+                    obs = self._observe_one(st, side)
+                    for key in ("token_mask", "categories", "category_known", "floats",
+                                "float_known", "flags", "flag_known", "role_ids", "side_ids"):
+                        players[key][r, side] = obs[key]
+                    players["observation_valid"][r, side] = True
+                else:
+                    players["observation_valid"][r, side] = False
+
+        return TensorDict(
+            {
+                "players": TensorDict(players, batch_size=[self._batch, NUM_SEATS]),
+                "native_slot": slots,
+                "native_generation": gens,
+                "episode_id": eps,
+                "step_index": steps,
+                "request_revised": torch.zeros(self._batch, dtype=torch.bool),
+                "match_completed": torch.zeros(self._batch, dtype=torch.bool),
+                "winner": torch.full((self._batch,), -1, dtype=torch.long),
+            },
+            batch_size=[self._batch],
+        )
+
+    def _observe_one(self, st: SlotState, side: int) -> dict:
+        """Decode one seat's own view via PA3's canonical parser."""
+        from agent.types.observation import ObservationBatch  # noqa: PLC0415
+
+        fixed, ragged = self._engine.observe_fixed_batch([(st.slot, st.generation)], [side])
+        payload = self._mod.parse_batch(fixed, ragged, 1)
+        batch = ObservationBatch.from_native_payload(payload, dtype=torch.float32)
+        return {
+            "token_mask": batch.token_mask[0].cpu(),
+            "categories": batch.categories[0].cpu(),
+            "category_known": batch.category_known[0].cpu(),
+            "floats": batch.floats[0].cpu(),
+            "float_known": batch.float_known[0].cpu(),
+            "flags": batch.flags[0].cpu(),
+            "flag_known": batch.flag_known[0].cpu(),
+            "role_ids": batch.role_ids[0].cpu(),
+            "side_ids": batch.side_ids[0].cpu(),
+        }
+
+    def player_view(self, seat: int, row: int = 0) -> dict:
+        """Actor-visible view: ONLY that seat's own observation.
+
+        Raises rather than returning opponent or engine-private data.
+        """
+        if seat not in (0, 1):
+            raise ValueError(f"seat must be 0 or 1, got {seat!r}")
+        td = self._observation_td()
+        return td["players"][row, seat].clone()
+
+    # -- legal random action (engine-sourced) ----------------------------
+    def _legal_prefix(self, st: SlotState, side: int, rng: torch.Generator) -> list[tuple]:
+        prefix: list[tuple] = []
+        n_branches = len(bytes(self._engine.request_branches(st.slot, st.generation, side)))
+        for _ in range(n_branches):
+            cands = self._candidates(st, side, prefix)
+            if not cands:
+                raise RuntimeError("engine returned no legal candidate for a requesting seat")
+            idx = int(torch.randint(0, len(cands), (1,), generator=rng).item())
+            prefix.append(cands[idx])
+        return prefix
+
+    def rand_action(self, tensordict: TensorDict | None = None) -> TensorDict:
+        """Legal random action packet, sourced only from native candidates.
+
+        TorchRL calls this with the current tensordict during spec checks and
+        rollout, so the packet must be merged into the input rather than
+        replacing it.
+        """
+        rng = torch.Generator().manual_seed(int(self._seed) + 12345)
+        packet = self.legal_action_packet(rng)
+        if tensordict is None:
+            return packet
+        out = tensordict.clone(recurse=False) if isinstance(tensordict, TensorDict) else TensorDict({}, [self._batch])
+        for key in ("action", "action_branch_count", "action_present", "action_request_id"):
+            out[key] = packet[key]
+        return out
+
+    def legal_action_packet(self, rng: torch.Generator | None = None) -> TensorDict:
+        n = self._batch
+        action = torch.zeros((n, NUM_SEATS, MAX_BRANCHES, ACTION_FIELDS), dtype=torch.long)
+        counts = torch.zeros((n, NUM_SEATS), dtype=torch.long)
+        present = torch.zeros((n, NUM_SEATS), dtype=torch.bool)
+        req_ids = torch.zeros((n, NUM_SEATS), dtype=torch.long)
+        rng = rng or torch.Generator().manual_seed(int(self._seed))
+
+        for r, st in enumerate(self._slots):
+            kinds = self._kinds(st)
+            for side in range(NUM_SEATS):
+                req_ids[r, side] = st.request_ids[side]
+                if kinds[side] not in POLICY_KINDS:
+                    continue
+                prefix = self._legal_prefix(st, side, rng)
+                k = len(prefix)
+                action[r, side, :k] = torch.tensor(prefix, dtype=torch.long)
+                counts[r, side] = k
+                present[r, side] = True
+        return TensorDict(
+            {
+                "action": action,
+                "action_branch_count": counts,
+                "action_present": present,
+                "action_request_id": req_ids,
+            },
+            batch_size=[n],
+        )
+
+    # -- stepping --------------------------------------------------------
+    def _step(self, tensordict: TensorDict) -> TensorDict:
+        n = self._batch
+        action = tensordict["action"].to(torch.long)
+        counts = tensordict["action_branch_count"].to(torch.long)
+        present = tensordict["action_present"].to(torch.bool)
+        req_ids = tensordict["action_request_id"].to(torch.long)
+
+        specs = []
+        rows_active = []
+        finished_rows = []
+        for r, st in enumerate(self._slots):
+            kinds = self._kinds(st)
+            if st.match_committed and all(k == KIND_FINISHED for k in kinds):
+                # Episode already concluded; nothing to submit for this row.
+                finished_rows.append(r)
+                continue
+            choices = []
+            for side in range(NUM_SEATS):
+                kind = kinds[side]
+                needs = kind in POLICY_KINDS
+                if needs != bool(present[r, side]):
+                    raise RuntimeError(
+                        f"action_present mismatch row={r} seat={side} "
+                        f"kind={KIND_LABELS[kind]} present={bool(present[r, side])}"
+                    )
+                if not needs:
+                    continue
+                if int(req_ids[r, side]) != st.request_ids[side]:
+                    raise RuntimeError(
+                        f"stale action_request_id row={r} seat={side}: "
+                        f"{int(req_ids[r, side])} != {st.request_ids[side]}"
+                    )
+                k = int(counts[r, side])
+                if k < 1 or k > MAX_BRANCHES:
+                    raise RuntimeError(f"invalid action_branch_count {k} row={r} seat={side}")
+                rows = [tuple(int(v) for v in action[r, side, i]) for i in range(k)]
+                # candidate membership is checked by Rust; we forward verbatim
+                choices.append((side, rows))
+            if not choices:
+                raise RuntimeError(
+                    f"protocol ambiguity row={r}: neither seat requests and not terminal"
+                )
+            specs.append((st.slot, st.generation, choices))
+            rows_active.append(r)
+
+        results = self._engine.step_batch(specs)
+
+        reward = torch.zeros((n, NUM_SEATS, 1), dtype=torch.float32)
+        terminated = torch.zeros((n, 1), dtype=torch.bool)
+        truncated = torch.zeros((n, 1), dtype=torch.bool)
+        revised = torch.zeros(n, dtype=torch.bool)
+        completed = torch.zeros(n, dtype=torch.bool)
+        winner = torch.full((n,), -1, dtype=torch.long)
+
+        for r, res in zip(rows_active, results):
+            accepted, term, trunc, win, err, kind_a, kind_b = res
+            st = self._slots[r]
+            if err:
+                raise RuntimeError(f"native operational error row={r}: {err}")
+            if not accepted:
+                revised[r] = True
+                st.request_seq += 1
+                st.request_ids = (st.request_ids[0] + 1, st.request_ids[1] + 1)
+                continue
+
+            st.step_index += 1
+            st.request_seq += 1
+            st.request_ids = (st.request_ids[0] + 1, st.request_ids[1] + 1)
+            terminated[r, 0] = bool(term)
+            truncated[r, 0] = bool(trunc)
+            if win is not None:
+                winner[r] = int(win)
+            if (term or trunc) and not st.match_committed:
+                st.match_committed = True
+                st.completed_matches += 1
+                completed[r] = True
+                if term and win is not None:
+                    w = int(win)
+                    if w == 0:
+                        reward[r, 0, 0] = 1.0
+                        reward[r, 1, 0] = -1.0
+                    elif w == 1:
+                        reward[r, 0, 0] = -1.0
+                        reward[r, 1, 0] = 1.0
+                    else:
+                        reward[r, :, 0] = 0.0
+
+        obs = self._observation_td()
+        obs["request_revised"] = revised
+        obs["match_completed"] = completed
+        obs["winner"] = winner
+        obs["reward"] = reward
+        obs["terminated"] = terminated
+        obs["truncated"] = truncated
+        obs["done"] = terminated | truncated
+
+        # Rows whose episode concluded but which are still in the batch need to
+        # leave finished state; auto-reset only those rows so fixed shapes hold
+        # and the next rollout continues from a fresh native episode.
+        if self._auto_reset:
+            done_rows = [r for r in range(n) if bool(obs["done"][r, 0])]
+            if done_rows:
+                reset_td = self._do_reset(done_rows, None)
+                for key in ("players", "native_slot", "native_generation",
+                            "episode_id", "step_index"):
+                    obs[key] = reset_td[key]
+        return obs
+
+    # -- accounting ------------------------------------------------------
+    @property
+    def completed_matches(self) -> int:
+        return sum(s.completed_matches for s in self._slots)
