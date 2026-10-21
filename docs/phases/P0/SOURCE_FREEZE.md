@@ -30,8 +30,24 @@ No PA3 code is migrated, no checkpoints downloaded, no fixtures generated.
   independently verified by PA4 and are **not** substituted for the pinned SHA.
 - No active PA3 production machine was accessed. The user's live training sources and
   checkpoints were not inspected in P0.
-- **PA3 was not modified.** The clone was not edited; `git status --porcelain` in the
-  reference clone was empty (clean) after inspection. PA4 wrote no artifacts into PA3.
+- **PA3 was not modified** — measured, not assumed:
+
+  ```
+  $ git -C /root/projects/_pa3_ref/pa3 rev-parse HEAD
+  65bc980abd8e0bbec14158b9ddc2884bb1726a4e
+  $ git status --porcelain | wc -l
+  0                      # working tree clean
+  $ git reflog | wc -l
+  1                      # single clone entry, no local commits
+  ```
+
+- **PA4 isolation** — measured:
+  - PA4 root `/root/projects/PokeAgent4.0` and PA3 reference
+    `/root/projects/_pa3_ref/pa3` are distinct real paths.
+  - `sys.path` inside the PA4 venv contains **no** PA3 entry (`NO_PA3_ON_SYS_PATH`).
+  - `import pa3_engine` fails with `ImportError` (not importable from PA4).
+  - No PA4 source/config file references a PA3 local path; only documentation mentions the
+    upstream URL.
 
 ---
 
@@ -80,14 +96,65 @@ Engine format constant: `FORMAT = "gen9championsvgc2026regmc"`.
 
 ### 3.2 Observation — 96-token contract
 
-- `knowledge.rs`: `OBSERVATION_TOKENS = 96`.
-- `observation.rs`: `SCHEMA_VERSION = 2`, `CATEGORY_COUNT = 32`, `FLOAT_COUNT = 50`,
-  `FLAG_COUNT = 40`.
-- `python.rs` defines `OBSERVATION_FIXED_BYTES` from those constants and packs
-  little-endian (`put_u16`/`put_f32`), one packed blob per **view** (per side), with
-  explicit `category_known` / `float_known` / `flag_known` masks. Hidden opponent
-  information is therefore represented as *unknown* rather than fabricated.
-- Layout is mirrored by `engine/python/pa3_observation.py`.
+Constants, with exact file:line:
+
+| Constant | Value | Location |
+|---|---|---|
+| `OBSERVATION_TOKENS` | `96` | `engine/src/knowledge.rs:7` |
+| `SCHEMA_VERSION` | `2` | `engine/src/observation.rs:34` |
+| `CONTRACT_HASH` | `dd723dc687a60b0568302fa0b09cfb110cbe67eac2c7022f2b4ffe4dff373e35` | `engine/src/observation.rs:35` |
+| `CATEGORY_COUNT` | `32` | `engine/src/observation.rs:37` |
+| `FLOAT_COUNT` | `50` | `engine/src/observation.rs:38` |
+| `FLAG_COUNT` | `40` | `engine/src/observation.rs:39` |
+
+**Critical reconciliation — the reviewer's Finding 8 resolved.** `CATEGORY_COUNT`,
+`FLOAT_COUNT` and `FLAG_COUNT` are **per-token** field counts, *not* components summed to
+reach 96. `TokenFeatures` (`engine/src/observation.rs:152-159`) is:
+
+```rust
+pub struct TokenFeatures {
+    pub categories:     [u16; CATEGORY_COUNT],   // 32
+    pub category_known: [bool; CATEGORY_COUNT],  // 32
+    pub floats:         [f32; FLOAT_COUNT],      // 50
+    pub float_known:    [bool; FLOAT_COUNT],     // 50
+    pub flags:          [bool; FLAG_COUNT],      // 40
+    pub flag_known:     [bool; FLAG_COUNT],      // 40
+}
+```
+
+So there are **96 tokens**, each carrying 32+50+40 fields (times two, counting the `*_known`
+mask columns). Per-token token-payload bytes
+(`32*2 + 32 + 50*4 + 50 + 40 + 40 = 426`) plus the `5*2 = 10` byte role/side block gives
+**436 bytes/token**. The full fixed blob, following `engine/src/python.rs:27-36` verbatim:
+
+```
+OBSERVATION_FIXED_BYTES = 2              // schema version
+                        + 32             // contract hash
+                        + 96 * 1         // token presence/role byte
+                        + 96 * 32 * 2    // categories (u16)
+                        + 96 * 32        // category_known
+                        + 96 * 50 * 4    // floats (f32)
+                        + 96 * 50        // float_known
+                        + 96 * 40        // flags
+                        + 96 * 40        // flag_known
+                        + 96 * 5 * 2     // role/side
+                        = 41,986 bytes
+```
+
+(Recomputed independently: token payload `96 * 426 = 40,896`; plus `2 + 32 + 96 + 96*10 =
+1,090` → `41,986`. This matches the constant's literal expression.)
+
+**A "token" counts 96 entity slots; category/float/flag counts are per slot.** P1 must not
+treat 96 as `32 + 50 + 40 + …`.
+
+Packing (from `engine/src/python.rs`):
+
+- Little-endian (`put_u16`, `put_f32`); one packed blob **per view** (per side).
+- Explicit `category_known` / `float_known` / `flag_known` masks, so hidden opponent
+  information is represented as *unknown* rather than fabricated or zero-filled silently.
+- Layout mirrored by `engine/python/pa3_observation.py`.
+
+Action-side constant: `CANDIDATE_PADDING = 64` (`engine/src/actions.rs:10`).
 
 ### 3.3 Action — prefix-dependent candidates
 

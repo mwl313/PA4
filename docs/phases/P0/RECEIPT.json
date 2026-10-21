@@ -1,23 +1,32 @@
 {
   "phase": "P0",
   "verdict": "PASS",
-  "pa4_commit": "119c5a7771230bd38e446dde4e4562b2f28b28fa",
+  "receipt_revision": "v2 (post-review corrections)",
+  "pa4_commit_tested": "PENDING_METADATA_COMMIT",
   "pa3_reference_commit": "65bc980abd8e0bbec14158b9ddc2884bb1726a4e",
   "host": "wsl2_ubuntu_24_04_win11",
-  "gpu": "rtx_4060_ti_8gb",
+  "host_evidence": "uname -a and /proc/version both report 'microsoft-standard-WSL2+'; os-release VERSION_ID=24.04",
+  "gpu": "nvidia_geforce_rtx_4060_ti",
+  "gpu_vram_mib": 8188,
   "python": "3.12.3",
   "torch": "2.9.1+cu128",
   "torchrl": "0.14.1",
   "tensordict": "0.14.3",
-  "cuda_runtime": "12.8",
+  "numpy": "2.5.4",
+  "cuda_wheel_build": "12.8",
   "nvidia_driver": "610.88",
   "uv": "0.13.4",
+  "dependency_lock_file": "uv.lock",
+  "dependency_lock_packages": 37,
   "dependency_lock_sha256": "8f414f526aad676f6466099da9bf96240f739abae9b9376a5c32fe845340d96e",
+  "lock_check_command": "uv lock --check",
+  "lock_check_exit_code": 0,
   "opencode_version": "2.1.2",
   "deepseek_model_route": "deepseek/deepseek-flash",
   "auditor_model_route": "deepseek/deepseek-flash",
   "auditor_read_only_verified": true,
-  "auditor_read_only_method": "capability_absence: live fresh-context registry contained only read/glob/grep; no edit/shell/task tool existed; no proof file created",
+  "auditor_read_only_method": "capability_absence_in_live_session",
+  "auditor_could_reach_pa4_wsl_repo": false,
   "gates": {
     "G0_A": "PASS",
     "G0_B": "PASS",
@@ -26,42 +35,69 @@
   },
   "evidence": {
     "G0_A": {
-      "command": "uv run --frozen python scripts/p0_smoke.py (CUDA section)",
-      "result": "torch.cuda.is_available=True; ones((8,8),cuda).sum()==64.0; gpu=NVIDIA GeForce RTX 4060 Ti",
+      "checks": [
+        "uname -a contains microsoft-standard-WSL2",
+        "/proc/version contains microsoft-standard-WSL2",
+        "nvidia-smi inside WSL reports NVIDIA GeForce RTX 4060 Ti, driver 610.88",
+        "torch.cuda.is_available() == True",
+        "ones((8,8), device='cuda').sum() == 64.0",
+        "tensor device type == 'cuda'"
+      ],
+      "command": "uv run --frozen python scripts/p0_smoke.py",
       "exit_code": 0
     },
     "G0_B": {
-      "commands": [
-        "uv lock (resolved 37 packages)",
-        "rm -rf .venv && uv sync --frozen",
-        "uv run --frozen python scripts/p0_smoke.py"
+      "checks": [
+        "installed versions equal pins (asserted, fails under -O on drift)",
+        "5/5 required APIs are real classes with __init__ signatures",
+        "TensorDict batch_size=[2], observation shape (2,4)",
+        "clean venv recreate via uv sync --frozen reproduces all markers",
+        "negative control with wrong pin exits 1 under python -O"
       ],
-      "result": "5/5 required API imports ok; TensorDict 2x4 batch_size=[2] shape=(2,4); reproduced after clean venv rebuild",
+      "commands": ["uv lock --check", "rm -rf .venv && uv sync --frozen", "uv run --frozen python scripts/p0_smoke.py"],
       "exit_code": 0
     },
     "G0_C": {
-      "lead_tool_write": "marker PA4_P0_DEEPSEEK_TOOL_SMOKE_OK written to ignored scratch via workspace-internal write",
-      "auditor_read": "fresh-context pa4-auditor read marker verbatim: PA4_P0_DEEPSEEK_TOOL_SMOKE_OK",
+      "attempts": 3,
+      "attempt_1_and_2_result": "auditor returned permission.rejected external_directory and refused to fabricate a result",
+      "attempt_3_result": "read succeeded on a workspace-internal file",
+      "lead_tool_write": "marker PA4_P0_DEEPSEEK_TOOL_SMOKE_OK written and read back via real tool calls; matched .gitignore:10:tmp/",
+      "auditor_read": "fresh-context pa4-auditor reported marker verbatim: PA4_P0_DEEPSEEK_TOOL_SMOKE_OK",
+      "auditor_tools_in_registry": ["read", "glob", "grep"],
       "auditor_write_attempt": "no edit/write/patch tool present in registry",
       "auditor_shell_attempt": "no shell/bash/execute tool present in registry",
       "auditor_task_attempt": "no task/subagent tool present in registry",
       "proof_file_created": false,
-      "verdict": "PASS"
+      "lead_independent_check": "auditor_write_proof.txt absent from directory listing",
+      "conjunct_status": {
+        "lead_tool_write_evidenced": true,
+        "auditor_fresh_context_evidenced": true,
+        "auditor_read_only_evidenced": true,
+        "auditor_covered_pa4_deliverables": false
+      }
     },
     "G0_D": {
-      "command": "git clone --depth 1 --branch main https://github.com/mwl313/PokeAgent3.0; git rev-parse HEAD",
-      "result": "65bc980abd8e0bbec14158b9ddc2884bb1726a4e",
-      "pa3_worktree_clean_after_inspection": true,
-      "p1_handoff_questions": 3
+      "command": "git clone --depth 1 --branch main https://github.com/mwl313/PokeAgent3.0",
+      "pinned_sha": "65bc980abd8e0bbec14158b9ddc2884bb1726a4e",
+      "pa3_worktree_clean": true,
+      "pa3_reflog_entries": 1,
+      "pa4_isolation_evidence": {
+        "distinct_roots": true,
+        "pa3_on_sys_path": false,
+        "pa3_engine_importable": false
+      },
+      "p1_handoff_questions": 3,
+      "observation_width_reconciled": "96 tokens x (32 categories + 50 floats + 40 flags); OBSERVATION_FIXED_BYTES=41986"
     }
   },
   "limitations": [
     "Rust 1.90.0 toolchain not yet installed in WSL; required for P1/P2 engine build",
     "Pinned PA3 SHA is the public main tip, not verified live production state; PA3 records production stopped 2026-10-16",
-    "pa4-auditor runs in the Windows domain and cannot read the WSL ext4 repo; positive read control was demonstrated on a Windows workspace-internal path",
-    "Auditor read-only status is capability absence (tools removed from registry by OpenCode v2), not present-and-refused",
-    "Same-model review is not independent model verification; objective tests and PA3 contracts remain authoritative"
+    "pa4-auditor runs in the Windows domain and cannot read the WSL ext4 repo; its positive read control used a Windows workspace-internal file, so it did not audit the PA4 deliverables",
+    "Auditor read-only status is capability absence (OpenCode v2 removes denied tools from the registry), not present-and-refused",
+    "Same-model review is not independent model verification; lead and auditor are both deepseek/deepseek-flash",
+    "torch.cuda '12.8' is the wheel build CUDA, not independent proof of driver capability"
   ],
-  "notes": "P0 PASS establishes development readiness only. No battle env, conditional action sampler or PPO learner is implemented or proven. No cloud resources were used. No secrets committed.",
+  "notes": "P0 PASS establishes development readiness only. No battle env, conditional action sampler or PPO learner is implemented or proven. No cloud resources used. No secrets committed. Receipt v2 incorporates read-only auditor review findings; evidence gaps were filled or claims downgraded rather than left overstated.",
   "generated_at": "2026-10-21"
 }

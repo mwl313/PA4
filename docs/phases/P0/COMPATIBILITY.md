@@ -1,8 +1,13 @@
-# P0-C / P0-B — Compatibility & Agent Routing Evidence
+# P0-B / P0-C — Compatibility & Agent Routing Evidence
 
-Document ID: `PA4-P0-COMPAT-v1.0`
+Document ID: `PA4-P0-COMPAT-v1.1`
 Scope: P0-B (locked dependency stack + TorchRL API) and P0-C (DeepSeek-only routing, auditor boundary).
 All values below are measured on the actual host. No assumed values.
+
+> **Revision note (v1.1):** hardened `scripts/p0_smoke.py` to (a) fail under `-O` by using an
+> explicit `check()` instead of bare `assert`, (b) assert installed versions equal the pins,
+> (c) verify each API is a real class with an `__init__` signature. Added a negative-control
+> run proving the script fails on version drift. Added lock-graph and host-identity evidence.
 
 ---
 
@@ -10,33 +15,51 @@ All values below are measured on the actual host. No assumed values.
 
 | Component | Pinned version | Source |
 |---|---|---|
-| Python | 3.12.3 (system `/usr/bin/python3.12`, pinned via `.python-version` = 3.12) | Ubuntu 24.04 image |
+| Python | 3.12.3 (`/usr/bin/python3.12`, `.python-version` = 3.12) | Ubuntu 24.04 |
 | torch | `2.9.1+cu128` | `download.pytorch.org/whl/cu128` (explicit index) |
 | torchrl | `0.14.1` | PyPI (published 2026-10-10) |
 | tensordict | `0.14.3` | PyPI |
-| numpy | 2.5.4 (transitive, locked) | PyPI |
-| triton | 3.5.1 (transitive, locked) | PyPI |
+| numpy | 2.5.4 (transitive) | PyPI |
+| triton | 3.5.1 (transitive) | PyPI |
 
 Resolution rationale:
 
-- TorchRL `0.14.1` requires `tensordict>=0.14.3,<0.15.0`; `0.14.3` is the newest
-  allowed `0.14.x` release and is deliberately chosen over the newer `0.15.x` line
-  to satisfy that constraint without a source patch.
-- TorchRL `0.14.1` requires `torch>=2.1.0`. `torch 2.9.1+cu128` is a stable CUDA 12.8
-  build that the host NVIDIA driver (610.88, CUDA UMD 13.3) supports.
-- No nightly builds, no extra RL integrations, no visualization extras were added.
+- TorchRL `0.14.1` requires `tensordict>=0.14.3,<0.15.0`; `0.14.3` is the newest allowed
+  `0.14.x` release, chosen over the newer `0.15.x` line to satisfy that constraint without
+  a source patch.
+- TorchRL `0.14.1` requires `torch>=2.1.0`. `torch 2.9.1+cu128` is a stable CUDA 12.8 build
+  supported by the host driver (610.88).
+- No nightly builds, no extra RL integrations, no visualization extras.
 
-Lock evidence:
+### Lock evidence (measured in-session)
 
 ```
-uv lock          -> Resolved 37 packages
-uv sync --frozen -> installed from uv.lock only
-sha256(uv.lock)  = 8f414f526aad676f6466099da9bf96240f739abae9b9376a5c32fe845340d96e
+$ uv lock --check
+Resolved 37 packages in 0.74ms                     # exit 0
+
+$ uv tree --frozen --depth 1
+pa4 v0.0.1
+├── tensordict v0.14.3
+├── torch v2.9.1+cu128
+└── torchrl v0.14.1
+
+$ python3 inspect_lock.py
+torch -> 2.9.1+cu128
+torchrl -> 0.14.1
+tensordict -> 0.14.3
+numpy -> 2.5.4
+cu128 index referenced in lock: True
+packages in lock: 37
+pypi.org/simple referenced: True
+
+$ sha256sum uv.lock
+8f414f526aad676f6466099da9bf96240f739abae9b9376a5c32fe845340d96e  uv.lock
 ```
+
+`pyproject.toml` intentionally carries **no** hash pins; `uv.lock` is the single source of
+truth for the full transitive graph (37 packages) and is committed.
 
 ### Reproducibility check (frozen)
-
-Command performed: delete `.venv`, then `uv sync --frozen`, then re-run the smoke.
 
 | Step | Result |
 |---|---|
@@ -47,7 +70,7 @@ Command performed: delete `.venv`, then `uv sync --frozen`, then re-run the smok
 
 ## 2. TorchRL API availability (measured on installed `torchrl 0.14.1`)
 
-Script: `scripts/p0_smoke.py` (exit 0).
+### Positive run — `uv run --frozen python scripts/p0_smoke.py`, exit 0
 
 ```
 python 3.12.3
@@ -55,11 +78,12 @@ torch 2.9.1+cu128
 torch.cuda 12.8
 torchrl 0.14.1
 tensordict 0.14.3
-api_import_ok TensorDict
-api_import_ok EnvBase
-api_import_ok AsyncBatchedCollector
-api_import_ok InferenceServer
-api_import_ok ProcessSlotTransport
+version_pins_ok {'torch': '2.9.1+cu128', 'torchrl': '0.14.1', 'tensordict': '0.14.3'}
+api_import_ok TensorDict | module: tensordict._td
+api_import_ok EnvBase | module: torchrl.envs.common
+api_import_ok AsyncBatchedCollector | module: torchrl.collectors._async_batched
+api_import_ok InferenceServer | module: torchrl.modules.inference_server._server
+api_import_ok ProcessSlotTransport | module: torchrl.modules.inference_server._process_slot
 tensordict_2x4_ok (2,) (2, 4)
 P0_TENSORDICT_2X4_PASS
 gpu_name NVIDIA GeForce RTX 4060 Ti
@@ -68,25 +92,40 @@ P0_CUDA_8X8_PASS
 P0_TORCHRL_API_IMPORT_PASS
 ```
 
-Real definitions (not aliases), from `inspect`:
+Checks performed: `inspect.isclass`, non-empty `__init__` signature, module provenance.
+This distinguishes real classes from `None` aliases or stubs.
 
-| Symbol | Module | `__init__` parameters |
-|---|---|---|
-| `AsyncBatchedCollector` | `torchrl.collectors._async_batched` | `create_env_fn, policy, policy_factory, frames_per_batch, total_frames, max_batch_size, min_batch_size, server_timeout, transport, device, backend, env_backend, env_exchange, envs_per_worker, transition_chunk_size, policy_backend, reset_at_each_iter, postproc, exploration_type, replay_buffer, post_collect_hook, yield_completed_trajectories, weight_sync, weight_sync_model_id, verbose, create_env_kwargs, worker_affinity, driver_affinity, server_config, device_config, policy_version, policy_version_key` |
-| `InferenceServer` | `torchrl.modules.inference_server._server` | `model, transport, policy_factory, service_backend, service_backend_options, transport_options, request_spec, response_spec, num_clients, max_batch_size, static_batch_size, min_batch_size, timeout, collate_fn, device, policy_device, output_device, collect_stats, stats_window_size, weight_sync, weight_sync_model_id, server_config, device_config, shutdown_event, policy_version, policy_version_key` |
-| `ProcessSlotTransport` | `torchrl.modules.inference_server._process_slot` | `request_spec, response_spec, num_slots, ctx, copy_result` |
-| `EnvBase` | `torchrl.envs.common` | `device, batch_size, run_type_checks, allow_done_after_reset` |
+### Negative control — proves the script actually fails
+
+A copy of the script with `"torchrl": "0.14.1"` replaced by `"torchrl": "9.9.9"`, run under
+`python -O` (where bare `assert`s are stripped):
+
+```
+$ uv run --frozen python -O /tmp/p0_smoke_neg.py
+P0_SMOKE_FAIL: torchrl installed='0.14.1' expected='9.9.9'
+exit=1
+```
+
+So the gate script is not a rubber stamp and is not optimizable away.
+
+### `__init__` signatures (recorded for P1 planning only)
+
+| Symbol | `__init__` parameters (abridged) |
+|---|---|
+| `AsyncBatchedCollector` | `create_env_fn, policy, policy_factory, frames_per_batch, total_frames, max_batch_size, min_batch_size, server_timeout, transport, device, backend, env_backend, env_exchange, envs_per_worker, transition_chunk_size, policy_backend, reset_at_each_iter, postproc, exploration_type, replay_buffer, post_collect_hook, yield_completed_trajectories, weight_sync, weight_sync_model_id, verbose, create_env_kwargs, worker_affinity, driver_affinity, server_config, device_config, policy_version, policy_version_key` |
+| `InferenceServer` | `model, transport, policy_factory, service_backend, service_backend_options, transport_options, request_spec, response_spec, num_clients, max_batch_size, static_batch_size, min_batch_size, timeout, collate_fn, device, policy_device, output_device, collect_stats, stats_window_size, weight_sync, weight_sync_model_id, server_config, device_config, shutdown_event, policy_version, policy_version_key` |
+| `ProcessSlotTransport` | `request_spec, response_spec, num_slots, ctx, copy_result` |
+| `EnvBase` | `device, batch_size, run_type_checks, allow_done_after_reset` |
+
+`AsyncBatchedCollector` exposes `policy_version` / `policy_version_key` — recorded as an
+observation relevant to the P6 staleness contract; not exercised in P0.
 
 ### Known limitations (explicit)
 
-- This proves **import availability** only. It does not prove action-contract
-  compatibility, a custom `EnvBase`, collector throughput or process-transport
-  reliability under load. Those are P1–P3 obligations.
-- `AsyncBatchedCollector` exposes `policy_version` / `policy_version_key`
-  parameters, which are relevant to the P6 staleness contract; this was recorded
-  as an observation only and is not exercised in P0.
-- TorchRL was **not** re-exported, patched or forked. No version sweep was performed
-  beyond the single resolution above.
+- Proves **import/class availability and version equality** only. It does **not** prove
+  action-contract compatibility, a custom `EnvBase`, collector throughput, or process
+  transport reliability under load. Those are P1–P3 obligations.
+- TorchRL was not re-exported, patched or forked. One version resolution only; no sweep.
 
 ---
 
@@ -95,33 +134,54 @@ Real definitions (not aliases), from `inspect`:
 | Item | Measured value |
 |---|---|
 | OpenCode CLI | `opencode v2.1.2` (Windows-native install) |
-| Config location | user profile config `~/.config/opencode/opencode.json` (project-local overlay not required) |
-| `pa4-lead` | `primary`, model `deepseek/deepseek-flash`, write-capable |
-| `pa4-auditor` | `subagent`, model `deepseek/deepseek-flash`, permission `"*": "deny"` with only `read`/`glob`/`grep`/`list` allowed |
-| DeepSeek credentials | reused existing authentication; **no** key duplicated in JSON, logs or receipts |
+| `pa4-lead` | `primary`, `deepseek/deepseek-flash`, write-capable |
+| `pa4-auditor` | `subagent`, `deepseek/deepseek-flash`, `"*": "deny"` + explicit `edit`/`shell`/`task`/`webfetch`/`websearch`/`external_directory` `deny`; only `read`/`glob`/`grep`/`list` allowed |
 
-### G0-C live tool-call smoke (measured)
+Auditor config also carries **both** a wildcard deny and explicit per-tool denies, so the
+boundary does not depend on implicit wildcard inheritance alone.
 
-| Step | Actor | Tool | Observed result |
-|---|---|---|---|
-| 1 | Lead (`pa4-lead`) | write | created ignored scratch `tmp/p0_agent_smoke.txt` containing `PA4_P0_DEEPSEEK_TOOL_SMOKE_OK` |
-| 2 | Lead | read | read back exact marker from disk |
-| 3 | Auditor (`pa4-auditor`, fresh session) | read | reported the exact marker content |
-| 4 | Auditor | edit | **denied** |
-| 5 | Auditor | shell (`bash`) | **denied** |
-| 6 | Lead | shell | removed only the generated scratch file |
+### G0-C live smoke (measured — three attempts, reported truthfully)
 
-Effective auditor permissions verified against the live config:
-`"*": "deny"` → `edit` and `bash` are not permitted; `task` is denied so the auditor
-cannot spawn a nested writable agent. The auditor is not given `external_directory`
-access, so it cannot reach outside the PA4 workspace.
+| Attempt | Setup | Result |
+|---|---|---|
+| 1 | Auditor asked to read a WSL path | `permission.rejected: external_directory`. Auditor correctly refused to fabricate a result and returned `INSUFFICIENT_EVIDENCE`. |
+| 2 | Auditor asked to read a temp-dir path | Same `external_directory` rejection. |
+| 3 | Target placed **inside the workspace root** | **Read succeeded.** |
 
-### Known limitations (agent boundary)
+Attempt 3 observations (fresh-context `pa4-auditor`):
 
-- `pa4-lead` and `pa4-auditor` run the **same model**. Context separation is a
-  process control, **not** independent model verification. Objective correctness is
-  decided only by automated tests and PA3 reference contracts.
-- Qwen / MiniDC / Ornith / multi-model delegation were not configured or tested.
+```
+TOOLS_IN_REGISTRY:      read, glob, grep
+MARKER_TEXT:            PA4_P0_DEEPSEEK_TOOL_SMOKE_OK     (verbatim read)
+WRITE attempt:          no write-capable tool in registry
+SHELL attempt:          no shell tool in registry
+TASK attempt:           no task tool in registry
+PROOF_FILE_CREATED:     FALSE
+```
+
+Lead-side independent verification: `auditor_write_proof.txt` **absent** from the directory
+listing; only `p0_agent_smoke.txt` present (29 bytes).
+
+Lead-side tool write: the marker file was created and read back through real tool calls, and
+`git check-ignore -v` confirmed it matched `.gitignore:10:tmp/`.
+
+### What G0-C does and does not establish
+
+- **Established:** `pa4-lead` performs real write tool calls; a fresh-context `pa4-auditor`
+  can read and report exact file content; the auditor had **no** edit, shell or task
+  capability available to it at all.
+- **Limitation — capability absence, not present-and-refused:** OpenCode v2 removes denied
+  tools from an agent's registry entirely, so there is no "tool existed and refused" error
+  to observe. Absence is a stronger guarantee in-session, but it is a different mechanism
+  than the design's §4 wording ("edit/shell denied") suggests. Recorded as `D-004`.
+- **Limitation — auditor cannot reach the WSL repo:** `pa4-auditor` runs in the **Windows**
+  domain (`C:\Users\...\Desktop\PA4`), while PA4 sources live on the WSL ext4 filesystem. The
+  auditor's positive read control therefore used a workspace-internal **Windows** file, not
+  the repo itself. The auditor cannot audit PA4 deliverables under `/root/projects/...`
+  unless its workspace is moved into WSL.
+- **Limitation — same model:** lead and auditor are both `deepseek/deepseek-flash`. Context
+  separation is a process control, not independent model verification. Objective
+  correctness comes only from automated tests and PA3 reference contracts.
 
 ---
 
@@ -129,7 +189,8 @@ access, so it cannot reach outside the PA4 workspace.
 
 ```bash
 cd ~/projects/PokeAgent4.0
-uv sync --frozen
+uv lock --check
+rm -rf .venv && uv sync --frozen
 uv run --frozen python scripts/p0_smoke.py
 sha256sum uv.lock
 ```

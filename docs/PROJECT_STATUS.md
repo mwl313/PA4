@@ -32,10 +32,31 @@ None blocking P1.
    toolchain before building `pa3-engine`.
 2. The pinned PA3 SHA is the **public `main` tip**, not verified live production state.
    PA3 records production as stopped since 2026-10-16.
-3. `pa4-auditor` runs in the Windows domain with no access to the WSL ext4 repo; its
-   positive read control was demonstrated on a workspace-internal Windows path.
-4. Auditor read-only status is **capability absence** (tools absent from the registry),
-   not present-and-refused (see `docs/DECISIONS.md` D-004).
+3. `pa4-auditor` runs in the Windows domain and **cannot read the WSL ext4 repo**; its
+   positive read control was demonstrated on a workspace-internal Windows path, so it did
+   **not** audit the actual PA4 deliverables. Moving the auditor workspace into WSL is
+   required before it can perform real diff review in P1.
+4. Auditor read-only status is **capability absence** (denied tools are removed from the
+   registry), not present-and-refused (see `docs/DECISIONS.md` D-004).
+5. Lead and auditor are the **same model**; review is a process control, not independent
+   verification.
+
+## Review status
+
+A read-only `pa4-auditor` review of the P0 artifacts was performed (fresh context) and
+returned `INSUFFICIENT_EVIDENCE` on the first evidence set. Its findings were acted on:
+
+| Finding | Action |
+|---|---|
+| Smoke script used optimizable `assert`; no version assertions | Fixed + negative control added (D-005) |
+| WSL2 host identity asserted, not evidenced | `uname`/`/proc/version`/`os-release` added (ENVIRONMENT.md §1) |
+| Lock hash unsupported by a lock artifact | `uv lock --check`, `uv tree`, lock graph added |
+| PA3-unmodified unevidenced | `git status`/`reflog` output added (SOURCE_FREEZE.md §1) |
+| PA4 isolation unevidenced | `sys.path` and `import pa3_engine` checks added |
+| Observation width unreconciled | Resolved: 41,986 bytes, per-token counts (D-006) |
+| Auditor could not audit deliverables | Recorded as an explicit limitation, not claimed as covered |
+
+Remaining gaps are recorded rather than closed by assertion.
 
 ## Immediate next task
 
