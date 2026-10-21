@@ -1,14 +1,13 @@
 {
   "phase": "P3",
   "design_id": "PA4-P3-DESIGN-v1.0",
-  "verdict": "PASS",
-  "verdict_scope": "G3-A is a scoped PASS under the user-approved ADR-008 master-criterion amendment (the stock AsyncBatchedCollector is not used; the real InferenceServer + ProcessSlotTransport are). Not an unqualified collector claim.",
+  "verdict": "PARTIAL",
+  "verdict_scope": "G3-A..G3-D are PASS on executed tests and measured numbers. G3-E is PARTIAL: its required conjunct is a read-only auditor that can read the ACTUAL WSL repository, and the auditor available to this Lead session was denied external_directory access to /home/pa4. Per PA4-P3-DESIGN-v1.0 the G3-E row explicitly disqualifies a text-only audit that cannot access the repo. A re-audit from a WSL-launched session is required to close it.",
   "design_source_path": "C:/Users/임민우/Desktop/PA4/PA4_P3_DETAILED_DESIGN_v1.0_2026-10-22.md",
   "design_source_sha256": "f73c556794bb406c1bd322a093fe7c05f0f330b32b3763d69c492266e313563e",
   "design_wsl_copy_sha256": "f73c556794bb406c1bd322a093fe7c05f0f330b32b3763d69c492266e313563e",
   "pa4_base_sha": "4d8f349b247bb929914db5b9ebe2c5ce84c18288",
-  "pa4_tested_code_sha": "a8e38b815fd9a904bd3d65f2ca3da35f74159df5",
-  "pa4_tested_code_sha_note": "filled from the implementation commit recorded below",
+  "pa4_tested_code_sha": "407961026410d349b3b1c689864e6868e9988086",
   "pa4_final_head_sha": "RECORDED_IN_METADATA_COMMIT",
   "pa3_reference_sha": "65bc980abd8e0bbec14158b9ddc2884bb1726a4e",
   "pa3_worktree_dirty_files": 0,
@@ -43,13 +42,13 @@
   "p3_test_count": 38,
   "total_tests": 128,
   "check_env_specs": "passed (P2 env, unchanged in P3)",
-  "auditor_read_actual_wsl_repo": true,
+  "auditor_read_actual_wsl_repo": false,
   "gates": {
     "G3_A": "PASS_SCOPED_ADR_008",
     "G3_B": "PASS",
     "G3_C": "PASS",
     "G3_D": "PASS",
-    "G3_E": "PASS"
+    "G3_E": "PARTIAL"
   },
   "gate_evidence": {
     "G3_A": {
@@ -184,5 +183,8 @@
     "No P4/PPO/optimizer/cloud work was performed.",
     "No secrets committed; no push without authorization."
   ],
-  "generated_at": "2026-10-22"
+  "generated_at": "2026-10-22",
+  "auditor_access_error": "permission.rejected: Permission denied: external_directory",
+  "auditor_verdict": "INSUFFICIENT_EVIDENCE (could not read repo; read zero files)",
+  "auditor_note": "The auditor confirmed the repo was unreadable (all five access attempts denied, no shell tool for git) and correctly refused to grade. It also correctly flagged that a G3-E PASS resting on such a session would be unsupported, which is why this receipt records G3_E as PARTIAL and auditor_read_actual_wsl_repo as false."
 }
