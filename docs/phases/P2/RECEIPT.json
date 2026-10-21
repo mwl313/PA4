@@ -5,7 +5,7 @@
   "verdict_reason": "All five gates are supported by code and by tests the Lead executed, and the six findings from the first WSL read-only review (including BLOCKER F1) are fixed and covered by tests. G2-E nevertheless remains PARTIAL: its second conjunct requires an independent read-only auditor to review the ACTUAL WSL repository files, and no auditor session available to this Lead can read that path. The Lead's subagents run in the Windows opencode.exe domain rooted at Desktop\\PA4 and receive permission.rejected: external_directory for every WSL path. A reviewer DID gain access in the user's own WSL session and produced the F1-F6 findings; a second such session is required to re-check the fixes.",
   "pa4_base_sha": "892f136f3704b773257a377c9a41c4fa50c74770",
   "pa4_tested_code_sha": "e95349567e1a043f6e5042b8670876acd9f9913c",
-  "pa4_final_head_sha": "RECORDED_IN_SUBSEQUENT_METADATA_COMMIT",
+  "pa4_final_head_sha": "4973b2722b24ab23627a61eafd18fdbe45b7c782",
   "pa3_reference_sha": "65bc980abd8e0bbec14158b9ddc2884bb1726a4e",
   "pa3_worktree_clean": true,
   "dependency_lock_sha256": "8f414f526aad676f6466099da9bf96240f739abae9b9376a5c32fe845340d96e",
