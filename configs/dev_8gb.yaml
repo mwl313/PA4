@@ -1,0 +1,27 @@
+# PA4 development profile - RTX 4060 Ti 8GB on WSL2
+# STATUS: P0 declarative placeholder. These are NOT tuned PPO hyperparameters
+# and NOT a performance claim. Do not infer throughput from this file.
+schema_version: pa4.dev_profile.v0
+profile: dev_8gb
+status: p0_placeholder
+
+device:
+  platform: windows11_wsl2_ubuntu2404
+  gpu: nvidia_rtx_4060_ti_8gb
+  cuda_enabled: true
+  device_index: 0
+
+precision:
+  mode: fp32_reference      # PA3 reference precision; no mixed precision in P0
+  tf32: false
+  fp16_bf16: false
+
+debug_batches:
+  # Sanity-check-only batch sizes. P4 owns real PPO sizing.
+  envs: 4
+  inference_batch: 8
+  ppo_microbatch: 16
+
+notes: >-
+  Declarative device/precision/debug profile only. P4 defines operational
+  PPO hyperparameters and P7 establishes measured throughput.

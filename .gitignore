@@ -1,0 +1,34 @@
+# PA4 .gitignore - never commit secrets or generated artifacts
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Local scratch / agent smoke markers (G0-C uses tmp/)
+tmp/
+scratch/
+*.local.log
+
+# Secrets - never commit
+.env
+.env.*
+*.key
+*.pem
+auth.json
+secrets/
+credentials*
+
+# Artifacts: large checkpoints/traces are stored externally
+artifacts/checkpoints/
+artifacts/traces/
+*.ckpt
+*.pt
+*.pth
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

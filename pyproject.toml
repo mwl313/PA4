@@ -1,0 +1,24 @@
+[project]
+name = "pa4"
+version = "0.0.1"
+description = "PokeAgent 4.0 - P0 scaffold (TorchRL/TensorDict foundation). No battle env or PPO in P0."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "torch==2.9.1",
+    "torchrl==0.14.1",
+    "tensordict==0.14.3",
+]
+
+[tool.uv]
+package = false
+
+# Stable CUDA 12.8 wheels only (matches NVIDIA driver / CUDA UMD 13.3 on this host).
+# No nightly / no extra RL integrations / no visualization extras.
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
