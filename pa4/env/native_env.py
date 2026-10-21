@@ -69,6 +69,10 @@ class SlotState:
     match_committed: bool = False
     last_kinds: tuple[int, int] = (KIND_PREVIEW, KIND_PREVIEW)
     completed_matches: int = 0
+    # The exact seed/teams actually submitted at reset, so an independent oracle
+    # can reproduce the episode without re-deriving (and off-by-one-ing) it.
+    used_seed: tuple[int, int, int, int] = (0, 0, 0, 0)
+    used_teams: tuple[int, int] = (0, 1)
 
 
 class PA4EnvBase(EnvBase):
@@ -205,14 +209,25 @@ class PA4EnvBase(EnvBase):
         team_b = [self._teams[r][1] for r in fresh]
         seeds = [self.seed_for(r) for r in fresh]
         role_map = [(0, 1)] * n
-        handles = self._engine.reset_batch(team_a, team_b, seeds, role_map)
-        for r, (slot, gen) in zip(fresh, handles):
+
+        full = n == self._batch and sorted(fresh) == list(range(self._batch))
+        if full:
+            handles = self._engine.reset_batch(team_a, team_b, seeds, role_map)
+        else:
+            # Partial refill: reset only these native slots so unrelated live
+            # slots keep their handle and in-progress battle state.
+            slots = [self._slots[r].slot for r in fresh]
+            handles = self._engine.reset_slots_batch(slots, team_a, team_b, seeds, role_map)
+
+        for i, (r, (slot, gen)) in enumerate(zip(fresh, handles)):
             prev = self._slots[r]
             self._slots[r] = SlotState(
                 slot=int(slot), generation=int(gen),
                 episode_id=prev.episode_id + 1, step_index=0, request_seq=0,
                 request_ids=(1, 1), match_committed=False,
                 completed_matches=prev.completed_matches,
+                used_seed=tuple(seeds[i]),
+                used_teams=(team_a[i], team_b[i]),
             )
         return self._observation_td()
 
