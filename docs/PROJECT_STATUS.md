@@ -41,10 +41,12 @@ None blocking P1.
    toolchain before building `pa3-engine`.
 2. The pinned PA3 SHA is the **public `main` tip**, not verified live production state.
    PA3 records production as stopped since 2026-10-16.
-3. `pa4-auditor` runs in the Windows domain and **cannot read the WSL ext4 repo**; its
-   positive read control was demonstrated on a workspace-internal Windows path, so it did
-   **not** audit the actual PA4 deliverables. Moving the auditor workspace into WSL is
-   required before it can perform real diff review in P1.
+3. `pa4-auditor` **could not read the WSL ext4 repo** during P0, because the Lead session ran
+   as the Windows `opencode.exe` rooted at `Desktop\PA4` and subagents inherit that domain
+   (root cause confirmed by a live test; see DECISIONS D-007 addendum). WSL2 now has its own
+   OpenCode 2.1.2 + DeepSeek route + project-local `opencode.json`, ready for use. **Action
+   required at P1 start:** relaunch the Lead from WSL2 (`cd ~/projects/PokeAgent4.0 &&
+   opencode`) so in-repo reads are internal.
 4. Auditor read-only status is **capability absence** (denied tools are removed from the
    registry), not present-and-refused (see `docs/DECISIONS.md` D-004).
 5. Lead and auditor are the **same model**; review is a process control, not independent

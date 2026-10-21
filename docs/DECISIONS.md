@@ -186,6 +186,29 @@ and absence of edit/shell/task capability — so the gate value is restored to t
 separately in `RECEIPT.json > gate_scoping.G0_C_out_of_scope_extension` instead of distorting
 the gate value.
 
+### D-007 addendum — why the auditor still cannot read the repo (root cause found)
+
+Follow-up testing established the precise cause, which is **not** a config problem.
+
+OpenCode was running as the native Windows binary
+(`...\npm\node_modules\@opencode\cli\bin\opencode.exe`) with its workspace root at
+`C:\Users\임민우\Desktop\PA4`. Subagents inherit the parent process's domain, so
+`pa4-auditor` was rooted on the Windows Desktop folder and every `/home/pa4/...` read
+resolved as `external_directory` and was refused. A live fresh-context test confirmed this:
+the auditor saw only the three design docs, received `permission.rejected:
+external_directory` for all WSL paths, and independently identified the fix.
+
+**Prepared fix (ready, not yet active):** OpenCode v2.1.2, Node 22 and the DeepSeek
+credential are now installed *inside* WSL2, with a project-local `opencode.json` at the
+repo root selecting `deepseek/deepseek-flash`. Verified: `opencode models` inside WSL lists
+`deepseek/deepseek-flash`; the API key is read from `~/.config/pa4-secrets/deepseek.key`
+(mode 600, outside the repo, never committed).
+
+**What remains:** the Lead session must be relaunched from WSL2 with
+`cd ~/projects/PokeAgent4.0 && opencode`. Only then does the auditor's workspace root
+become the repo, making in-repo reads internal. This is a session-relaunch step for the
+user, not a code change.
+
 **Path amendment.** Documentation paths were updated mechanically with assertions on every
 replacement, and each amended path was then verified to exist on the new distro. This is a
 recorded environment amendment, not a silent rewrite of P0 evidence.

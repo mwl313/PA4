@@ -1,0 +1,46 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "deepseek/deepseek-flash",
+  "default_agent": "pa4-lead",
+  "provider": {
+    "deepseek": {
+      "options": {
+        "apiKey": "{file:$HOME/.config/pa4-secrets/deepseek.key}"
+      }
+    }
+  },
+  "agent": {
+    "pa4-lead": {
+      "description": "PA4 lead and sole writable implementer. Follow the current phase design; never start future phases without approved gates.",
+      "mode": "primary",
+      "model": "deepseek/deepseek-flash",
+      "prompt": "You are the PA4 Lead and sole writable implementer. Read PA4 Master Architecture v1.2, the current detailed phase design, AGENTS.md, and docs/PROJECT_STATUS.md before changes. Work within the current phase only. Keep PokeAgent3.0 read-only at its pinned SHA. One writable session at a time. Execute only necessary automated tests and record truthful PASS/BLOCKED receipts. After code/test completion ask pa4-auditor to review the diff read-only in a fresh context. Review does not replace objective tests. Never spend cloud resources or modify global configs without user approval.",
+      "permission": {
+        "task": {
+          "*": "deny",
+          "pa4-auditor": "allow"
+        },
+        "external_directory": "deny"
+      }
+    },
+    "pa4-auditor": {
+      "description": "Fresh-context read-only review of PA4 diffs and test evidence. Do not edit or run shell commands.",
+      "mode": "subagent",
+      "model": "deepseek/deepseek-flash",
+      "prompt": "Read only. Review the selected PA4 phase requirements, the provided git diff, and test evidence. Report precise findings with file and line locations, then PASS_REVIEW, CHANGES_REQUIRED, or INSUFFICIENT_EVIDENCE. Never modify files, invoke shell commands or tools that can write, call subagents, or approve a phase based solely on your review. Same-model review is a process control, not independent model verification; objective truth is the automated tests and PA3 reference contracts.",
+      "permission": {
+        "*": "deny",
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "edit": "deny",
+        "shell": "deny",
+        "task": "deny",
+        "webfetch": "deny",
+        "websearch": "deny",
+        "external_directory": "deny"
+      }
+    }
+  }
+}
