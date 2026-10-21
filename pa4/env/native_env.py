@@ -70,6 +70,7 @@ class SlotState:
     last_kinds: tuple[int, int] = (KIND_PREVIEW, KIND_PREVIEW)
     completed_matches: int = 0
     truncated_episodes: int = 0
+    revisions: int = 0
     # The exact seed/teams actually submitted at reset, so an independent oracle
     # can reproduce the episode without re-deriving (and off-by-one-ing) it.
     used_seed: tuple[int, int, int, int] = (0, 0, 0, 0)
@@ -166,6 +167,8 @@ class PA4EnvBase(EnvBase):
             action_branch_count=Unbounded(shape=(*n, NUM_SEATS), dtype=torch.long),
             action_present=Unbounded(shape=(*n, NUM_SEATS), dtype=torch.bool),
             action_request_id=Unbounded(shape=(*n, NUM_SEATS), dtype=torch.long),
+            action_episode_id=Unbounded(shape=(*n, NUM_SEATS), dtype=torch.long),
+            action_native_generation=Unbounded(shape=(*n, NUM_SEATS), dtype=torch.long),
             shape=n,
         )
         self.reward_spec = Unbounded(shape=(*n, NUM_SEATS, 1), dtype=torch.float32)
@@ -358,7 +361,8 @@ class PA4EnvBase(EnvBase):
         if tensordict is None:
             return packet
         out = tensordict.clone(recurse=False) if isinstance(tensordict, TensorDict) else TensorDict({}, [self._batch])
-        for key in ("action", "action_branch_count", "action_present", "action_request_id"):
+        for key in ("action", "action_branch_count", "action_present", "action_request_id",
+                    "action_episode_id", "action_native_generation"):
             out[key] = packet[key]
         return out
 
@@ -368,12 +372,16 @@ class PA4EnvBase(EnvBase):
         counts = torch.zeros((n, NUM_SEATS), dtype=torch.long)
         present = torch.zeros((n, NUM_SEATS), dtype=torch.bool)
         req_ids = torch.zeros((n, NUM_SEATS), dtype=torch.long)
+        ep_ids = torch.zeros((n, NUM_SEATS), dtype=torch.long)
+        gens = torch.zeros((n, NUM_SEATS), dtype=torch.long)
         rng = rng or torch.Generator().manual_seed(int(self._seed))
 
         for r, st in enumerate(self._slots):
             kinds = self._kinds(st)
             for side in range(NUM_SEATS):
                 req_ids[r, side] = st.request_ids[side]
+                ep_ids[r, side] = st.episode_id
+                gens[r, side] = st.generation
                 if kinds[side] not in POLICY_KINDS:
                     continue
                 prefix = self._legal_prefix(st, side, rng)
@@ -387,6 +395,8 @@ class PA4EnvBase(EnvBase):
                 "action_branch_count": counts,
                 "action_present": present,
                 "action_request_id": req_ids,
+                "action_episode_id": ep_ids,
+                "action_native_generation": gens,
             },
             batch_size=[n],
         )
@@ -404,11 +414,17 @@ class PA4EnvBase(EnvBase):
         finished_rows = []
         for r, st in enumerate(self._slots):
             kinds = self._kinds(st)
-            if st.match_committed and all(k == KIND_FINISHED for k in kinds):
-                # Episode already concluded; nothing to submit for this row.
+            if st.match_committed:
+                # Episode already concluded. Any submission here is a stale
+                # packet from a previous episode, not a fresh decision.
+                if bool(present[r].any()):
+                    raise RuntimeError(
+                        f"stale packet row={r}: episode already concluded "
+                        f"(episode_id={st.episode_id}) but a seat still submits")
                 finished_rows.append(r)
                 continue
             choices = []
+            native_branches = self._branch_counts(st)
             for side in range(NUM_SEATS):
                 kind = kinds[side]
                 needs = kind in POLICY_KINDS
@@ -418,17 +434,50 @@ class PA4EnvBase(EnvBase):
                         f"kind={KIND_LABELS[kind]} present={bool(present[r, side])}"
                     )
                 if not needs:
+                    # A Wait/Finished seat must supply no action at all.
+                    if int(counts[r, side]) != 0:
+                        raise RuntimeError(
+                            f"extra actions for non-requesting seat row={r} seat={side}: "
+                            f"kind={KIND_LABELS[kind]} count={int(counts[r, side])}")
                     continue
+                # F2: identity must match the CURRENT handle AND episode.
                 if int(req_ids[r, side]) != st.request_ids[side]:
                     raise RuntimeError(
                         f"stale action_request_id row={r} seat={side}: "
                         f"{int(req_ids[r, side])} != {st.request_ids[side]}"
                     )
+                if "action_native_generation" in tensordict.keys():
+                    gen_in = int(tensordict["action_native_generation"][r, side])
+                    if gen_in != st.generation:
+                        raise RuntimeError(
+                            f"stale action_native_generation row={r} seat={side}: "
+                            f"{gen_in} != {st.generation}")
+                if "action_episode_id" in tensordict.keys():
+                    ep_in = int(tensordict["action_episode_id"][r, side])
+                    if ep_in != st.episode_id:
+                        raise RuntimeError(
+                            f"stale action_episode_id row={r} seat={side}: "
+                            f"{ep_in} != {st.episode_id}")
                 k = int(counts[r, side])
                 if k < 1 or k > MAX_BRANCHES:
                     raise RuntimeError(f"invalid action_branch_count {k} row={r} seat={side}")
+                # F3: supplied prefix length must equal the native branch count.
+                if k != native_branches[side]:
+                    raise RuntimeError(
+                        f"branch count mismatch row={r} seat={side}: supplied {k}, "
+                        f"native {native_branches[side]}")
                 rows = [tuple(int(v) for v in action[r, side, i]) for i in range(k)]
-                # candidate membership is checked by Rust; we forward verbatim
+                # Candidate membership is enforced by Rust, but verify here too so
+                # an illegal submission is an explicit env error, not a silent
+                # "revision".
+                prefix = []
+                for row in rows:
+                    legal = self._candidates(st, side, prefix)
+                    if row not in legal:
+                        raise RuntimeError(
+                            f"illegal action row={r} seat={side} level={len(prefix)}: "
+                            f"{row} not in native candidates")
+                    prefix.append(row)
                 choices.append((side, rows))
             if not choices:
                 raise RuntimeError(
@@ -450,9 +499,16 @@ class PA4EnvBase(EnvBase):
             accepted, term, trunc, win, err, kind_a, kind_b = res
             st = self._slots[r]
             if err:
+                # F4: a native operational error is a hard failure, never a
+                # "revision" and never a completed match.
                 raise RuntimeError(f"native operational error row={r}: {err}")
             if not accepted:
+                # A genuine native request revision. All actions we submit were
+                # pre-validated as legal and length-correct, so reaching here
+                # means the engine revised the public request (e.g. a peer
+                # committed, Imprison, etc.), not that our packet was invalid.
                 revised[r] = True
+                st.revisions += 1
                 st.request_seq += 1
                 st.request_ids = (st.request_ids[0] + 1, st.request_ids[1] + 1)
                 continue
@@ -496,6 +552,14 @@ class PA4EnvBase(EnvBase):
         obs["terminated"] = terminated
         obs["truncated"] = truncated
         obs["done"] = terminated | truncated
+
+        # F6: a row that was already concluded in a previous step has no new
+        # transition to report, but it must not appear as a live, unfinished
+        # episode. Surface it as done so callers do not treat it as playable.
+        for r in finished_rows:
+            obs["done"][r, 0] = True
+            obs["terminated"][r, 0] = True
+            obs["winner"][r] = int(obs["winner"][r]) if int(obs["winner"][r]) >= 0 else -1
 
         # Rows whose episode concluded but which are still in the batch need to
         # leave finished state; auto-reset only those rows so fixed shapes hold

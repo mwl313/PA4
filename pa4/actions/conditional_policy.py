@@ -142,11 +142,17 @@ def observation_digest(obs) -> str:
     return h.hexdigest()
 
 
-def build_branch_table(candidate_groups: Sequence[Sequence[tuple[int, ...]]], layout):
+def build_branch_table(candidate_groups: Sequence[Sequence[tuple[int, ...]]], layout,
+                       active_to_roster=None):
     """Build BranchCandidatesBatch from real engine tuples for one level.
 
     Mirrors PA3's `_level_table`: capacity 64, explicit mask, and it FAILS
     LOUDLY on overflow instead of silently truncating candidates.
+
+    `active_to_roster` is the player-known active->roster map from
+    `ObservationBatch.active_to_roster()`. PA3 requires it to resolve token
+    references for non-PICK actions (Normal/Replacement); P1 only ever exercised
+    PICK actions, which do not need it.
     """
     _, _, AtomicAction, _, ActionRef, BranchCandidatesBatch = _pa3()
 
@@ -167,7 +173,8 @@ def build_branch_table(candidate_groups: Sequence[Sequence[tuple[int, ...]]], la
             )
         for index, packed in enumerate(candidates):
             action = AtomicAction.from_tuple(packed)
-            ref = ActionRef.resolve(layout, action, None)
+            row_map = None if active_to_roster is None else active_to_roster[row_index]
+            ref = ActionRef.resolve(layout, action, row_map)
             action_ids[row_index, 0, index] = torch.tensor(ref.tuple, dtype=torch.long)
             mask[row_index, 0, index] = True
             entity[row_index, 0, index] = int(ref.entity_token)
@@ -206,9 +213,9 @@ class ConditionalPolicy:
 
     # -- staged selection ----------------------------------------------
     def select_branch(self, encoded, candidates: Sequence[tuple[int, ...]],
-                      generator: torch.Generator | None = None):
+                      generator: torch.Generator | None = None, active_to_roster=None):
         """Sample ONE branch from real candidates; return (index, logprob, table)."""
-        table = build_branch_table([candidates], self.layout)
+        table = build_branch_table([candidates], self.layout, active_to_roster)
         table = type(table)(
             action_ids=table.action_ids.to(self.device),
             mask=table.mask.to(self.device),
@@ -226,9 +233,10 @@ class ConditionalPolicy:
         k = int(result.branch_k[0, 0].item())
         return idx, lp, k, table
 
-    def evaluate_branch(self, encoded, candidates: Sequence[tuple[int, ...]], index: int):
+    def evaluate_branch(self, encoded, candidates: Sequence[tuple[int, ...]], index: int,
+                        active_to_roster=None):
         """Score a SAVED index without sampling (the replay path)."""
-        table = build_branch_table([candidates], self.layout)
+        table = build_branch_table([candidates], self.layout, active_to_roster)
         table = type(table)(
             action_ids=table.action_ids.to(self.device),
             mask=table.mask.to(self.device),
@@ -258,6 +266,7 @@ class ConditionalPolicy:
 
         encoded = self.encode(observation)
         obs_digest = observation_digest(observation)
+        a2r = observation.active_to_roster()  # player-known map from PA3 layout
 
         prefix_actions: list[tuple[int, ...]] = []
         snapshots: list[BranchSnapshot] = []
@@ -265,7 +274,7 @@ class ConditionalPolicy:
         # Preview has 4 branch slots; Normal/Replacement have 2 (engine-provided).
         for level, branch_slot in enumerate(req.branch_slots):
             candidates = native.candidates(slot, generation, side, prefix_actions)
-            idx, lp, k, table = self.select_branch(encoded, candidates, generator)
+            idx, lp, k, table = self.select_branch(encoded, candidates, generator, a2r)
             chosen = candidates[idx]
             prefix_actions.append(chosen)
 
@@ -337,9 +346,11 @@ class ConditionalPolicy:
                 )
 
         encoded = self.encode(observation)
+        a2r = observation.active_to_roster()
         recomputed: list[float] = []
         for snap in record.branches:
-            lp, _ = self.evaluate_branch(encoded, snap.candidate_tuples, snap.selected_index)
+            lp, _ = self.evaluate_branch(encoded, snap.candidate_tuples,
+                                        snap.selected_index, a2r)
             recomputed.append(lp)
 
         joint = float(sum(recomputed))

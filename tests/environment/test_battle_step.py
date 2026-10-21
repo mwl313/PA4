@@ -29,7 +29,7 @@ def play_full(env, seed_rng=1701, max_steps=400):
         kinds_seen.add((KIND_LABELS[kinds[0]], KIND_LABELS[kinds[1]]))
         if all(k == KIND_FINISHED for k in kinds):
             return {"finished": True, "steps": steps, "kinds": kinds_seen}
-        packet = env.legal_action_packet(torch.Generator().manual_seed(seed_rng + steps))
+        packet = env.legal_action_packet(torch.Generator().manual_seed(seed_rng + env._seed * 100000 + steps))
         td = env.step(packet)
         steps += 1
         if bool(td["next", "done"][0, 0]):
