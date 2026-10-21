@@ -45,6 +45,25 @@ rounds are recorded in `docs/phases/P2/RECEIPT.json`; the final round at
 The auditor is the **same model** as the Lead. This is a process control and a
 second reading of real files, **not** independent-model verification.
 
+
+## P3 — Batched Collector and Central Inference
+
+**Status: PARTIAL** (G3-A..G3-D PASS, G3-E PARTIAL)
+- Tested code: `407961026410d349b3b1c689864e6868e9988086`
+- Real CUDA batching proven: one model forward covering 4 independent requests,
+  observed `bmax = 64`, tuned `bmean = 15.5`, device `cuda:0`
+- Measured: 5.1-6.0 natural matches/s, 79-104 env-transitions/s (single driver);
+  2 and 4 driver processes measured at 4.4 and 5.5 matches/s
+- 128 tests green: P1 39 + P2 51 + P3 38
+- Key finding: batching was blocked because `ProcessInferenceServer.client()`
+  caches one client, so all "clients" aliased slot 0 and every forward was B=1.
+  `srv.clients(n)` returns distinct slots.
+- Residual bottleneck is TorchRL transport round-trip overhead (~40 ms/forward),
+  not GPU compute (encode 4.8-11.5 ms, step 2.4-2.6 ms, nearly flat in batch).
+- **G3-E unmet**: the auditor available to this Lead session could not read the
+  WSL repo (`permission.rejected: external_directory`). Re-audit from a
+  WSL-launched session to close it.
+
 ## Open limitations (carried forward, not blocking)
 
 1. Auditor independence is same-model only.
