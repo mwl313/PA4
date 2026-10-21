@@ -1,0 +1,145 @@
+{
+  "phase": "P1",
+  "design_id": "PA4-P1-DESIGN-v1.0",
+  "verdict": "PASS",
+  "verdict_scope": "G1-A..G1-E pass. G1-D is a CPU transport proof; no GPU central-inference claim is made.",
+  "pa4_base_commit": "a900f4793afb4417c1f3226a5d423aca9c038e43",
+  "pa4_tested_commit": "aa1a624776f5f646efb231e7c4fce3c8950be3d0",
+  "pa4_final_head": "RECORDED_AFTER_METADATA_COMMIT",
+  "pa3_source_sha": "65bc980abd8e0bbec14158b9ddc2884bb1726a4e",
+  "pa3_worktree_clean": true,
+  "pa3_modified_files": 0,
+  "dependency_lock_sha256": "8f414f526aad676f6466099da9bf96240f739abae9b9376a5c32fe845340d96e",
+  "lock_unchanged_from_p0": true,
+  "host": "wsl2_ubuntu_24_04_win11",
+  "device": "rtx_4060_ti_8gb",
+  "device_used_in_p1": "cpu",
+  "torchrl_version": "0.14.1",
+  "torch_version": "2.9.1+cu128",
+  "tensordict_version": "0.14.3",
+  "rust_toolchain": "1.90.0",
+  "pyo3_version": "0.26.0",
+  "selected_path": "B_ACCEPTED",
+  "inference_transport": "process_slot (ProcessInferenceServer)",
+  "max_observed_legal_candidates": 18,
+  "max_observed_prefix_depth": 4,
+  "complete_player_action_count": 4,
+  "illegal_actions": 0,
+  "max_abs_branch_logprob_delta": 0.0,
+  "max_abs_joint_logprob_delta": 0.0,
+  "replay_hidden_aware_proof": {
+    "level1_logprob_correct_prefix": -1.608508587,
+    "level1_logprob_wrong_prefix": -1.611402273,
+    "abs_difference": 0.002893686295
+  },
+  "central_server_batch_size_observed": null,
+  "central_server_batch_size_note": "two independent clients were exercised, but the server-side batch size was not instrumented; not claimed",
+  "policy_cache_peak_bytes": null,
+  "policy_cache_peak_note": "not measured in P1; cache holds small CPU EncodedState/GRU hidden",
+  "policy_parameters": 9889755,
+  "policy_init": "random, seed 20261006",
+  "policy_weight_fingerprint": "356710ea293dd656fc9f028efa9064a8e738dce1bfffc14b9981abee6e7b5ab4",
+  "gates": {
+    "G1_A": "PASS",
+    "G1_B": "PASS",
+    "G1_C": "PASS",
+    "G1_D": "PASS_CPU_SCOPED",
+    "G1_E": "PASS"
+  },
+  "gate_evidence": {
+    "G1_A": {
+      "test": "tests/action_distribution/test_native_legality.py",
+      "tests": 8,
+      "facts": [
+        "observation contract pinned: schema 2, 96 tokens, 41986 bytes, hash dd723dc6...",
+        "Preview exposes 4 engine-provided branch slots",
+        "duplicate pick excluded: K 6 -> 5 -> 4 -> 3; chosen action never reappears",
+        "level 0 has exactly 6 distinct party members",
+        "signed targets include negatives down to -2, unclamped",
+        "Mega resource=1 in branch 1 depends on branch 0 choice",
+        "Wait(3)/Finished(4) excluded from POLICY_REQUEST_KINDS"
+      ],
+      "request_kinds_observed": ["Preview", "Normal", "Replacement", "Wait"]
+    },
+    "G1_B": {
+      "test": "tests/action_distribution/test_conditional_parity.py",
+      "facts": [
+        "sum(P_legal) = 1 within 1e-6",
+        "padded/illegal probability exactly 0 under FP32 floor",
+        "no NaN/Inf",
+        "K=1 yields logprob 0",
+        "hidden carry verified by comparing two different level-0 picks"
+      ]
+    },
+    "G1_C": {
+      "test": "tests/action_distribution/test_conditional_parity.py + negative controls",
+      "facts": [
+        "replay reproduces branch and joint logprob with delta 0.0",
+        "replay path contains no RNG",
+        "replay refuses weight mismatch, policy_version mismatch, observation digest mismatch",
+        "replay rejects out-of-range selected index, masked-illegal index, branch_k != mask sum",
+        "candidate-order tampering detected by digest",
+        "entropy + uniform KL finite and produce nonzero gradient"
+      ]
+    },
+    "G1_D": {
+      "test": "tests/action_distribution/test_inference_gateway.py",
+      "tests": 7,
+      "facts": [
+        "real TorchRL ProcessInferenceServer started and stayed alive",
+        "ProcessSlotTransport preallocates slots; clients created once and reused",
+        "ENCODE -> 4 staged STEPs on live Rust candidates -> RESET",
+        "encoder runs once per request",
+        "per-request cache isolation across two clients",
+        "fails closed and evicts on wrong level, unknown key, wrong policy_version"
+      ],
+      "scope": "CPU only"
+    },
+    "G1_E": {
+      "tests": "test_negative_controls.py + test_server_guards.py",
+      "facts": [
+        "exactly 64 candidates accepted; 65 raises RuntimeError mentioning capacity/truncation",
+        "wire path rejects candidate_count > 64 with ERR_OVERFLOW",
+        "candidate_count != legal_mask.sum() rejected with ERR_COUNT_MISMATCH",
+        "no slicing/clamping patterns in pa4/actions",
+        "max observed K=18, depth 4, overflow False"
+      ]
+    }
+  },
+  "test_command": "uv run --frozen python -m unittest discover -s tests/action_distribution -t .",
+  "test_result": "Ran 39 tests, OK",
+  "negative_controls": [
+    "65 candidates raise on builder and on wire path",
+    "sample exactly 64 accepted",
+    "illegal index forced to FP32 floor with probability exactly 0",
+    "20 seeded draws never select beyond real K",
+    "level-1 logprob differs for different level-0 picks",
+    "replay rejects weight / version / observation mismatch",
+    "replay rejects illegal or out-of-range stored index",
+    "server rejects wrong level, unknown key, wrong version, overflow, count mismatch",
+    "rejected server step evicts the cache entry"
+  ],
+  "limitations": [
+    "CPU-only inference; no GPU central-inference claim",
+    "Random-initialised weights (seed 20261006), not a production checkpoint; no trained-strength or weight-parity claim",
+    "Max K=18 is an observed fixture maximum, not a proven global bound",
+    "No numerical PA3 golden-reference comparison beyond replay self-consistency; no PPO parity (P4)",
+    "policy_cache_peak_bytes not measured",
+    "central_server_batch_size_observed not instrumented; two clients exercised but batching not claimed",
+    "Replay needs the original observation supplied by the caller; the record stores a digest, not the payload",
+    "Fixture coverage is a small representative set, not full game coverage (P2)",
+    "pa4-auditor reviewed inline source only and could not read the repo or reproduce the test run",
+    "Same-model review is a process control, not independent model verification"
+  ],
+  "review_history": {
+    "round_1": "INSUFFICIENT_EVIDENCE - auditor could not access any file; reviewed only a summary",
+    "round_2": "CHANGES_REQUIRED - concrete defects; 7 were real and fixed, 1 was a false positive resolved with empirical evidence"
+  },
+  "notes": [
+    "No PPO loss, optimizer, EnvBase, collector or checkpoint I/O implemented (out of P1 scope).",
+    "PA3 unmodified: reference clone clean at pinned SHA; build used a separate scratch copy.",
+    "Dependency lock unchanged from P0; tests use stdlib unittest because pytest is not in the frozen lock.",
+    "No secrets committed; the DeepSeek key lives outside the repo."
+  ],
+  "generated_at": "2026-10-21"
+}
