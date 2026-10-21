@@ -110,25 +110,35 @@ class ActionReplayRecordV1:
 
 
 def weight_fingerprint(model: torch.nn.Module) -> str:
-    """Deterministic fingerprint of the exact weights under test."""
+    """Deterministic fingerprint of the exact weights under test (dtype/shape aware)."""
     h = hashlib.sha256()
     for name, tensor in sorted(model.state_dict().items()):
+        t = tensor.detach().cpu().contiguous()
         h.update(name.encode("utf-8"))
-        h.update(tensor.detach().to(torch.float32).cpu().contiguous().numpy().tobytes())
+        h.update(str(t.dtype).encode("utf-8"))
+        h.update(str(tuple(t.shape)).encode("utf-8"))
+        h.update(t.to(torch.float64).numpy().tobytes())
     return h.hexdigest()
 
 
 def observation_digest(obs) -> str:
-    """Content digest over the decoded observation tensor set."""
+    """Content digest over the decoded observation, aware of dtype and shape."""
     h = hashlib.sha256()
     for attr in ("token_mask", "categories", "category_known", "floats",
                  "float_known", "flags", "flag_known", "role_ids", "side_ids"):
         t = getattr(obs, attr, None)
         if t is None:
             continue
-        arr = t.detach().to(torch.float32).cpu().contiguous().numpy()
+        t = t.detach().cpu().contiguous()
         h.update(attr.encode("utf-8"))
-        h.update(arr.tobytes())
+        h.update(str(t.dtype).encode("utf-8"))
+        h.update(str(tuple(t.shape)).encode("utf-8"))
+        if t.dtype == torch.bool:
+            h.update(t.to(torch.uint8).numpy().tobytes())
+        elif t.dtype.is_floating_point:
+            h.update(t.to(torch.float32).numpy().tobytes())
+        else:
+            h.update(t.to(torch.int64).numpy().tobytes())
     return h.hexdigest()
 
 
@@ -294,12 +304,37 @@ class ConditionalPolicy:
     # -- replay ---------------------------------------------------------
     def replay(self, record: ActionReplayRecordV1, observation):
         """Recompute the saved action's logprob exactly. Never resamples."""
-        if record.policy_weight_fingerprint != self.fingerprint:
+        # Recompute live so in-place weight mutation is detected, not just a
+        # stale fingerprint captured at construction time.
+        if weight_fingerprint(self.model) != record.policy_weight_fingerprint:
             raise RuntimeError("replay refused: policy weights differ from the record")
         if record.policy_version != self.policy_version:
             raise RuntimeError("replay refused: policy_version mismatch")
         if observation_digest(observation) != record.observation_digest:
             raise RuntimeError("replay refused: observation content differs from the record")
+
+        # Validate the stored branch metadata BEFORE scoring: an illegal index
+        # or an inconsistent mask/branch_k must fail closed, not be rescored.
+        for snap in record.branches:
+            n = len(snap.candidate_tuples)
+            if not (0 <= snap.selected_index < n):
+                raise RuntimeError(
+                    f"replay refused: selected_index {snap.selected_index} outside "
+                    f"[0,{n}) at level {snap.level}"
+                )
+            if len(snap.legal_mask) != n:
+                raise RuntimeError(
+                    f"replay refused: legal_mask length {len(snap.legal_mask)} != {n}"
+                )
+            if not snap.legal_mask[snap.selected_index]:
+                raise RuntimeError(
+                    f"replay refused: selected index {snap.selected_index} is masked illegal"
+                )
+            if snap.branch_k != sum(snap.legal_mask):
+                raise RuntimeError(
+                    f"replay refused: branch_k {snap.branch_k} != mask sum "
+                    f"{sum(snap.legal_mask)} at level {snap.level}"
+                )
 
         encoded = self.encode(observation)
         recomputed: list[float] = []

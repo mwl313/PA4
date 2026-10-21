@@ -40,6 +40,8 @@ ERR_OK = 0
 ERR_NO_CACHE = 1
 ERR_NO_LEGAL = 2
 ERR_BAD_OP = 3
+ERR_OVERFLOW = 4
+ERR_COUNT_MISMATCH = 5
 
 
 def _scalar(td: TensorDict, key: str) -> int:
@@ -227,15 +229,39 @@ class ConditionalScorerService(nn.Module):
         if op == OP_STEP:
             entry = self._cache.get((0, key))
             if entry is None or entry.policy_version != pv or entry.steps_done != level:
+                # Fail closed AND evict: a rejected step must not leave state
+                # that a later request with the same key could silently reuse.
+                self._cache.pop((0, key), None)
                 out["error_code"] = ERR_NO_CACHE
+                out["cache_size"] = len(self._cache)
                 return emit()
 
             k = _scalar(td, "candidate_count")
             legal = td["legal_mask"]
             if legal.dim() == 2:
                 legal = legal[0]
+
+            # Capacity is a hard wall on the wire path too: never let a
+            # fixed-size buffer silently drop candidates past 64 (G1-E).
+            if k > CANDIDATE_CAPACITY:
+                self._cache.pop((0, key), None)
+                out["error_code"] = ERR_OVERFLOW
+                out["cache_size"] = len(self._cache)
+                return emit()
+
+            # candidate_count must agree with the mask; a mismatch is a packing
+            # bug, not something to paper over with min().
+            mask_sum = int(legal.sum().item())
+            if k != mask_sum:
+                self._cache.pop((0, key), None)
+                out["error_code"] = ERR_COUNT_MISMATCH
+                out["cache_size"] = len(self._cache)
+                return emit()
+
             if k <= 0 or not bool(legal[:k].any()):
+                self._cache.pop((0, key), None)
                 out["error_code"] = ERR_NO_LEGAL
+                out["cache_size"] = len(self._cache)
                 return emit()
 
             model = self._ensure_model()
