@@ -26,7 +26,7 @@ tests, `N=2` supported and exercised for partial reset).
 | `players.observation_valid` | `[N,2]` | `bool` | Whether this seat has a player-facing view |
 | `players.request_kind` | `[N,2]` | `int64` | 0=Preview,1=Normal,2=Replacement,3=Wait,4=Finished |
 | `players.decision_required` | `[N,2]` | `bool` | True only for kinds 0/1/2 |
-| `players.request_id` | `[N,2]` | `int64` | Changes on revision and on reset |
+| `players.request_id` | `[N,2]` | `int64` | Increments on every native advance and every revision; restarts at `(1,1)` when a slot is reset |
 | `players.branch_count` | `[N,2]` | `int64` | Real native branch count; 0 for Wait/Finished |
 | `native_slot` | `[N]` | `int64` | Handle traceability (not a policy feature) |
 | `native_generation` | `[N]` | `int64` | Handle lifetime |
@@ -44,11 +44,33 @@ tests, `N=2` supported and exercised for partial reset).
 | `action_branch_count` | `[N,2]` | `int64` |
 | `action_present` | `[N,2]` | `bool` |
 | `action_request_id` | `[N,2]` | `int64` |
+| `action_episode_id` | `[N,2]` | `int64` |
+| `action_native_generation` | `[N,2]` | `int64` |
 
 `action` rows are canonical six-field native tuples
 `(kind, own_slot, move_slot, target_location, switch_destination, resource)`.
 `target_location` is **signed** and never clamped. Rows beyond
 `action_branch_count` are never submitted.
+
+**All six keys are required.** A packet missing `action_episode_id` or
+`action_native_generation` is rejected rather than accepted with stale-packet
+detection silently disabled. For each requesting seat the env checks
+`request_id`, `episode_id` and native `generation` against the current handle,
+requires the supplied prefix length to equal the native branch count, and checks
+every row against the engine's ordered candidate list for that prefix. `Wait` /
+`Finished` seats must supply `present=False` and `branch_count=0`. Any violation
+raises `RuntimeError` before `step_batch` is called, so an invalid packet can
+never be absorbed as a native "revision".
+
+### 2.1 Post-terminal contract
+
+After a row reports `done`, that row has no native transition left. A further
+`step` is legal only with `action_present=False` and `action_branch_count=0` for
+that row; the env re-reports `done=True` together with the terminal
+`terminated`/`truncated` flags and `winner` recorded when the episode actually
+ended. It never synthesizes a different termination (in particular, a truncated
+episode never becomes `terminated=True` afterwards). Any submission for a
+concluded row raises.
 
 ## 3. Reward / done
 
@@ -64,11 +86,13 @@ Terminal reward: winner `0` → `(+1,-1)`; winner `1` → `(-1,+1)`; draw/unknow
 
 ## 4. Spec construction notes (measured, not assumed)
 
-- **`Binary` is `int8` in torchrl 0.14.1** while this env emits truthful `bool`
-  tensors. Boolean leaves therefore use `Unbounded(shape=..., dtype=torch.bool)`
-  so the spec matches reality. `check_env_specs` previously failed with
-  `fake=torch.int8 and real=torch.bool` until this was fixed; the fix aligns the
-  spec to the real dtype rather than casting data to hide it.
+- **Boolean leaves are `bool`, and the spec says `bool`.** torchrl 0.14.1
+  `Binary` *defaults* to `int8` (it does accept `dtype=`), so the earlier
+  `Binary(...)` spec produced `fake=torch.int8 and real=torch.bool` in
+  `check_env_specs`. Boolean leaves now use
+  `Unbounded(shape=..., dtype=torch.bool)`, which matches the truthful emitted
+  dtype. The fix aligns the spec to the data rather than casting the data to
+  hide the mismatch.
 - The nested `players` `Composite` must carry the **full** shape including the
   outer batch dim (`[N,2]`), not just `[2]`, or TorchRL raises a shape mismatch
   against the parent spec.

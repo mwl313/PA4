@@ -1,11 +1,12 @@
 {
   "phase": "P2",
   "design_id": "PA4-P2-DESIGN-v1.0",
-  "verdict": "PARTIAL",
-  "verdict_reason": "All five gates are supported by code and by tests the Lead executed, and the six findings from the first WSL read-only review (including BLOCKER F1) are fixed and covered by tests. G2-E nevertheless remains PARTIAL: its second conjunct requires an independent read-only auditor to review the ACTUAL WSL repository files, and no auditor session available to this Lead can read that path. The Lead's subagents run in the Windows opencode.exe domain rooted at Desktop\\PA4 and receive permission.rejected: external_directory for every WSL path. A reviewer DID gain access in the user's own WSL session and produced the F1-F6 findings; a second such session is required to re-check the fixes.",
+  "verdict": "PASS",
+  "verdict_reason": "All five gates pass. G2-E's audit conjunct is now met: the Lead runs from WSL, pa4-auditor demonstrated actual repository read access (ACCESS_OK, literal file read) and returned VERDICT: CLEAN on the tested commit. G2-E's P1 conjunct is met by a real ConditionalPolicy-produced two-seat packet crossing EnvBase.step() and by a full P1-policy-driven battle. P1 regression is 39/39 green; lock and PA3 reference unchanged.",
   "pa4_base_sha": "892f136f3704b773257a377c9a41c4fa50c74770",
-  "pa4_tested_code_sha": "e95349567e1a043f6e5042b8670876acd9f9913c",
-  "pa4_final_head_sha": "4973b2722b24ab23627a61eafd18fdbe45b7c782",
+  "pa4_tested_code_sha": "136d333fa089edd12c36af53ae2c5ddc85f664a8",
+  "pa4_final_head_sha": "136d333fa089edd12c36af53ae2c5ddc85f664a8",
+  "final_head_definition": "At the time this receipt was written, HEAD == pa4_tested_code_sha. The commit that carries this receipt is a documentation-only metadata commit; a further documentation-only commit updates this field to that metadata commit SHA. No code changes follow the tested commit.",
   "pa3_reference_sha": "65bc980abd8e0bbec14158b9ddc2884bb1726a4e",
   "pa3_worktree_clean": true,
   "dependency_lock_sha256": "8f414f526aad676f6466099da9bf96240f739abae9b9376a5c32fe845340d96e",
@@ -21,133 +22,101 @@
   "native_engine_build_source_verified": true,
   "observation_contract_verified": "schema 2, 96 tokens, 41986 bytes, hash dd723dc687a60b0568302fa0b09cfb110cbe67eac2c7022f2b4ffe4dff373e35",
   "naturally_completed_matches": 4,
-  "distinct_seeds": [
-    1,
-    2,
-    3,
-    4
-  ],
-  "steps_per_game": [
-    20,
-    11,
-    19,
-    14
-  ],
-  "winners": [
-    0,
-    1,
-    0,
-    1
-  ],
-  "rewards": [
-    [
-      1.0,
-      -1.0
-    ],
-    [
-      1.0,
-      -1.0
-    ],
-    [
-      -1.0,
-      1.0
-    ],
-    [
-      -1.0,
-      1.0
-    ]
-  ],
+  "distinct_seeds": [1, 2, 3, 4],
+  "steps_per_game": [20, 11, 19, 14],
+  "winners": [0, 1, 0, 1],
+  "rewards": [[1.0, -1.0], [-1.0, 1.0], [1.0, -1.0], [-1.0, 1.0]],
   "operational_errors": 0,
   "illegal_submissions": 0,
   "duplicate_completion_ids": 0,
+  "revisions_observed": 0,
+  "truncated_episodes": 0,
   "trace_parity_first_mismatch": null,
-  "trace_parity_seeds_checked": [
-    1,
-    2,
-    3,
-    4
-  ],
+  "trace_parity_seeds_checked": [1, 2, 3, 4],
   "partial_reset_pass": true,
   "wait_finished_observed": true,
   "replacement_observed": true,
   "request_kind_pairs_observed": [
-    [
-      "Preview",
-      "Preview"
-    ],
-    [
-      "Normal",
-      "Normal"
-    ],
-    [
-      "Replacement",
-      "Wait"
-    ],
-    [
-      "Wait",
-      "Replacement"
-    ]
+    ["Preview", "Preview"],
+    ["Normal", "Normal"],
+    ["Replacement", "Replacement"],
+    ["Replacement", "Wait"],
+    ["Wait", "Replacement"]
   ],
   "p1_action_packet_integration_pass": true,
+  "p1_action_packet_evidence": "ConditionalPolicy.complete_request produces each requesting seat's prefix; each record is verified by ConditionalPolicy.replay (abs_joint_delta <= 1e-5); an actor-active row is asserted; the packet crosses EnvBase.step() and matches a direct NativeOracle step_batch. A second test drives a full battle end-to-end with P1 policy decisions on both seats.",
   "p1_regression_test_count": 39,
-  "p2_environment_test_count": 41,
-  "auditor_read_actual_wsl_repo": false,
-  "auditor_access_error": "permission.rejected: Permission denied: external_directory",
+  "p2_environment_test_count": 51,
+  "auditor_read_actual_wsl_repo": true,
+  "auditor_access_proof": "pa4-auditor returned ACCESS_OK and quoted lines 1-5 of pa4/env/native_env.py and pa4/env/trace_compare.py verbatim from the WSL path.",
+  "auditor_verdicts": [
+    {"round": 1, "context": "Windows opencode.exe", "commit": "67f1d59", "result": "INSUFFICIENT_EVIDENCE", "note": "denied permission.rejected: external_directory on every WSL path"},
+    {"round": 2, "context": "WSL, real repo access", "commit": "67f1d59", "result": "FINDINGS", "note": "F1 BLOCKER (false P1-packet claim) plus F2-F6"},
+    {"round": 3, "context": "WSL", "commit": "e953495", "result": "FINDINGS", "note": "F1/F3/F4 resolved; F5/F6 partial; N1 post-terminal fabrication confirmed"},
+    {"round": 4, "context": "WSL", "commit": "e310cce", "result": "FINDINGS", "note": "N1/N2/N3/N5 resolved; no code blocker; receipt values found stale"},
+    {"round": 5, "context": "WSL", "commit": "136d333", "result": "CLEAN", "note": "no blocker or substantive defect; minor coverage notes only"}
+  ],
   "gates": {
     "G2_A": "PASS",
     "G2_B": "PASS",
     "G2_C": "PASS",
     "G2_D": "PASS",
-    "G2_E": "PARTIAL"
+    "G2_E": "PASS"
+  },
+  "review_findings_status": {
+    "F1_BLOCKER_p1_packet_never_crossed_env": "FIXED - ConditionalPolicy.complete_request now produces each requesting seat's prefix, is proven by replay, asserts an actor-active row, and crosses EnvBase.step(); a second test plays a whole battle with P1 policy decisions",
+    "F2_no_slot_generation_episode_identity": "FIXED - every packet must carry action_episode_id and action_native_generation; all six keys are required and mismatches raise",
+    "F3_branch_count_not_compared": "FIXED - supplied prefix length must equal the native branch count; extra actions on Wait/Finished raise; each row is checked against native candidates",
+    "F4_revision_conflated_with_invalid": "FIXED - illegal packets raise before step_batch; a genuine accepted=False is counted in SlotState.revisions and never completes a match",
+    "F5_metrics_were_prose": "FIXED - test_measured_evidence asserts illegal submissions, revisions, exact kind pairs, one completion per episode, and the documented step/winner/reward table",
+    "F6_concluded_row_reported_not_done": "FIXED - concluded rows report done with the raw flags/winner recorded at episode end",
+    "N1_post_terminal_truncation_fabricated": "FIXED - post-terminal steps re-report the stored terminated/truncated flags and winner; a truncation never becomes terminated=True",
+    "N2_revision_path_untested": "FIXED - a stubbed accepted=False test asserts request_revised, zero reward, no completion, revisions==1, step_index unchanged and identity eviction",
+    "N3_F6_path_untested": "FIXED - ConcludedRowTest covers post-truncation, post-termination and re-submission",
+    "N4_receipt_values_unasserted": "FIXED - revisions, the exact kind-pair set and the documented steps/winners/rewards are asserted; the receipt had stale reward rows for seeds 2-3 and omitted (Replacement,Replacement), both corrected",
+    "N5_identity_optional": "FIXED - missing identity keys raise instead of silently disabling stale-packet detection"
   },
   "defects_fixed": [
-    "torchrl Binary is int8 while the env emits bool; boolean leaves use Unbounded(dtype=torch.bool) so the spec matches truthful data (check_env_specs had failed on dtype mismatch)",
+    "torchrl Binary defaults to int8 while the env emits bool; boolean leaves use Unbounded(dtype=torch.bool) so the spec matches truthful data (check_env_specs had failed on dtype mismatch)",
     "nested players Composite required the full [N,2] shape, not [2]",
     "independent oracle re-derived its seed after episode_id incremented, replaying the wrong episode; now records used_seed/used_teams",
     "partial reset used reset_batch, invalidating untouched handles; now uses reset_slots_batch on masked slots only",
-    "truncation was counted as a completed match (guard was 'term or trunc'); completion now requires term, truncation tracked separately with no payout (found by read-only review)"
+    "truncation was counted as a completed match (guard was 'term or trunc'); completion now requires term, truncation tracked separately with no payout",
+    "F1 (review-found): the 'P1 staged policy packet' test used torch.randint, so no ConditionalPolicy ever reached EnvBase.step() while the receipt claimed it did; now the policy produces the prefix, proven by replay",
+    "measurement harness seeded actions from step index only, so the four 'distinct seeds' played an identical sequence; seeding now includes env._seed",
+    "N1 (review-found): a step after a truncated episode re-reported terminated=True and lost the winner; concluded rows now re-report the raw flags recorded at commit",
+    "identity/branch-count validation gaps (review-found F2-F6): mandatory slot/generation/episode identity, native branch-count equality, candidate membership, fail-closed rejection before step_batch, revision accounting separated from invalidity"
   ],
+  "p1_code_change": "PA3 refuses to resolve token refs for non-PICK actions without the player-known active->roster map, so build_branch_table and ConditionalPolicy now accept and thread observation.active_to_roster(). The parameter is additive and defaults to None; P1 regression remains 39/39 green.",
+  "harness_bug_found_and_fixed": "The Lead's own measurement harness seeded the action RNG from the step index only, so all four 'distinct seeds' played an identical action sequence. Seeding now includes env._seed; the four games are genuinely distinct (20/11/19/14 steps, winners 0/1/0/1).",
   "limitations": [
-    "G2-E second conjunct unmet: no auditor session available to this Lead could read the WSL repo; the F1-F6 fixes are therefore not independently re-reviewed",
-    "Four seeded games only; exactly the G2-B minimum",
-    "The oracle is a second native engine but shares the PA4 decoder path, so decoder bugs are invisible to it",
+    "Only 4 seeded games; exactly the G2-B minimum with no margin",
+    "The oracle is a second native engine but shares the PA4 decoder path, so decoder bugs would be invisible to it",
     "CPU native stepping only; no GPU simulation or throughput claim",
+    "Truncation accounting is proven with a synthetic native result via a transparent proxy; natural play never produced a truncating episode",
     "Max observed legal candidates 18 is an inherited fixture bound, not a global maximum",
     "P1 policy is randomly initialised (seed 20261006); no strength claim",
     "No benchmark or performance optimisation performed",
-    "P1 replay still needs the original observation payload",
+    "P1 replay still requires the original observation payload",
     "PA3 pin is the public main tip, not verified live production state",
-    "The P2 execution prompt named in the task does not exist on this machine; PA4-P2-DESIGN-v1.0 was used as the authority"
+    "Minor uncovered test edges (auditor M1-M4, M7): concluded-row present=False/count>0 branch not directly tested; truncated_episodes persistence across reset unasserted; parity test hardcodes env accepted=True; P1 test asserts an actor-active row rather than both seats; no len(results)==len(specs) guard",
+    "The auditor is the same model as the Lead: this is a process control, not independent-model verification; correctness rests on executed tests and PA3 contracts"
   ],
   "test_commands": [
     "uv run --frozen python -m unittest discover -s tests/environment -t .",
     "uv run --frozen python -m unittest discover -s tests/action_distribution -t ."
   ],
   "test_results": {
-    "environment": "Ran 30 tests, OK",
+    "environment": "Ran 51 tests, OK",
     "p1_regression": "Ran 39 tests, OK"
   },
   "notes": [
     "One step per native advance attempt; never one step per branch choice and never one step per match.",
     "match_completed is emitted at most once per naturally terminated episode; truncated episodes are not counted as matches.",
     "player_view(seat) is the only policy-facing extraction and returns that seat's own observation only.",
+    "All six action-packet keys are required; stale request_id/generation/episode_id, present mismatch, wrong branch count and extra Wait/Finished actions raise before step_batch.",
     "No P3 collector, PPO, profiling or cloud work was performed.",
     "The P2 execution prompt file named in the task does not exist on this machine; work followed PA4-P2-DESIGN-v1.0, which is the authoritative design."
   ],
-  "generated_at": "2026-10-21",
-  "revisions_observed": 0,
-  "truncated_episodes": 0,
-  "review_findings_status": {
-    "F1_BLOCKER_p1_packet_never_crossed_env": "FIXED - test_p1_integration.py now calls ConditionalPolicy.complete_request for each requesting seat, replays the record to prove it is genuine, asserts an actor_active row exists, and a second test plays a whole battle with P1 policy decisions on both seats",
-    "F2_no_slot_generation_episode_identity": "FIXED - packets carry action_episode_id and action_native_generation; _step rejects mismatches and rejects any submission after the episode concluded",
-    "F3_branch_count_not_compared": "FIXED - supplied prefix length must equal the native branch count; extra actions on a Wait/Finished seat raise; each row is checked against native candidates",
-    "F4_revision_conflated_with_invalid": "FIXED - illegal packets raise before submission; a genuine accepted=False is counted in SlotState.revisions",
-    "F5_metrics_were_prose": "FIXED - test_measured_evidence.py measures illegal_submissions, Replacement/Wait observation, one completion per episode, and adds explicit rejection tests",
-    "F6_concluded_row_reported_not_done": "FIXED"
-  },
-  "harness_bug_found_and_fixed": "The Lead's own measurement harness seeded the action RNG from the step index only, so all four 'distinct seeds' played an identical action sequence (identical 12-step games, all winner 1). Seeding now includes env._seed; the four games are genuinely distinct (20/11/19/14 steps, winners 0/1/0/1).",
-  "p1_code_change": "PA3 refuses to resolve token refs for non-PICK actions without the player-known active->roster map, so build_branch_table and ConditionalPolicy now accept and thread observation.active_to_roster(). P1 had only ever exercised PICK actions. P1 regression remains 39/39 green.",
-  "p1_action_packet_evidence": "Two tests: a single-step packet generated by ConditionalPolicy and verified by replay, and a full battle driven end-to-end by ConditionalPolicy on both seats",
-  "auditor_who_could_read": "A review DID run with access in the user's own WSL opencode session and produced the F1-F6 findings at commit 67f1d59. It was not available to this Lead session.",
-  "to_close_g2_e": "Run the Lead from WSL (cd /home/pa4/projects/PokeAgent4.0 && opencode) so its subagents inherit a workspace that can read the repo, then have pa4-auditor re-check F1-F6 at commit e953495."
+  "generated_at": "2026-10-22"
 }
