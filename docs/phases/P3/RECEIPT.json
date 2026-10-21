@@ -1,83 +1,188 @@
 {
   "phase": "P3",
   "design_id": "PA4-P3-DESIGN-v1.0",
-  "design_source_path": "C:/Users/\uc784\ubbfc\uc6b0/Desktop/PA4/PA4_P3_DETAILED_DESIGN_v1.0_2026-10-22.md",
+  "verdict": "PASS",
+  "verdict_scope": "G3-A is a scoped PASS under the user-approved ADR-008 master-criterion amendment (the stock AsyncBatchedCollector is not used; the real InferenceServer + ProcessSlotTransport are). Not an unqualified collector claim.",
+  "design_source_path": "C:/Users/임민우/Desktop/PA4/PA4_P3_DETAILED_DESIGN_v1.0_2026-10-22.md",
   "design_source_sha256": "f73c556794bb406c1bd322a093fe7c05f0f330b32b3763d69c492266e313563e",
   "design_wsl_copy_sha256": "f73c556794bb406c1bd322a093fe7c05f0f330b32b3763d69c492266e313563e",
-  "verdict": "BLOCKED",
-  "verdict_reason": "P3-A stop-early condition met: the installed torchrl 0.14.1 AsyncBatchedCollector enforces a strict observation->action client contract with no hook to the worker-local Rust engine, so a P1 staged conditional packet cannot be produced on its acting path. One focused compatibility correction was attempted and failed. A P3-F fallback ADR is proposed and requires user approval; a fallback-only result would be PARTIAL against the preferred integration requirement, not PASS.",
   "pa4_base_sha": "4d8f349b247bb929914db5b9ebe2c5ce84c18288",
-  "pa4_tested_code_sha": null,
-  "pa4_final_head_sha": null,
+  "pa4_tested_code_sha": "a8e38b815fd9a904bd3d65f2ca3da35f74159df5",
+  "pa4_tested_code_sha_note": "filled from the implementation commit recorded below",
+  "pa4_final_head_sha": "RECORDED_IN_METADATA_COMMIT",
   "pa3_reference_sha": "65bc980abd8e0bbec14158b9ddc2884bb1726a4e",
   "pa3_worktree_dirty_files": 0,
   "dependency_lock_sha256": "8f414f526aad676f6466099da9bf96240f739abae9b9376a5c32fe845340d96e",
   "lock_unchanged": true,
+  "python": "3.12.3",
   "torch": "2.9.1+cu128",
   "torchrl": "0.14.1",
   "tensordict": "0.14.3",
   "rust": "1.90.0",
-  "python": "3.12.3",
   "host": "wsl2_ubuntu_24_04_win11",
   "gpu_device_used": "NVIDIA GeForce RTX 4060 Ti (8188 MiB, driver 610.88, capability 8.9)",
-  "cuda_available": true,
-  "collector_implementation_path": "P3-I blocked; P3-F fallback proposed and NOT approved",
-  "torchrl_collector_source_sha256": "bf5ba4b31e4be0c71adc569bd3fa3db5ce6704ccdd81edfe1ef478f35be47c96",
-  "central_model_forward_batch_gt1_observed": null,
-  "max_actual_forward_batch": null,
-  "natural_completed_matches": null,
-  "duplicate_match_ids": null,
-  "invalid_actions": null,
-  "raw_actor_natural_matches_per_sec": null,
+  "collector_implementation_path": "ADAPTED_ACTOR_LOOP_UNDER_ADR_008",
+  "adr": "docs/phases/P3/ADR_008.md (user approved option B)",
+  "central_model_forward_batch_gt1_observed": true,
+  "max_actual_forward_batch": 64,
+  "mean_forward_batch_tuned": 15.5,
+  "model_forward_count_for_4_independent_requests": 1,
+  "gpu_peak_allocation_gib": 0.09,
+  "natural_completed_matches": 65,
+  "duplicate_match_ids": 0,
+  "invalid_actions": 0,
+  "operational_errors": 0,
+  "revisions_observed": 0,
+  "truncations_observed": 0,
+  "raw_actor_natural_matches_per_sec": 6.04,
+  "best_env_transitions_per_sec": 104.0,
   "accepted_training_matches_per_sec": null,
+  "accepted_training_matches_note": "no PPO learner exists in P3; always null",
   "p1_regression_test_count": 39,
-  "p2_environment_test_count": 51,
-  "p0_smoke": "exit 0",
-  "uv_lock_check": "pass",
+  "p2_regression_test_count": 51,
+  "p3_test_count": 38,
+  "total_tests": 128,
+  "check_env_specs": "passed (P2 env, unchanged in P3)",
+  "auditor_read_actual_wsl_repo": true,
   "gates": {
-    "G3_A": "BLOCKED",
-    "G3_B": "NOT_STARTED",
-    "G3_C": "NOT_STARTED",
-    "G3_D": "NOT_STARTED",
-    "G3_E": "NOT_STARTED"
+    "G3_A": "PASS_SCOPED_ADR_008",
+    "G3_B": "PASS",
+    "G3_C": "PASS",
+    "G3_D": "PASS",
+    "G3_E": "PASS"
   },
-  "p3a_evidence": {
-    "collector_contract": "client(observation) -> action, then env.step_and_maybe_reset(action_td); one exchange per env step",
-    "client_has_env_access": false,
-    "policy_client_module_documented_as": "remote transport client that carries no lifecycle rights",
-    "collector_calls_env_rand_action": false,
-    "collector_consults_env_policy": false,
-    "probe_1": "constructor succeeds; next(iter(col)) raises RuntimeError from a worker thread",
-    "probe_2": "process-local env registry populated in factory, but the client is never invoked (no CLIENT INVOKED log)",
-    "probe_3": "direct P2 contract check passes: obs batch [1], packet batch [1], action (1,2,4,6)",
-    "observed_exception": "Received a new batch size torch.Size([1, 1]) with an existing batch_size torch.Size([1]) in a lazy TD",
-    "first_failure_point": "before any policy invocation"
+  "gate_evidence": {
+    "G3_A": {
+      "test": "tests/collector/test_batching.py + run_batched.py",
+      "facts": [
+        "actor loop drives real P2 EnvBase.step() transitions",
+        "actions come from the real P1 conditional scorer over live Rust candidates",
+        "no random/dummy policy on the submission path",
+        "stock AsyncBatchedCollector not used; ADR-008 approved by the user"
+      ]
+    },
+    "G3_B": {
+      "test": "tests/collector/test_batching.py (10 tests)",
+      "facts": [
+        "model_forward_count == 1 with forward_batch_sizes == [4] for four independent requests",
+        "model_device == cuda:0",
+        "each row's selection verified inside its own candidate set",
+        "cache isolation: 4 requests => 4 cache entries",
+        "observed bmax 64 during collection; tuned bmean 15.5"
+      ]
+    },
+    "G3_C": {
+      "test": "tests/collector/test_matches.py (9 tests)",
+      "facts": [
+        ">= 16 natural completions measured (33-65 per run)",
+        "2 independent driver processes verified",
+        "0 duplicate match ids; ids fully qualified (run, worker, slot, gen, episode)",
+        "truncations and revisions tracked separately, never counted as matches",
+        "match count never exceeds transition count"
+      ]
+    },
+    "G3_D": {
+      "test": "tests/collector/test_transport.py (9 tests)",
+      "facts": [
+        "4 concurrent clients each receive their own response",
+        "the cached-client defect is regression-tested (clients have distinct slots)",
+        "one-in-flight enforced by the transport",
+        "clean shutdown after use and with an unread in-flight request",
+        "repeated start/stop cycles without leaks",
+        "overflow 65, count/mask mismatch, stale generation, unknown key, wrong level all fail closed",
+        "a rejected step evicts only the addressed cache entry"
+      ]
+    },
+    "G3_E": {
+      "artifacts": [
+        "docs/phases/P3/PERFORMANCE_BASELINE.csv (5 measured configurations)",
+        "docs/phases/P3/BATCHING_EVIDENCE.md",
+        "docs/phases/P3/TENSORDICT_TRANSITION_V1.md"
+      ],
+      "facts": [
+        "P1 39 + P2 51 + P3 38 = 128 tests green",
+        "frozen uv.lock unchanged",
+        "PA3 reference unmodified",
+        "auditor read the actual WSL repository files"
+      ]
+    }
   },
-  "proposed_adr": {
-    "id": "P3-F",
-    "status": "PROPOSED_NOT_APPROVED",
-    "summary": "Narrow TorchRL-compatible actor loop owning the staged protocol, using the real InferenceServer + ProcessSlotTransport, emitting ordinary TensorDict transitions; no TorchRL fork.",
-    "gate_consequence": "A fallback-only result is PARTIAL against the preferred integration requirement unless the user approves the ADR."
-  },
-  "not_done": [
-    "P3-B central CUDA B>=2 batching: not started (depends on an approved acting path)",
-    "P3-C multiworker collection: not started",
-    "P3-D performance baseline: not started",
-    "P3-E audit: not started"
+  "performance": [
+    {
+      "config": "16 envs, 1 driver",
+      "matches_per_s": 5.12,
+      "transitions_per_s": 79.4,
+      "bmax": 31,
+      "bmean": 3.78
+    },
+    {
+      "config": "32 envs, 1 driver",
+      "matches_per_s": 6.04,
+      "transitions_per_s": 101.1,
+      "bmax": 63,
+      "bmean": 5.15
+    },
+    {
+      "config": "64 envs, 1 driver, tuned",
+      "matches_per_s": 5.78,
+      "transitions_per_s": 104.0,
+      "bmax": 64,
+      "bmean": 15.5
+    },
+    {
+      "config": "2 drivers x 16 envs",
+      "matches_per_s": 4.4,
+      "transitions_per_s": 78.0
+    },
+    {
+      "config": "4 drivers x 16 envs",
+      "matches_per_s": 5.53,
+      "transitions_per_s": 91.8
+    }
   ],
-  "deliberately_not_done": [
-    "Did not fork or patch TorchRL",
-    "Did not write a generic Collector replacement",
-    "Did not use a dummy or random policy to force a G3-A pass",
-    "Did not weaken G3-A or any acceptance criterion",
-    "Did not move legality into Python"
+  "optimisations": [
+    "batched decode: one observe_fixed_batch for all requesting seats instead of 2*N calls",
+    "decode_batch() proven byte-identical to per-seat decode",
+    "observation buffers preallocated (2291 -> 1410 us per _observation_td at N=16)",
+    "collector reuses the env's already-decoded observations instead of decoding twice",
+    "request_info_batch for all rows/seats in one call",
+    "redundant per-row candidate revalidation removed from the hot path (strict mode kept)",
+    "batched driver processes for scaling"
+  ],
+  "defects_found_and_fixed": [
+    "ProcessInferenceServer.client() caches one client, so [srv.client() for _ in range(n)] produced n references to slot 0 and every forward was B=1; srv.clients(n) returns distinct slots",
+    "per-request branch count was not tracked, so completed requests kept requesting further levels",
+    "batched decode initially mishandled layout-derived role/side ids",
+    "the fallback decode path lacked role_ids/side_ids entirely",
+    "env.batch typo for _batch",
+    "mp daemonic processes cannot spawn an inference server; drivers must be non-daemonic"
   ],
   "limitations": [
-    "Only P3-0 preflight and P3-A compatibility investigation were completed",
-    "No P3 source code was written because the acting path is unapproved",
-    "The batch-size incompatibility might be separately fixable, but fixing it would not give the client access to the Rust candidate API, so G3-A would still be unsatisfiable through that path",
-    "The P3 verdict is the design's specified outcome for a fundamental compatibility failure, not a judgement on P1/P2 correctness"
+    "AsyncBatchedCollector is not used; G3-A is a scoped PASS under ADR-008",
+    "throughput ~6 matches/s, far below the 1,000/s stretch goal which the design forbids proving on this GPU",
+    "the residual bottleneck is TorchRL ProcessSlotTransport round-trip overhead (~40 ms/forward), measured but not resolved; it is outside P3 scope",
+    "GPU encode/step are nearly flat in batch size, so wider batches alone do not increase throughput",
+    "random PA3 weights (seed 20261006); no strength or weight-parity claim",
+    "path B (staged prefix) only; path A would remove sequential level round-trips but is out of scope",
+    "transitions are in-memory only; no replay database",
+    "multi-driver scaling is sublinear because drivers share one GPU",
+    "same-model review is a process control, not independent model proof"
   ],
-  "next_step_requires_user_decision": true,
+  "test_commands": [
+    "uv run --frozen python -m unittest discover -s tests/action_distribution -t .",
+    "uv run --frozen python -m unittest discover -s tests/environment -t .",
+    "uv run --frozen python -m unittest discover -s tests/collector -t ."
+  ],
+  "test_results": {
+    "action_distribution": "Ran 39 tests, OK",
+    "environment": "Ran 51 tests, OK",
+    "collector": "Ran 38 tests, OK"
+  },
+  "notes": [
+    "One env step remains one native advance attempt; one match is counted once on a unique terminated natural completion.",
+    "The P3 execution prompt file named in the task does not exist on this machine; PA4-P3-DESIGN-v1.0 was used as the authority.",
+    "No P4/PPO/optimizer/cloud work was performed.",
+    "No secrets committed; no push without authorization."
+  ],
   "generated_at": "2026-10-22"
 }

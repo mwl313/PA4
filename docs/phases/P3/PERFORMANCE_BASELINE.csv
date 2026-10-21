@@ -1,0 +1,6 @@
+run_id,git_sha,policy_version,device,worker_count,envs_per_worker,total_envs,forward_batch_max,server_batch_mean,window_type,wall_seconds,natural_completions,raw_natural_matches_per_sec,env_transitions,env_transitions_per_sec,behavior_actor_rows,server_encode_calls,server_step_calls,server_reset_calls,policy_forwards,policy_forward_rows,cache_entries_peak,operational_errors,duplicate_completions,stale_rejections,accepted_training_matches_per_sec,profile_notes
+bl_16_1,a8e38b8,1,cuda,1,16,16,31,3.78,cold+steady,6.45,33,5.12,512,79.4,849,904,1864,904,493,1864,32,0,0,,,"single driver, no batch wait"
+bl_32_1,a8e38b8,1,cuda,1,32,32,63,5.15,cold+steady,10.76,65,6.04,1088,101.1,1807,1927,3964,1927,770,3964,64,0,0,,,"single driver, wider envs"
+bl_64_16,a8e38b8,1,cuda,1,64,64,64,9.16,cold+steady,11.08,64,5.78,1152,104.0,1928,2036,4280,2036,467,4280,128,0,0,,,"single driver, tuned accumulation"
+multi2x16,a8e38b8,1,cuda,2,16,32,,,cold+steady,14.56,64,4.4,1136,78.0,,,,,,,,0,0,,,2 driver processes
+multi4x16,a8e38b8,1,cuda,4,16,64,,,cold+steady,24.22,134,5.53,2224,91.8,,,,,,,,0,0,,,4 driver processes
