@@ -79,6 +79,126 @@ class CrossEpisodeStalenessTest(unittest.TestCase):
             env.step(stale)
 
 
+class ConcludedRowTest(unittest.TestCase):
+    """A step after the episode ended must re-report how it ACTUALLY ended.
+
+    Regression for review finding N1: the earlier F6 fix set terminated=True
+    unconditionally, so a truncated episode became a fabricated natural
+    completion (and lost the winner) on the following step.
+    """
+
+    def _empty_packet(self, env):
+        st = env._slots[0]
+        return TensorDict(
+            {
+                "action": torch.zeros((1, 2, 4, 6), dtype=torch.long),
+                "action_branch_count": torch.zeros((1, 2), dtype=torch.long),
+                "action_present": torch.zeros((1, 2), dtype=torch.bool),
+                "action_request_id": torch.tensor([[st.request_ids[0], st.request_ids[1]]]),
+                "action_episode_id": torch.full((1, 2), st.episode_id),
+                "action_native_generation": torch.full((1, 2), st.generation),
+            },
+            batch_size=[1],
+        )
+
+    def _env_with_synthetic_result(self, term, trunc, winner):
+        env = PA4EnvBase(batch_size=1, seed=1)
+        env.reset()
+        env._engine = _Proxy(
+            env._engine, lambda specs: [(True, term, trunc, winner, None, 4, 4)])
+        env.step(env.legal_action_packet())
+        return env
+
+    def test_post_truncation_step_does_not_fabricate_termination(self):
+        env = self._env_with_synthetic_result(term=False, trunc=True, winner=0)
+        out = env.step(self._empty_packet(env))
+        self.assertTrue(bool(out["next", "done"][0, 0]))
+        self.assertTrue(bool(out["next", "truncated"][0, 0]),
+                        "truncation must survive a post-terminal step")
+        self.assertFalse(bool(out["next", "terminated"][0, 0]),
+                         "a truncated episode must never become a natural termination")
+        self.assertFalse(bool(out["next", "match_completed"][0]))
+        self.assertEqual(env.completed_matches, 0)
+        self.assertEqual(int(out["next", "winner"][0]), 0)
+
+    def test_post_termination_step_preserves_winner(self):
+        env = self._env_with_synthetic_result(term=True, trunc=False, winner=1)
+        out = env.step(self._empty_packet(env))
+        self.assertTrue(bool(out["next", "done"][0, 0]))
+        self.assertTrue(bool(out["next", "terminated"][0, 0]))
+        self.assertFalse(bool(out["next", "truncated"][0, 0]))
+        self.assertEqual(int(out["next", "winner"][0]), 1,
+                         "the winner must not be lost on a post-terminal step")
+        self.assertEqual(env.completed_matches, 1)
+
+    def test_concluded_row_rejects_a_new_submission(self):
+        env = self._env_with_synthetic_result(term=True, trunc=False, winner=0)
+        packet = env.legal_action_packet()
+        packet["action_present"][0, 0] = True
+        with self.assertRaises(RuntimeError) as ctx:
+            env.step(packet)
+        self.assertIn("already concluded", str(ctx.exception))
+
+
+class RevisionPathTest(unittest.TestCase):
+    """F4/N2: a genuine native accepted=False is a revision, never a completion."""
+
+    def test_accepted_false_is_a_nonterminal_revision(self):
+        env = PA4EnvBase(batch_size=1, seed=1)
+        env.reset()
+        env._engine = _Proxy(
+            env._engine, lambda specs: [(False, False, False, None, None, 1, 2)])
+        st = env._slots[0]
+        before_req = st.request_ids
+        out = env.step(env.legal_action_packet())
+        self.assertTrue(bool(out["next", "request_revised"][0]))
+        self.assertFalse(bool(out["next", "done"][0, 0]))
+        self.assertFalse(bool(out["next", "terminated"][0, 0]))
+        self.assertFalse(bool(out["next", "match_completed"][0]))
+        self.assertEqual(out["next", "reward"][0].flatten().tolist(), [0.0, 0.0])
+        self.assertEqual(env.completed_matches, 0)
+        self.assertEqual(st.revisions, 1)
+        self.assertEqual(st.step_index, 0, "a revision is not a native advance")
+        self.assertNotEqual(st.request_ids, before_req,
+                            "a revision must evict the stale request identity")
+
+    def test_illegal_packet_raises_before_submission(self):
+        """Pre-validation means an illegal packet never becomes a 'revision'."""
+        env = PA4EnvBase(batch_size=1, seed=1)
+        env.reset()
+        env._engine = _Proxy(
+            env._engine, lambda specs: [(False, False, False, None, None, 1, 2)])
+        p = env.legal_action_packet()
+        p["action"][0, 0, 0] = torch.tensor([255, 255, 255, 127, 255, 255])
+        with self.assertRaises(RuntimeError) as ctx:
+            env.step(p)
+        self.assertIn("illegal action", str(ctx.exception))
+        self.assertEqual(env._slots[0].revisions, 0,
+                         "an invalid submission must not be counted as a revision")
+
+
+class RequiredIdentityTest(unittest.TestCase):
+    """F2/N5: identity fields are required, not opt-out."""
+
+    def test_packet_without_episode_id_rejected(self):
+        env = PA4EnvBase(batch_size=1, seed=1)
+        env.reset()
+        p = env.legal_action_packet()
+        del p["action_episode_id"]
+        with self.assertRaises(RuntimeError) as ctx:
+            env.step(p)
+        self.assertIn("action_episode_id", str(ctx.exception))
+
+    def test_packet_without_generation_rejected(self):
+        env = PA4EnvBase(batch_size=1, seed=1)
+        env.reset()
+        p = env.legal_action_packet()
+        del p["action_native_generation"]
+        with self.assertRaises(RuntimeError) as ctx:
+            env.step(p)
+        self.assertIn("action_native_generation", str(ctx.exception))
+
+
 class _Proxy:
     """Transparent proxy so a single native call can be substituted."""
 

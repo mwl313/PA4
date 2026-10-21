@@ -71,6 +71,13 @@ class SlotState:
     completed_matches: int = 0
     truncated_episodes: int = 0
     revisions: int = 0
+    # Raw native flags as reported when this episode concluded. A later step on
+    # an already-concluded row re-reports THESE, never a fabricated value: a
+    # truncated episode must not turn into a natural termination on the next
+    # call (contract: PA4-P2-DESIGN-v1.0 L180).
+    concluded_terminated: bool = False
+    concluded_truncated: bool = False
+    concluded_winner: int = -1
     # The exact seed/teams actually submitted at reset, so an independent oracle
     # can reproduce the episode without re-deriving (and off-by-one-ing) it.
     used_seed: tuple[int, int, int, int] = (0, 0, 0, 0)
@@ -404,6 +411,15 @@ class PA4EnvBase(EnvBase):
     # -- stepping --------------------------------------------------------
     def _step(self, tensordict: TensorDict) -> TensorDict:
         n = self._batch
+        # Identity fields are REQUIRED, not optional: an absent field must not
+        # silently disable stale-packet detection (fail closed, DESIGN §2.2.4).
+        for key in ("action", "action_branch_count", "action_present",
+                    "action_request_id", "action_episode_id",
+                    "action_native_generation"):
+            if key not in tensordict.keys():
+                raise RuntimeError(
+                    f"action packet missing required key {key!r}; stale-packet "
+                    f"detection cannot be skipped")
         action = tensordict["action"].to(torch.long)
         counts = tensordict["action_branch_count"].to(torch.long)
         present = tensordict["action_present"].to(torch.bool)
@@ -446,18 +462,16 @@ class PA4EnvBase(EnvBase):
                         f"stale action_request_id row={r} seat={side}: "
                         f"{int(req_ids[r, side])} != {st.request_ids[side]}"
                     )
-                if "action_native_generation" in tensordict.keys():
-                    gen_in = int(tensordict["action_native_generation"][r, side])
-                    if gen_in != st.generation:
-                        raise RuntimeError(
-                            f"stale action_native_generation row={r} seat={side}: "
-                            f"{gen_in} != {st.generation}")
-                if "action_episode_id" in tensordict.keys():
-                    ep_in = int(tensordict["action_episode_id"][r, side])
-                    if ep_in != st.episode_id:
-                        raise RuntimeError(
-                            f"stale action_episode_id row={r} seat={side}: "
-                            f"{ep_in} != {st.episode_id}")
+                gen_in = int(tensordict["action_native_generation"][r, side])
+                if gen_in != st.generation:
+                    raise RuntimeError(
+                        f"stale action_native_generation row={r} seat={side}: "
+                        f"{gen_in} != {st.generation}")
+                ep_in = int(tensordict["action_episode_id"][r, side])
+                if ep_in != st.episode_id:
+                    raise RuntimeError(
+                        f"stale action_episode_id row={r} seat={side}: "
+                        f"{ep_in} != {st.episode_id}")
                 k = int(counts[r, side])
                 if k < 1 or k > MAX_BRANCHES:
                     raise RuntimeError(f"invalid action_branch_count {k} row={r} seat={side}")
@@ -528,6 +542,9 @@ class PA4EnvBase(EnvBase):
                 st.match_committed = True
                 st.completed_matches += 1
                 completed[r] = True
+                st.concluded_terminated = True
+                st.concluded_truncated = bool(trunc)
+                st.concluded_winner = int(win) if win is not None else -1
                 if win is not None:
                     w = int(win)
                     if w == 0:
@@ -543,6 +560,9 @@ class PA4EnvBase(EnvBase):
                 # no match_completed flag and no terminal payout.
                 st.match_committed = True
                 st.truncated_episodes += 1
+                st.concluded_terminated = False
+                st.concluded_truncated = True
+                st.concluded_winner = int(win) if win is not None else -1
 
         obs = self._observation_td()
         obs["request_revised"] = revised
@@ -557,9 +577,14 @@ class PA4EnvBase(EnvBase):
         # transition to report, but it must not appear as a live, unfinished
         # episode. Surface it as done so callers do not treat it as playable.
         for r in finished_rows:
+            st = self._slots[r]
+            # Re-report how this episode ACTUALLY ended. Setting terminated=True
+            # unconditionally would silently convert a truncation into a natural
+            # completion (and lose the winner) on any post-terminal step.
             obs["done"][r, 0] = True
-            obs["terminated"][r, 0] = True
-            obs["winner"][r] = int(obs["winner"][r]) if int(obs["winner"][r]) >= 0 else -1
+            obs["terminated"][r, 0] = st.concluded_terminated
+            obs["truncated"][r, 0] = st.concluded_truncated
+            obs["winner"][r] = st.concluded_winner
 
         # Rows whose episode concluded but which are still in the batch need to
         # leave finished state; auto-reset only those rows so fixed shapes hold

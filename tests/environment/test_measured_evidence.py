@@ -68,6 +68,23 @@ def play_measured(env, rng_base=1701, max_steps=400):
             "illegal": illegal, "revisions": revisions}
 
 
+# The exact table RECEIPT.json publishes. If the implementation changes, this
+# test fails and the receipt must be re-measured rather than silently drifting.
+DOCUMENTED_TRACE = (
+    {"seed": 1, "steps": 20, "winner": 0, "reward": [1.0, -1.0]},
+    {"seed": 2, "steps": 11, "winner": 1, "reward": [-1.0, 1.0]},
+    {"seed": 3, "steps": 19, "winner": 0, "reward": [1.0, -1.0]},
+    {"seed": 4, "steps": 14, "winner": 1, "reward": [-1.0, 1.0]},
+)
+DOCUMENTED_KIND_PAIRS = {
+    ("Preview", "Preview"),
+    ("Normal", "Normal"),
+    ("Replacement", "Replacement"),
+    ("Replacement", "Wait"),
+    ("Wait", "Replacement"),
+}
+
+
 class MeasuredEvidenceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -116,6 +133,26 @@ class MeasuredEvidenceTest(unittest.TestCase):
         """A native operational error raises, so reaching here means none occurred."""
         for r in self.results:
             self.assertTrue(r["finished"], r)
+
+    def test_documented_trace_matches_receipt(self):
+        """steps_per_game / winners / rewards in RECEIPT.json are measured here."""
+        got = [(r["seed"], r["steps"], r.get("winner"), r.get("reward"))
+               for r in self.results]
+        want = [(d["seed"], d["steps"], d["winner"], d["reward"])
+                for d in DOCUMENTED_TRACE]
+        self.assertEqual(got, want,
+                         "measured trace no longer matches the receipt table")
+
+    def test_no_revisions_measured(self):
+        """`revisions_observed: 0` is asserted, not prose."""
+        for r in self.results:
+            self.assertEqual(r["revisions"], 0, r)
+
+    def test_documented_request_kind_pairs_measured(self):
+        """`request_kind_pairs_observed` is asserted as an exact measured set."""
+        seen = set().union(*(r["kinds"] for r in self.results))
+        self.assertEqual(seen, DOCUMENTED_KIND_PAIRS,
+                         f"measured pairs differ from the receipt: {sorted(seen)}")
 
 
 class InvalidSubmissionTest(unittest.TestCase):

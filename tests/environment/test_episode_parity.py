@@ -68,17 +68,23 @@ def run_lockstep(env: PA4EnvBase, max_steps: int = 400) -> ParityReport:
         counts = torch.zeros((n, 2), dtype=torch.long)
         present = torch.zeros((n, 2), dtype=torch.bool)
         req_ids = torch.zeros((n, 2), dtype=torch.long)
+        ep_ids = torch.zeros((n, 2), dtype=torch.long)
+        gens = torch.zeros((n, 2), dtype=torch.long)
         for side, acts in choices:
             action[row, side, :len(acts)] = torch.tensor(acts, dtype=torch.long)
             counts[row, side] = len(acts)
             present[row, side] = True
         for side in (0, 1):
             req_ids[row, side] = st.request_ids[side]
+            ep_ids[row, side] = st.episode_id
+            gens[row, side] = st.generation
 
         from tensordict import TensorDict
 
         packet = TensorDict({"action": action, "action_branch_count": counts,
-                             "action_present": present, "action_request_id": req_ids},
+                             "action_present": present, "action_request_id": req_ids,
+                             "action_episode_id": ep_ids,
+                             "action_native_generation": gens},
                             batch_size=[n])
         out = env.step(packet)
         oracle_res = oracle.step(slot, gen, choices)
