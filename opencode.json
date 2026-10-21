@@ -5,7 +5,7 @@
   "provider": {
     "deepseek": {
       "options": {
-        "apiKey": "{file:$HOME/.config/pa4-secrets/deepseek.key}"
+        "apiKey": "{file:/home/pa4/.config/pa4-secrets/deepseek.key}"
       }
     }
   },
