@@ -30,24 +30,40 @@ No PA3 code is migrated, no checkpoints downloaded, no fixtures generated.
   independently verified by PA4 and are **not** substituted for the pinned SHA.
 - No active PA3 production machine was accessed. The user's live training sources and
   checkpoints were not inspected in P0.
-- **PA3 was not modified** — measured, not assumed:
+- **PA3 was not modified** — measured with an explicit `-C` so the command cannot silently
+  run against PA4:
 
   ```
   $ git -C /root/projects/_pa3_ref/pa3 rev-parse HEAD
   65bc980abd8e0bbec14158b9ddc2884bb1726a4e
-  $ git status --porcelain | wc -l
-  0                      # working tree clean
-  $ git reflog | wc -l
-  1                      # single clone entry, no local commits
+  $ git -C /root/projects/_pa3_ref/pa3 rev-parse origin/main
+  65bc980abd8e0bbec14158b9ddc2884bb1726a4e     # HEAD == remote pin
+  $ git -C /root/projects/_pa3_ref/pa3 status --porcelain | wc -l
+  0                                             # working tree clean
+  $ git -C /root/projects/_pa3_ref/pa3 reflog | wc -l
+  1                                             # clone entry only, no local commits
+  $ git -C /root/projects/_pa3_ref/pa3 diff --stat origin/main HEAD | wc -l
+  0                                             # no divergence from the pinned ref
   ```
+
+  Baseline for "unmodified" is the freshly cloned `origin/main` at
+  `65bc980abd8e0bbec14158b9ddc2884bb1726a4e`; every check above compares against it.
 
 - **PA4 isolation** — measured:
   - PA4 root `/root/projects/PokeAgent4.0` and PA3 reference
     `/root/projects/_pa3_ref/pa3` are distinct real paths.
   - `sys.path` inside the PA4 venv contains **no** PA3 entry (`NO_PA3_ON_SYS_PATH`).
-  - `import pa3_engine` fails with `ImportError` (not importable from PA4).
+  - The real PA3 package names are not importable from the PA4 venv:
+    `pa3_engine` → `ModuleNotFoundError: No module named 'pa3_engine'`;
+    `pa3_observation` → same; `agent` → same.
   - No PA4 source/config file references a PA3 local path; only documentation mentions the
     upstream URL.
+
+  **Isolation caveat:** an `ImportError`/`ModuleNotFoundError` proves the module is not
+  resolvable in this venv; it does not prove the absence of a vendored copy under a
+  different name, nor does it inspect symlinks. No such copy exists in the committed tree
+  (16 tracked files, listed in `git ls-files`), but this check is name-based, not a
+  sandbox guarantee.
 
 ---
 
@@ -128,20 +144,28 @@ mask columns). Per-token token-payload bytes
 **436 bytes/token**. The full fixed blob, following `engine/src/python.rs:27-36` verbatim:
 
 ```
-OBSERVATION_FIXED_BYTES = 2              // schema version
-                        + 32             // contract hash
-                        + 96 * 1         // token presence/role byte
-                        + 96 * 32 * 2    // categories (u16)
-                        + 96 * 32        // category_known
-                        + 96 * 50 * 4    // floats (f32)
-                        + 96 * 50        // float_known
-                        + 96 * 40        // flags
-                        + 96 * 40        // flag_known
-                        + 96 * 5 * 2     // role/side
+OBSERVATION_FIXED_BYTES = 2              // schema_version (u16)            -> put_u16
+                        + 32             // CONTRACT_BYTES hash             -> extend_from_slice
+                        + 96 * 1         // token_mask: one presence byte per token
+                        + 96 * 32 * 2    // categories (u16 x 32)           -> pack_tokens
+                        + 96 * 32        // category_known (u8 x 32)
+                        + 96 * 50 * 4    // floats (f32 x 50)
+                        + 96 * 50        // float_known (u8 x 50)
+                        + 96 * 40        // flags (u8 x 40)
+                        + 96 * 40        // flag_known (u8 x 40)
+                        + 96 * 5 * 2     // 5 ragged length rows (u16 each):
+                                         //   effect_repertoire/type/base_move/move_effect
                         = 41,986 bytes
 ```
 
-(Recomputed independently: token payload `96 * 426 = 40,896`; plus `2 + 32 + 96 + 96*10 =
+Provenance of the two terms absent from `TokenFeatures`: `pack_fixed_into`
+(`engine/src/python.rs:137-160`) writes `schema_version`, then `CONTRACT_BYTES`, then
+`for present in view.token_mask { out.push(u8::from(present)) }` (**that is the `96*1`**),
+then `pack_tokens(...)`, then five loops over `effect_ranges`, `repertoire_ranges`,
+`type_ranges`, `base_move_ranges`, `move_effect_ranges`, each `put_u16(len)` (**that is the
+`96*5*2`**). `TokenFeatures` at `observation.rs:152-159` covers only the middle block.
+
+(Recomputed independently: token payload `96 * 426 = 40,896`; plus `2 + 32 + 96 + 960 =
 1,090` → `41,986`. This matches the constant's literal expression.)
 
 **A "token" counts 96 entity slots; category/float/flag counts are per slot.** P1 must not

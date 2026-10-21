@@ -30,8 +30,12 @@
   "gates": {
     "G0_A": "PASS",
     "G0_B": "PASS",
-    "G0_C": "PASS",
+    "G0_C": "PASS_READ_ONLY_CAPABILITY_SCOPED",
     "G0_D": "PASS"
+  },
+  "gate_scoping": {
+    "G0_C": "SCOPED PASS. The P0 design fail condition is 'if the auditor can modify files or execute shell commands, report G0-C as BLOCKED'. That condition is NOT triggered: the live auditor registry held only read/glob/grep, and no write/shell/task capability existed. This PASS therefore covers the read-only boundary and the lead write only. It explicitly does NOT cover 'the auditor reviewed the PA4 deliverables', which is recorded false below.",
+    "G0_C_uncovered_conjunct": "auditor review of the actual PA4 WSL deliverables"
   },
   "evidence": {
     "G0_A": {
@@ -69,8 +73,9 @@
       "auditor_task_attempt": "no task/subagent tool present in registry",
       "proof_file_created": false,
       "lead_independent_check": "auditor_write_proof.txt absent from directory listing",
+      "negative_control": "scripts/p0_negative_control.py runs 4 mutated variants under python -O; all exit 1 (NEGATIVE_CONTROL_PASS variants=4)",
       "conjunct_status": {
-        "lead_tool_write_evidenced": true,
+        "lead_tool_write_evidenced": "transcript_evidenced_not_independently_audited",
         "auditor_fresh_context_evidenced": true,
         "auditor_read_only_evidenced": true,
         "auditor_covered_pa4_deliverables": false

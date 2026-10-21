@@ -8,7 +8,7 @@
 |---|---|---|
 | G0-A Dev host (WSL2 + CUDA + 8×8 tensor) | **PASS** | `docs/phases/P0/ENVIRONMENT.md` §5 |
 | G0-B Locked dependencies + TorchRL APIs + TensorDict 2×4 | **PASS** | `docs/phases/P0/COMPATIBILITY.md` §1–2 |
-| G0-C DeepSeek-only routing + read-only auditor | **PASS** | `docs/phases/P0/COMPATIBILITY.md` §3 |
+| G0-C DeepSeek-only routing + read-only auditor | **PASS (scoped)** | `docs/phases/P0/COMPATIBILITY.md` §3 |
 | G0-D PA3 reference freeze + P1 handoff | **PASS** | `docs/phases/P0/SOURCE_FREEZE.md` |
 
 PASS establishes **development readiness only**. It does not prove that the battle engine,
@@ -54,7 +54,11 @@ returned `INSUFFICIENT_EVIDENCE` on the first evidence set. Its findings were ac
 | PA3-unmodified unevidenced | `git status`/`reflog` output added (SOURCE_FREEZE.md §1) |
 | PA4 isolation unevidenced | `sys.path` and `import pa3_engine` checks added |
 | Observation width unreconciled | Resolved: 41,986 bytes, per-token counts (D-006) |
-| Auditor could not audit deliverables | Recorded as an explicit limitation, not claimed as covered |
+| Auditor could not audit deliverables | Recorded as `auditor_covered_pa4_deliverables: false`; G0-C relabelled `PASS_READ_ONLY_CAPABILITY_SCOPED` |
+| PA3 git commands not anchored to PA3 | Re-run with explicit `-C /root/projects/_pa3_ref/pa3`; HEAD == origin/main, 0 dirty, 1 reflog |
+| Isolation check too weak | Tested real PA3 package names (`pa3_engine`, `pa3_observation`, `agent`) — all `ModuleNotFoundError`; caveat recorded |
+| Negative control exercised only the version pin | Added `scripts/p0_negative_control.py`, 4 mutations on the committed file, all exit 1 under `-O` |
+| `96*1` / `96*5*2` terms unexplained | Traced to `token_mask` and five ragged-length `u16` rows in `pack_fixed_into` |
 
 Remaining gaps are recorded rather than closed by assertion.
 

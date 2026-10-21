@@ -8,6 +8,11 @@ All values below are measured on the actual host. No assumed values.
 > explicit `check()` instead of bare `assert`, (b) assert installed versions equal the pins,
 > (c) verify each API is a real class with an `__init__` signature. Added a negative-control
 > run proving the script fails on version drift. Added lock-graph and host-identity evidence.
+>
+> **Revision note (v1.2):** added `scripts/p0_negative_control.py`, which mutates the
+> **committed** script four ways (torchrl pin, tensordict pin, TensorDict shape, CUDA sum) and
+> requires each variant to exit non-zero under `-O`. Result: `NEGATIVE_CONTROL_PASS variants=4`.
+> G0-C is now recorded as a **scoped** pass, not a blanket one.
 
 ---
 
@@ -97,16 +102,20 @@ This distinguishes real classes from `None` aliases or stubs.
 
 ### Negative control — proves the script actually fails
 
-A copy of the script with `"torchrl": "0.14.1"` replaced by `"torchrl": "9.9.9"`, run under
-`python -O` (where bare `assert`s are stripped):
+`scripts/p0_negative_control.py` rewrites the **committed** script with four independent
+mutations and requires each variant to exit non-zero under `python -O` (where bare
+`assert`s would be stripped):
 
 ```
-$ uv run --frozen python -O /tmp/p0_smoke_neg.py
-P0_SMOKE_FAIL: torchrl installed='0.14.1' expected='9.9.9'
-exit=1
+PASS wrong_torchrl_pin:   exit=1 matched='P0_SMOKE_FAIL: torchrl'
+PASS wrong_tensordict_pin: exit=1 matched='P0_SMOKE_FAIL: tensordict'
+PASS wrong_tensordict_shape: exit=1 matched='P0_SMOKE_FAIL'
+PASS wrong_cuda_sum:      exit=1 matched='P0_SMOKE_FAIL: 8x8 cuda sum'
+NEGATIVE_CONTROL_PASS variants=4
 ```
 
-So the gate script is not a rubber stamp and is not optimizable away.
+So the version-pin, TensorDict-shape and CUDA branches are each demonstrated to be fail-able,
+not just optimizable. The script is not a rubber stamp.
 
 ### `__init__` signatures (recorded for P1 planning only)
 
@@ -170,18 +179,22 @@ Lead-side tool write: the marker file was created and read back through real too
 - **Established:** `pa4-lead` performs real write tool calls; a fresh-context `pa4-auditor`
   can read and report exact file content; the auditor had **no** edit, shell or task
   capability available to it at all.
+- **Scope of the PASS:** the design's fail condition is *"if the auditor can modify files or
+  execute shell commands, report G0-C as BLOCKED"*. That condition is **not** triggered, so
+  G0-C passes **for the read-only boundary and the lead write only**.
+- **Not covered — auditor deliverable review:** `pa4-auditor` runs in the **Windows** domain
+  (`C:\Users\...\Desktop\PA4`) while PA4 sources live on the WSL ext4 filesystem. The
+  auditor's positive read control used a workspace-internal **Windows** file. It therefore did
+  **not** review the PA4 deliverables under `/root/projects/...`. Recorded as
+  `auditor_covered_pa4_deliverables: false`. To obtain real diff review in P1, the auditor
+  workspace must move into WSL.
 - **Limitation — capability absence, not present-and-refused:** OpenCode v2 removes denied
-  tools from an agent's registry entirely, so there is no "tool existed and refused" error
-  to observe. Absence is a stronger guarantee in-session, but it is a different mechanism
-  than the design's §4 wording ("edit/shell denied") suggests. Recorded as `D-004`.
-- **Limitation — auditor cannot reach the WSL repo:** `pa4-auditor` runs in the **Windows**
-  domain (`C:\Users\...\Desktop\PA4`), while PA4 sources live on the WSL ext4 filesystem. The
-  auditor's positive read control therefore used a workspace-internal **Windows** file, not
-  the repo itself. The auditor cannot audit PA4 deliverables under `/root/projects/...`
-  unless its workspace is moved into WSL.
+  tools from an agent's registry entirely, so there is no "tool existed and refused" error to
+  observe. Absence is a stronger in-session guarantee, but a different mechanism than the
+  design's wording suggests. Recorded as `D-004`.
 - **Limitation — same model:** lead and auditor are both `deepseek/deepseek-flash`. Context
-  separation is a process control, not independent model verification. Objective
-  correctness comes only from automated tests and PA3 reference contracts.
+  separation is a process control, not independent model verification. Objective correctness
+  comes only from automated tests and PA3 reference contracts.
 
 ---
 
