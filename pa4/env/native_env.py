@@ -91,7 +91,7 @@ class PA4EnvBase(EnvBase):
                  data_dir: str = DEFAULT_DATA_DIR,
                  teams_json: str | None = None,
                  teams: list[tuple[int, int]] | None = None,
-                 seed: int = 0, auto_reset: bool = False):
+                 seed: int = 0, auto_reset: bool = False, use_fast_obs: bool = True):
         super().__init__(device=torch.device(device), batch_size=torch.Size([batch_size]))
         self._mod = _load_engine()
         self._data_dir = data_dir
@@ -103,6 +103,11 @@ class PA4EnvBase(EnvBase):
         self._seed = int(seed)
         self._slots: list[SlotState] = [SlotState(slot=i) for i in range(batch_size)]
         self._batch = int(batch_size)
+        # per-step decoded-observation cache: (slot, gen, step_index, side) -> dict
+        self._obs_cache: dict[tuple, dict] = {}
+        # Fast decoder is opt-in but default-on; it is inert until verified.
+        self._decoder = None
+        self._use_fast_obs = bool(use_fast_obs)
         self._make_specs()
 
     # -- paths used by the driver/tests ---------------------------------
@@ -241,6 +246,18 @@ class PA4EnvBase(EnvBase):
                 used_seed=tuple(seeds[i]),
                 used_teams=(team_a[i], team_b[i]),
             )
+        # Any native state change invalidates cached decodes.
+        self._obs_cache.clear()
+
+        # One-time fast-decoder equivalence proof, per instance, against PA3's
+        # authoritative adapter on a real freshly-reset observation.
+        if self._use_fast_obs and self._decoder is None:
+            from pa4.env.obs_fastpath import SliceDecoder
+
+            dec = SliceDecoder(self._engine, self._mod)
+            first = self._slots[fresh[0]]
+            dec.verify_contract(first.slot, first.generation)
+            self._decoder = dec
         return self._observation_td()
 
     def _reset(self, tensordict: TensorDict | None = None, **kwargs) -> TensorDict:
@@ -317,7 +334,28 @@ class PA4EnvBase(EnvBase):
         )
 
     def _observe_one(self, st: SlotState, side: int) -> dict:
-        """Decode one seat's own view via PA3's canonical parser."""
+        """Decode one seat's own view.
+
+        Uses the verified fast decoder on the hot path (pa4/env/obs_fastpath.py)
+        and caches the result for the current (slot, generation, step_index, side)
+        so a transition decodes each seat at most once instead of twice. Falls
+        back to PA3's authoritative adapter when the fast path is disabled or not
+        yet verified.
+        """
+        cache_key = (st.slot, st.generation, st.step_index, side)
+        cached = self._obs_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        if self._decoder is not None and self._decoder.verified:
+            obs = self._decoder.decode_fast(st.slot, st.generation, side)
+        else:
+            obs = self._observe_one_full(st, side)
+        self._obs_cache[cache_key] = obs
+        return obs
+
+    def _observe_one_full(self, st: SlotState, side: int) -> dict:
+        """Authoritative PA3 decode path (unchanged behaviour)."""
         from agent.types.observation import ObservationBatch  # noqa: PLC0415
 
         fixed, ragged = self._engine.observe_fixed_batch([(st.slot, st.generation)], [side])
@@ -334,6 +372,10 @@ class PA4EnvBase(EnvBase):
             "role_ids": batch.role_ids[0].cpu(),
             "side_ids": batch.side_ids[0].cpu(),
         }
+
+    def invalidate_obs_cache(self) -> None:
+        """Drop cached decodes (call after any state change that bypasses _step)."""
+        self._obs_cache.clear()
 
     def player_view(self, seat: int, row: int = 0) -> dict:
         """Actor-visible view: ONLY that seat's own observation.
