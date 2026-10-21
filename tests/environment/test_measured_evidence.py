@@ -183,7 +183,10 @@ class InvalidSubmissionTest(unittest.TestCase):
                 self.env.step(p)
             self.assertIn("branch count mismatch", str(ctx.exception))
         else:
-            self.skipTest("first seat has a single-branch request")
+            # Not a skip: the receipt claims multi-branch requests are exercised,
+            # so a single-branch-only reset would mean the evidence is missing.
+            self.fail("first seat has a single-branch request; wrong-branch-count "
+                      "rejection was not exercised")
 
     def test_extra_actions_for_wait_seat_rejected(self):
         """Find a Wait state and submit an action for it."""
@@ -202,7 +205,9 @@ class InvalidSubmissionTest(unittest.TestCase):
                 torch.Generator().manual_seed(step)))
             if bool(out["next", "done"][0, 0]):
                 break
-        self.skipTest("no Wait state reached in this seed")
+        # Not a skip: `wait_observed: true` is a receipt claim, so failing to
+        # reach a Wait state must fail rather than silently reduce coverage.
+        self.fail("no Wait state reached in this seed; Wait rejection not exercised")
 
     def test_stale_generation_rejected(self):
         p = self._packet()

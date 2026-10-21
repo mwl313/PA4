@@ -237,6 +237,7 @@ class PA4EnvBase(EnvBase):
                 episode_id=prev.episode_id + 1, step_index=0, request_seq=0,
                 request_ids=(1, 1), match_committed=False,
                 completed_matches=prev.completed_matches,
+                truncated_episodes=prev.truncated_episodes,
                 used_seed=tuple(seeds[i]),
                 used_teams=(team_a[i], team_b[i]),
             )
@@ -437,6 +438,10 @@ class PA4EnvBase(EnvBase):
                     raise RuntimeError(
                         f"stale packet row={r}: episode already concluded "
                         f"(episode_id={st.episode_id}) but a seat still submits")
+                if bool((counts[r] != 0).any()):
+                    raise RuntimeError(
+                        f"extra actions for concluded row={r}: "
+                        f"branch_count={counts[r].tolist()} (must be 0)")
                 finished_rows.append(r)
                 continue
             choices = []
@@ -500,7 +505,9 @@ class PA4EnvBase(EnvBase):
             specs.append((st.slot, st.generation, choices))
             rows_active.append(r)
 
-        results = self._engine.step_batch(specs)
+        # Never call the native binding with an empty batch: rows whose episode
+        # already concluded have no transition to request.
+        results = self._engine.step_batch(specs) if specs else []
 
         reward = torch.zeros((n, NUM_SEATS, 1), dtype=torch.float32)
         terminated = torch.zeros((n, 1), dtype=torch.bool)

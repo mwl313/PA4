@@ -122,9 +122,12 @@ class BattleStepTest(unittest.TestCase):
         env.reset()
         packet = env.legal_action_packet()
         out = env.step(packet)
-        if not bool(out["next", "done"][0, 0]):
-            self.assertEqual(env.completed_matches, 0)
-            self.assertEqual(out["next", "match_completed"].tolist(), [False])
+        # Fail rather than silently pass if this seed's first step is terminal:
+        # a vacuous test is not evidence of nonterminal accounting.
+        self.assertFalse(bool(out["next", "done"][0, 0]),
+                         "seed 1 step 1 was terminal; nonterminal accounting untested")
+        self.assertEqual(env.completed_matches, 0)
+        self.assertEqual(out["next", "match_completed"].tolist(), [False])
 
 
 class RejectionTest(unittest.TestCase):
