@@ -5,7 +5,7 @@
   "verdict_scope": "G1-A..G1-E pass. G1-D is a CPU transport proof; no GPU central-inference claim is made.",
   "pa4_base_commit": "a900f4793afb4417c1f3226a5d423aca9c038e43",
   "pa4_tested_commit": "aa1a624776f5f646efb231e7c4fce3c8950be3d0",
-  "pa4_final_head": "RECORDED_AFTER_METADATA_COMMIT",
+  "pa4_final_head": "b9115a0610b104c0f2b579362dc013264873c469",
   "pa3_source_sha": "65bc980abd8e0bbec14158b9ddc2884bb1726a4e",
   "pa3_worktree_clean": true,
   "pa3_modified_files": 0,
