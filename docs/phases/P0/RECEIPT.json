@@ -1,0 +1,67 @@
+{
+  "phase": "P0",
+  "verdict": "PASS",
+  "pa4_commit": "119c5a7771230bd38e446dde4e4562b2f28b28fa",
+  "pa3_reference_commit": "65bc980abd8e0bbec14158b9ddc2884bb1726a4e",
+  "host": "wsl2_ubuntu_24_04_win11",
+  "gpu": "rtx_4060_ti_8gb",
+  "python": "3.12.3",
+  "torch": "2.9.1+cu128",
+  "torchrl": "0.14.1",
+  "tensordict": "0.14.3",
+  "cuda_runtime": "12.8",
+  "nvidia_driver": "610.88",
+  "uv": "0.13.4",
+  "dependency_lock_sha256": "8f414f526aad676f6466099da9bf96240f739abae9b9376a5c32fe845340d96e",
+  "opencode_version": "2.1.2",
+  "deepseek_model_route": "deepseek/deepseek-flash",
+  "auditor_model_route": "deepseek/deepseek-flash",
+  "auditor_read_only_verified": true,
+  "auditor_read_only_method": "capability_absence: live fresh-context registry contained only read/glob/grep; no edit/shell/task tool existed; no proof file created",
+  "gates": {
+    "G0_A": "PASS",
+    "G0_B": "PASS",
+    "G0_C": "PASS",
+    "G0_D": "PASS"
+  },
+  "evidence": {
+    "G0_A": {
+      "command": "uv run --frozen python scripts/p0_smoke.py (CUDA section)",
+      "result": "torch.cuda.is_available=True; ones((8,8),cuda).sum()==64.0; gpu=NVIDIA GeForce RTX 4060 Ti",
+      "exit_code": 0
+    },
+    "G0_B": {
+      "commands": [
+        "uv lock (resolved 37 packages)",
+        "rm -rf .venv && uv sync --frozen",
+        "uv run --frozen python scripts/p0_smoke.py"
+      ],
+      "result": "5/5 required API imports ok; TensorDict 2x4 batch_size=[2] shape=(2,4); reproduced after clean venv rebuild",
+      "exit_code": 0
+    },
+    "G0_C": {
+      "lead_tool_write": "marker PA4_P0_DEEPSEEK_TOOL_SMOKE_OK written to ignored scratch via workspace-internal write",
+      "auditor_read": "fresh-context pa4-auditor read marker verbatim: PA4_P0_DEEPSEEK_TOOL_SMOKE_OK",
+      "auditor_write_attempt": "no edit/write/patch tool present in registry",
+      "auditor_shell_attempt": "no shell/bash/execute tool present in registry",
+      "auditor_task_attempt": "no task/subagent tool present in registry",
+      "proof_file_created": false,
+      "verdict": "PASS"
+    },
+    "G0_D": {
+      "command": "git clone --depth 1 --branch main https://github.com/mwl313/PokeAgent3.0; git rev-parse HEAD",
+      "result": "65bc980abd8e0bbec14158b9ddc2884bb1726a4e",
+      "pa3_worktree_clean_after_inspection": true,
+      "p1_handoff_questions": 3
+    }
+  },
+  "limitations": [
+    "Rust 1.90.0 toolchain not yet installed in WSL; required for P1/P2 engine build",
+    "Pinned PA3 SHA is the public main tip, not verified live production state; PA3 records production stopped 2026-10-16",
+    "pa4-auditor runs in the Windows domain and cannot read the WSL ext4 repo; positive read control was demonstrated on a Windows workspace-internal path",
+    "Auditor read-only status is capability absence (tools removed from registry by OpenCode v2), not present-and-refused",
+    "Same-model review is not independent model verification; objective tests and PA3 contracts remain authoritative"
+  ],
+  "notes": "P0 PASS establishes development readiness only. No battle env, conditional action sampler or PPO learner is implemented or proven. No cloud resources were used. No secrets committed.",
+  "generated_at": "2026-10-21"
+}
