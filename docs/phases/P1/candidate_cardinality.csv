@@ -1,0 +1,7 @@
+fixture_id,request_kind,branch_level,prefix_signature,legal_k,padded_p,complete_joint_paths_observed,overflow,remarks
+preview_duplicate_exclusion,Preview,0,(),6,64,NA,False,first-pick duplicate exclusion
+preview_duplicate_exclusion,Preview,1,"((0, 0, 255, 0, 0, 0),)",5,64,NA,False,first-pick duplicate exclusion
+preview_duplicate_exclusion,Preview,2,"((0, 0, 255, 0, 0, 0), (0, 1, 255, 0, 1, 0))",4,64,NA,False,first-pick duplicate exclusion
+preview_duplicate_exclusion,Preview,3,"((0, 0, 255, 0, 0, 0), (0, 1, 255, 0, 1, 0), (0, 2, 255, 0, 2, 0))",3,64,NA,False,first-pick duplicate exclusion
+normal_mega_resource,Normal,0,(),12,64,NA,False,mega_b0=0
+normal_mega_resource,Normal,1,"((1, 0, 0, -2, 255, 0),)",18,64,NA,False,b1_mega_available=8
