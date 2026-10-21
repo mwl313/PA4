@@ -22,6 +22,8 @@ from torchrl.data import Binary, Categorical, Composite, Unbounded
 from torchrl.envs import EnvBase
 
 # --- inherited contract constants (verified against the built module) -------
+OBS_LEAVES_CONST = ("token_mask", "categories", "category_known", "floats",
+                   "float_known", "flags", "flag_known", "role_ids", "side_ids")
 OBSERVATION_TOKENS = 96
 CATEGORY_COUNT = 32
 FLOAT_COUNT = 50
@@ -82,6 +84,16 @@ class SlotState:
     # can reproduce the episode without re-deriving (and off-by-one-ing) it.
     used_seed: tuple[int, int, int, int] = (0, 0, 0, 0)
     used_teams: tuple[int, int] = (0, 1)
+
+
+class _SlotRef:
+    """Minimal stand-in carrying a native handle for _observe_one_full."""
+
+    __slots__ = ("slot", "generation")
+
+    def __init__(self, slot, generation):
+        self.slot = slot
+        self.generation = generation
 
 
 class PA4EnvBase(EnvBase):
@@ -271,31 +283,55 @@ class PA4EnvBase(EnvBase):
 
     # -- observation assembly -------------------------------------------
     def _empty_players(self) -> dict:
+        """Return preallocated player buffers, zeroed only where cheap.
+
+        Allocating ~2 MB of tensors per step dominated profiling at N=16, so the
+        buffers are created once and rewritten in place. Seats without a valid
+        observation are zeroed individually (they are the minority after reset).
+        """
         n = self._batch
-        return {
-            "token_mask": torch.zeros((n, NUM_SEATS, OBSERVATION_TOKENS), dtype=torch.bool),
-            "categories": torch.zeros((n, NUM_SEATS, OBSERVATION_TOKENS, CATEGORY_COUNT), dtype=torch.long),
-            "category_known": torch.zeros((n, NUM_SEATS, OBSERVATION_TOKENS, CATEGORY_COUNT), dtype=torch.bool),
-            "floats": torch.zeros((n, NUM_SEATS, OBSERVATION_TOKENS, FLOAT_COUNT), dtype=torch.float32),
-            "float_known": torch.zeros((n, NUM_SEATS, OBSERVATION_TOKENS, FLOAT_COUNT), dtype=torch.bool),
-            "flags": torch.zeros((n, NUM_SEATS, OBSERVATION_TOKENS, FLAG_COUNT), dtype=torch.bool),
-            "flag_known": torch.zeros((n, NUM_SEATS, OBSERVATION_TOKENS, FLAG_COUNT), dtype=torch.bool),
-            "role_ids": torch.zeros((n, NUM_SEATS, OBSERVATION_TOKENS), dtype=torch.long),
-            "side_ids": torch.zeros((n, NUM_SEATS, OBSERVATION_TOKENS), dtype=torch.long),
-            "observation_valid": torch.zeros((n, NUM_SEATS), dtype=torch.bool),
-            "request_kind": torch.zeros((n, NUM_SEATS), dtype=torch.long),
-            "decision_required": torch.zeros((n, NUM_SEATS), dtype=torch.bool),
-            "request_id": torch.zeros((n, NUM_SEATS), dtype=torch.long),
-            "branch_count": torch.zeros((n, NUM_SEATS), dtype=torch.long),
-        }
+        shape_key = (n,)
+        buf = getattr(self, "_player_buf", None)
+        if buf is None or getattr(self, "_player_buf_shape", None) != shape_key:
+            buf = {
+                "token_mask": torch.zeros((n, NUM_SEATS, OBSERVATION_TOKENS), dtype=torch.bool),
+                "categories": torch.zeros((n, NUM_SEATS, OBSERVATION_TOKENS, CATEGORY_COUNT), dtype=torch.long),
+                "category_known": torch.zeros((n, NUM_SEATS, OBSERVATION_TOKENS, CATEGORY_COUNT), dtype=torch.bool),
+                "floats": torch.zeros((n, NUM_SEATS, OBSERVATION_TOKENS, FLOAT_COUNT), dtype=torch.float32),
+                "float_known": torch.zeros((n, NUM_SEATS, OBSERVATION_TOKENS, FLOAT_COUNT), dtype=torch.bool),
+                "flags": torch.zeros((n, NUM_SEATS, OBSERVATION_TOKENS, FLAG_COUNT), dtype=torch.bool),
+                "flag_known": torch.zeros((n, NUM_SEATS, OBSERVATION_TOKENS, FLAG_COUNT), dtype=torch.bool),
+                "role_ids": torch.zeros((n, NUM_SEATS, OBSERVATION_TOKENS), dtype=torch.long),
+                "side_ids": torch.zeros((n, NUM_SEATS, OBSERVATION_TOKENS), dtype=torch.long),
+                "observation_valid": torch.zeros((n, NUM_SEATS), dtype=torch.bool),
+                "request_kind": torch.zeros((n, NUM_SEATS), dtype=torch.long),
+                "decision_required": torch.zeros((n, NUM_SEATS), dtype=torch.bool),
+                "request_id": torch.zeros((n, NUM_SEATS), dtype=torch.long),
+                "branch_count": torch.zeros((n, NUM_SEATS), dtype=torch.long),
+            }
+            self._player_buf = buf
+            self._player_buf_shape = shape_key
+        # Clear only the seats that will not be overwritten this call.
+        buf["observation_valid"].zero_()
+        return buf
 
     def _observation_td(self) -> TensorDict:
+        """Build the observation TensorDict using ONE batched native call.
+
+        Previously this decoded each requesting seat with a separate
+        `observe_fixed_batch` call (2*N native calls per step). All requesting
+        seats are now decoded in a single native call, which profiling showed to
+        be the dominant cost at N>4.
+        """
         players = self._empty_players()
         slots = torch.zeros(self._batch, dtype=torch.long)
         gens = torch.zeros(self._batch, dtype=torch.long)
         eps = torch.zeros(self._batch, dtype=torch.long)
         steps = torch.zeros(self._batch, dtype=torch.long)
 
+        # --- collect all requesting (row, seat) pairs ---
+        pending = []
+        kinds_cache = []
         for r, st in enumerate(self._slots):
             slots[r] = st.slot
             gens[r] = st.generation
@@ -304,16 +340,26 @@ class PA4EnvBase(EnvBase):
             kinds = self._kinds(st)
             counts = self._branch_counts(st)
             st.last_kinds = kinds
+            kinds_cache.append((kinds, counts))
+            for side in range(NUM_SEATS):
+                if kinds[side] in POLICY_KINDS:
+                    pending.append((r, side))
+
+        # --- one native decode for every pending seat ---
+        decoded = self._decode_many(pending) if pending else []
+
+        di = 0
+        for r, (kinds, counts) in enumerate(kinds_cache):
             for side in range(NUM_SEATS):
                 kind = kinds[side]
                 players["request_kind"][r, side] = kind
                 players["decision_required"][r, side] = kind in POLICY_KINDS
                 players["branch_count"][r, side] = counts[side] if kind in POLICY_KINDS else 0
-                players["request_id"][r, side] = st.request_ids[side]
+                players["request_id"][r, side] = self._slots[r].request_ids[side]
                 if kind in POLICY_KINDS:
-                    obs = self._observe_one(st, side)
-                    for key in ("token_mask", "categories", "category_known", "floats",
-                                "float_known", "flags", "flag_known", "role_ids", "side_ids"):
+                    obs = decoded[di]
+                    di += 1
+                    for key in OBS_LEAVES_CONST:
                         players[key][r, side] = obs[key]
                     players["observation_valid"][r, side] = True
                 else:
@@ -332,6 +378,40 @@ class PA4EnvBase(EnvBase):
             },
             batch_size=[self._batch],
         )
+
+    def _decode_many(self, pairs) -> list[dict]:
+        """Decode several (row, seat) views in ONE native call, with caching."""
+        out: list[dict | None] = [None] * len(pairs)
+        fetch, fetch_idx = [], []
+        for i, (r, seat) in enumerate(pairs):
+            st = self._slots[r]
+            key = (st.slot, st.generation, st.step_index, seat)
+            hit = self._obs_cache.get(key)
+            if hit is not None:
+                out[i] = hit
+            else:
+                fetch.append((st.slot, st.generation, seat))
+                fetch_idx.append((i, key))
+
+        if fetch:
+            if self._decoder is not None and self._decoder.verified:
+                handles = [(h[0], h[1]) for h in fetch]
+                sides = [h[2] for h in fetch]
+                fixed, ragged = self._engine.observe_fixed_batch(handles, sides)
+                payload = self._mod.parse_batch(fixed, ragged, len(fetch))
+                views = self._decoder.decode_batch(payload, len(fetch))
+            else:
+                # Authoritative path: PA3's full adapter supplies the
+                # layout-derived role/side ids that the raw payload omits.
+                views = []
+                for (slot, gen, side) in fetch:
+                    views.append(self._observe_one_full(
+                        _SlotRef(slot, gen), side))
+            for (i, key), view in zip(fetch_idx, views):
+                self._obs_cache[key] = view
+                out[i] = view
+
+        return out
 
     def _observe_one(self, st: SlotState, side: int) -> dict:
         """Decode one seat's own view.

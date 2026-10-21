@@ -106,6 +106,40 @@ class SliceDecoder:
         self.fast_decodes += 1
         return out
 
+    # -- batched decode: one call for many views (biggest hot-path win) ----
+    def decode_batch(self, payload, n: int):
+        """Decode `n` stacked views at once.
+
+        Returns a list of per-view dicts. Role/side ids come from the layout and
+        are masked by each view's own token_mask, exactly as PA3 does.
+        """
+        cols = {}
+        for k in OBS_LEAVES:
+            if k in ("role_ids", "side_ids"):
+                continue
+            v = payload[k]
+            itemsize = v.itemsize
+            if not v.flags.writeable or (itemsize and any(
+                stride % itemsize for stride in v.strides
+            )):
+                v = np.array(v, dtype=v.dtype, order="C", copy=True)
+            t = torch.as_tensor(v)
+            if t.shape[0] != n:
+                t = t.reshape(n, *t.shape[1:] if t.dim() > 1 else ())
+            cols[k] = t.to(_LEAF_DTYPE[k])
+
+        token_mask = cols["token_mask"]
+        role = self._layout.default_roles().contiguous().clone()
+        role = role.unsqueeze(0).expand(n, -1).clone()
+        role[~token_mask] = self._layout.ROLE_PAD
+        side = self._layout.default_sides().contiguous().clone()
+        side = side.unsqueeze(0).expand(n, -1).clone()
+        cols["role_ids"] = role.to(torch.long)
+        cols["side_ids"] = side.to(torch.long)
+
+        self.fast_decodes += n
+        return [{k: cols[k][i] for k in OBS_LEAVES} for i in range(n)]
+
     # -- one-time equivalence proof ---------------------------------------
     def verify_contract(self, sample_slot: int, sample_generation: int, samples=(0, 1)) -> None:
         """Prove the fast tier matches PA3's authoritative decode exactly.
