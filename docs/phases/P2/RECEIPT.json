@@ -5,7 +5,7 @@
   "verdict_reason": "Four gates pass. G2-E is partial: its auditor leg (independent read-only review of the actual WSL repository files) could not be performed because the Lead session runs in the Windows opencode.exe domain and the auditor was denied external_directory access to every WSL path. The design states inline-only review is not an acceptable P2 independent file review.",
   "pa4_base_sha": "892f136f3704b773257a377c9a41c4fa50c74770",
   "pa4_tested_code_sha": "67f1d59dccf51d1be7f39d7452c86a0dcf30033a",
-  "pa4_final_head_sha": "RECORDED_IN_SUBSEQUENT_METADATA_COMMIT",
+  "pa4_final_head_sha": "9545e6bce558b808d50699ac73d7f73a6731d18b",
   "pa3_reference_sha": "65bc980abd8e0bbec14158b9ddc2884bb1726a4e",
   "pa3_worktree_clean": true,
   "dependency_lock_sha256": "8f414f526aad676f6466099da9bf96240f739abae9b9376a5c32fe845340d96e",
