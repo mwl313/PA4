@@ -102,7 +102,9 @@ This distinguishes real classes from `None` aliases or stubs.
 
 ### Negative control — proves the script actually fails
 
-`scripts/p0_negative_control.py` rewrites the **committed** script with four independent
+`scripts/p0_negative_control.py` is **committed to the repo** (tracked, not ignored) and grows
+the tree from 17 to 18 files; the earlier "16 tracked files" figure predated it. It rewrites
+the **committed** script with four independent
 mutations and requires each variant to exit non-zero under `python -O` (where bare
 `assert`s would be stripped):
 
@@ -113,6 +115,10 @@ PASS wrong_tensordict_shape: exit=1 matched='P0_SMOKE_FAIL'
 PASS wrong_cuda_sum:      exit=1 matched='P0_SMOKE_FAIL: 8x8 cuda sum'
 NEGATIVE_CONTROL_PASS variants=4
 ```
+
+The control operates on **temporary copies**, never the working tree, so it cannot mutate the
+committed script. `wrong_tensordict_shape` asserts only the generic `P0_SMOKE_FAIL` prefix
+(the broadest of the four); the other three match specific messages.
 
 So the version-pin, TensorDict-shape and CUDA branches are each demonstrated to be fail-able,
 not just optimizable. The script is not a rubber stamp.
@@ -174,6 +180,17 @@ listing; only `p0_agent_smoke.txt` present (29 bytes).
 Lead-side tool write: the marker file was created and read back through real tool calls, and
 `git check-ignore -v` confirmed it matched `.gitignore:10:tmp/`.
 
+### G0-C conjunct-by-conjunct status
+
+| Conjunct (per `PA4-P0-DESIGN-v1.1` §4 / §7) | Status | Evidence |
+|---|---|---|
+| Lead performs a real **write** tool call to ignored scratch | **met** | marker file created, read back, `git check-ignore` matched `.gitignore:10:tmp/` |
+| Fresh-context auditor **reads the marker** | **met** | attempt 3: auditor returned `PA4_P0_DEEPSEEK_TOOL_SMOKE_OK` verbatim (read of the actual file, not inference) |
+| Auditor **edit denied** | **met (by absence)** | registry = `read, glob, grep` only; no edit/write/patch existed |
+| Auditor **shell denied** | **met (by absence)** | no shell/bash/execute in registry |
+| Auditor **cannot nest** agents | **met (by absence)** | no task tool in registry |
+| Auditor reviews the PA4 deliverables | **not met** | Windows domain vs WSL ext4; see below |
+
 ### What G0-C does and does not establish
 
 - **Established:** `pa4-lead` performs real write tool calls; a fresh-context `pa4-auditor`
@@ -185,7 +202,7 @@ Lead-side tool write: the marker file was created and read back through real too
 - **Not covered — auditor deliverable review:** `pa4-auditor` runs in the **Windows** domain
   (`C:\Users\...\Desktop\PA4`) while PA4 sources live on the WSL ext4 filesystem. The
   auditor's positive read control used a workspace-internal **Windows** file. It therefore did
-  **not** review the PA4 deliverables under `/root/projects/...`. Recorded as
+  **not** review the PA4 deliverables under `/home/pa4/projects/...`. Recorded as
   `auditor_covered_pa4_deliverables: false`. To obtain real diff review in P1, the auditor
   workspace must move into WSL.
 - **Limitation — capability absence, not present-and-refused:** OpenCode v2 removes denied

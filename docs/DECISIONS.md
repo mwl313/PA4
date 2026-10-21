@@ -137,3 +137,55 @@ field counts, not components of 96. The full packed blob is
 An earlier draft of `SOURCE_FREEZE.md` stated 45,548 bytes from faulty mental arithmetic;
 that figure was recomputed in the environment and replaced with 41,986 before commit.
 P1 must not treat 96 as `32 + 50 + 40 + …`.
+
+---
+
+## D-007 — Environment migration off the SwitchTrade distro; gate vocabulary restored
+
+**Date:** 2026-10-21
+**Status:** accepted
+
+**Why.** PA4 was developed inside `SwitchTrade-beta-6023477315d6-...`, a distro provisioned
+and owned by an unrelated project (`/etc/switchtrade-distro.json`,
+`"owner":"switchtrade-provisioner"`), running as **root** (`DefaultUid=0`). The user confirmed
+SwitchTrade is a dead project and asked for a clean PA4 start. Continuing to hold PA4's only
+copy inside another project's runtime directory, as root, was an unacceptable standing risk.
+
+**What changed.**
+
+| | Before | After |
+|---|---|---|
+| Distro | `SwitchTrade-beta-...` (product payload) | `Ubuntu-24.04` (stock, official) |
+| User | `root` (uid 0) | `pa4` (uid 1000, sudo, non-root default) |
+| Repo | `/root/projects/PokeAgent4.0` | `/home/pa4/projects/PokeAgent4.0` |
+| PA3 ref | `/root/projects/_pa3_ref/pa3` | `/home/pa4/projects/_pa3_ref` |
+| Default distro | SwitchTrade | `Ubuntu-24.04` |
+
+**Method:** fresh `wsl --install -d Ubuntu-24.04` (no payload inherited), clone from
+`origin`, `uv sync --frozen`. The old distro was **not** used as a base, so no SwitchTrade
+artifacts carry over.
+
+**Evidence preservation:** before any migration, a `git bundle` of all commits was written to
+the Windows Desktop (`PA4-p0.bundle`, sha256 `e772a957...`) and restored into a scratch clone
+to verify integrity; the repo was also pushed to `https://github.com/mwl313/PA4.git` and
+re-verified by clean re-clone.
+
+**Re-validation, not assumption.** Every P0 check was re-run on the new distro rather than
+carried over: lock hash identical, `uv sync --frozen` rebuilt 37 packages from scratch,
+`p0_smoke.py` passed (including CUDA 8x8), `p0_negative_control.py` passed all 4 variants, PA3
+pin reproduced exactly and confirmed unchanged upstream. This makes G0-B *stronger*: it is now
+a genuine second-machine reproduction.
+
+**Gate vocabulary correction.** An interim revision used a non-schema token
+`PASS_READ_ONLY_CAPABILITY_SCOPED` for G0-C, to avoid implying the auditor had reviewed the
+deliverables. Read-only review correctly flagged that this both broke the receipt schema
+(`PASS_OR_BLOCKED`) and sat awkwardly beside `verdict: PASS`. On re-examination **every G0-C
+conjunct named in the design was actually met** — lead tool-write, fresh-context marker read,
+and absence of edit/shell/task capability — so the gate value is restored to the literal
+`"PASS"`. The non-required extension ("auditor reviewed the PA4 deliverables") is recorded
+separately in `RECEIPT.json > gate_scoping.G0_C_out_of_scope_extension` instead of distorting
+the gate value.
+
+**Path amendment.** Documentation paths were updated mechanically with assertions on every
+replacement, and each amended path was then verified to exist on the new distro. This is a
+recorded environment amendment, not a silent rewrite of P0 evidence.

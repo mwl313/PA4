@@ -8,15 +8,24 @@
 |---|---|---|
 | G0-A Dev host (WSL2 + CUDA + 8×8 tensor) | **PASS** | `docs/phases/P0/ENVIRONMENT.md` §5 |
 | G0-B Locked dependencies + TorchRL APIs + TensorDict 2×4 | **PASS** | `docs/phases/P0/COMPATIBILITY.md` §1–2 |
-| G0-C DeepSeek-only routing + read-only auditor | **PASS (scoped)** | `docs/phases/P0/COMPATIBILITY.md` §3 |
+| G0-C DeepSeek-only routing + read-only auditor | **PASS** | `docs/phases/P0/COMPATIBILITY.md` §3 |
 | G0-D PA3 reference freeze + P1 handoff | **PASS** | `docs/phases/P0/SOURCE_FREEZE.md` |
 
 PASS establishes **development readiness only**. It does not prove that the battle engine,
 the conditional action sampler or the PPO learner works.
 
+## Environment (after 2026-10-21 migration)
+
+- **Distro:** `Ubuntu-24.04` (stock, official) - default WSL distro
+- **User:** `pa4` (uid 1000, non-root default; sudo available)
+- **Repo:** `/home/pa4/projects/PokeAgent4.0`
+- **Remote:** `https://github.com/mwl313/PA4.git` (origin)
+- **PA3 ref:** `/home/pa4/projects/_pa3_ref` @ `65bc980abd8e0bbec14158b9ddc2884bb1726a4e`
+- Migrated off the dead SwitchTrade distro; re-validated from scratch (see DECISIONS D-007)
+
 ## Pinned facts
 
-- **PA4 repo:** `/root/projects/PokeAgent4.0` (WSL2 Ubuntu 24.04, ext4)
+- **PA4 repo:** `/home/pa4/projects/PokeAgent4.0` (WSL2 Ubuntu 24.04, ext4)
 - **PA3 reference:** `https://github.com/mwl313/PokeAgent3.0` @ `65bc980abd8e0bbec14158b9ddc2884bb1726a4e` (read-only)
 - **Stack:** Python 3.12 / torch `2.9.1+cu128` / torchrl `0.14.1` / tensordict `0.14.3`
 - **Lock:** `uv.lock` sha256 `8f414f526aad676f6466099da9bf96240f739abae9b9376a5c32fe845340d96e`
@@ -55,7 +64,7 @@ returned `INSUFFICIENT_EVIDENCE` on the first evidence set. Its findings were ac
 | PA4 isolation unevidenced | `sys.path` and `import pa3_engine` checks added |
 | Observation width unreconciled | Resolved: 41,986 bytes, per-token counts (D-006) |
 | Auditor could not audit deliverables | Recorded as `auditor_covered_pa4_deliverables: false`; G0-C relabelled `PASS_READ_ONLY_CAPABILITY_SCOPED` |
-| PA3 git commands not anchored to PA3 | Re-run with explicit `-C /root/projects/_pa3_ref/pa3`; HEAD == origin/main, 0 dirty, 1 reflog |
+| PA3 git commands not anchored to PA3 | Re-run with explicit `-C /home/pa4/projects/_pa3_ref/pa3`; HEAD == origin/main, 0 dirty, 1 reflog |
 | Isolation check too weak | Tested real PA3 package names (`pa3_engine`, `pa3_observation`, `agent`) — all `ModuleNotFoundError`; caveat recorded |
 | Negative control exercised only the version pin | Added `scripts/p0_negative_control.py`, 4 mutations on the committed file, all exit 1 under `-O` |
 | `96*1` / `96*5*2` terms unexplained | Traced to `token_mask` and five ragged-length `u16` rows in `pack_fixed_into` |

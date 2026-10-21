@@ -37,6 +37,10 @@ The `microsoft-standard-WSL2+` kernel tag is the WSL2 proof.
 GPU is exposed via the standard Windows WSL passthrough. **No Linux NVIDIA kernel driver was
 installed inside WSL.**
 
+`nvidia-smi` resolves through `/usr/lib/wsl/lib`, which WSL adds to `PATH` for interactive
+shells. A non-login `bash -c` without PATH setup may not see it even though the device
+works; call `/usr/lib/wsl/lib/nvidia-smi` explicitly in scripts.
+
 ---
 
 ## 2. Toolchains (inside WSL2)
@@ -56,9 +60,9 @@ installed inside WSL.**
 
 | Item | Measured |
 |---|---|
-| PA4 repo | `/root/projects/PokeAgent4.0` (WSL ext4, **not** `/mnt/c`) |
+| PA4 repo | `/home/pa4/projects/PokeAgent4.0` (WSL ext4, **not** `/mnt/c`) |
 | Root filesystem | `/dev/sdc`, 1007G total, ~956G free |
-| PA3 reference | `/root/projects/_pa3_ref/pa3` (separate directory) |
+| PA3 reference | `/home/pa4/projects/_pa3_ref` (separate directory) |
 | Windows working copy | `C:\Users\<user>\Desktop\PA4` (source design docs only) |
 
 ---

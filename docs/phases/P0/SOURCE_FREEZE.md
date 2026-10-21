@@ -17,7 +17,7 @@ No PA3 code is migrated, no checkpoints downloaded, no fixtures generated.
 | Commit subject | `docs(ops): record the checkpoint team-stats path dependency that breaks resume` |
 | Repository pushed_at | 2026-10-17T10:29:51Z |
 | Acquired as | `git clone --depth 1 --branch main --single-branch`, then verified `git rev-parse HEAD` |
-| Local location | `/root/projects/_pa3_ref/pa3` (separate directory, read-only intent) |
+| Local location | `/home/pa4/projects/_pa3_ref` (separate directory, read-only intent) |
 
 ### Limitation — stated explicitly
 
@@ -34,24 +34,38 @@ No PA3 code is migrated, no checkpoints downloaded, no fixtures generated.
   run against PA4:
 
   ```
-  $ git -C /root/projects/_pa3_ref/pa3 rev-parse HEAD
+  $ git -C /home/pa4/projects/_pa3_ref rev-parse HEAD
   65bc980abd8e0bbec14158b9ddc2884bb1726a4e
-  $ git -C /root/projects/_pa3_ref/pa3 rev-parse origin/main
+  $ git -C /home/pa4/projects/_pa3_ref rev-parse origin/main
   65bc980abd8e0bbec14158b9ddc2884bb1726a4e     # HEAD == remote pin
-  $ git -C /root/projects/_pa3_ref/pa3 status --porcelain | wc -l
+  $ git -C /home/pa4/projects/_pa3_ref status --porcelain | wc -l
   0                                             # working tree clean
-  $ git -C /root/projects/_pa3_ref/pa3 reflog | wc -l
+  $ git -C /home/pa4/projects/_pa3_ref reflog | wc -l
   1                                             # clone entry only, no local commits
-  $ git -C /root/projects/_pa3_ref/pa3 diff --stat origin/main HEAD | wc -l
+  $ git -C /home/pa4/projects/_pa3_ref diff --stat origin/main HEAD | wc -l
   0                                             # no divergence from the pinned ref
   ```
+
+  **Clone provenance note:** the reference is a **single-branch shallow clone**
+  (`--depth 1 --single-branch`). `origin/main` is therefore a *clone-time* ref, not
+  a live upstream check; it is not evidence that `main` has not advanced since.
+  To confirm today, run `git ls-remote <uri> refs/heads/main`.
+
+  Performed at environment-migration time (2026-10-21):
+
+  ```
+  $ git ls-remote https://github.com/mwl313/PokeAgent3.0 refs/heads/main
+  65bc980abd8e0bbec14158b9ddc2884bb1726a4e	refs/heads/main
+  ```
+
+  Upstream `main` still equals the pinned SHA, so the pin is current as of that check.
 
   Baseline for "unmodified" is the freshly cloned `origin/main` at
   `65bc980abd8e0bbec14158b9ddc2884bb1726a4e`; every check above compares against it.
 
 - **PA4 isolation** — measured:
-  - PA4 root `/root/projects/PokeAgent4.0` and PA3 reference
-    `/root/projects/_pa3_ref/pa3` are distinct real paths.
+  - PA4 root `/home/pa4/projects/PokeAgent4.0` and PA3 reference
+    `/home/pa4/projects/_pa3_ref` are distinct real paths.
   - `sys.path` inside the PA4 venv contains **no** PA3 entry (`NO_PA3_ON_SYS_PATH`).
   - The real PA3 package names are not importable from the PA4 venv:
     `pa3_engine` → `ModuleNotFoundError: No module named 'pa3_engine'`;
@@ -62,7 +76,7 @@ No PA3 code is migrated, no checkpoints downloaded, no fixtures generated.
   **Isolation caveat:** an `ImportError`/`ModuleNotFoundError` proves the module is not
   resolvable in this venv; it does not prove the absence of a vendored copy under a
   different name, nor does it inspect symlinks. No such copy exists in the committed tree
-  (16 tracked files, listed in `git ls-files`), but this check is name-based, not a
+  (18 tracked files at the amendment commit, listed in `git ls-files`), but this check is name-based, not a
   sandbox guarantee.
 
 ---
@@ -159,6 +173,8 @@ OBSERVATION_FIXED_BYTES = 2              // schema_version (u16)            -> p
 ```
 
 Provenance of the two terms absent from `TokenFeatures`: `pack_fixed_into`
+(all Rust citations in this document are at the pinned SHA
+`65bc980abd8e0bbec14158b9ddc2884bb1726a4e`, path `engine/src/...`)
 (`engine/src/python.rs:137-160`) writes `schema_version`, then `CONTRACT_BYTES`, then
 `for present in view.token_mask { out.push(u8::from(present)) }` (**that is the `96*1`**),
 then `pack_tokens(...)`, then five loops over `effect_ranges`, `repertoire_ranges`,
