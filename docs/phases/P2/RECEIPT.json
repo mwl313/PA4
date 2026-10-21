@@ -2,10 +2,10 @@
   "phase": "P2",
   "design_id": "PA4-P2-DESIGN-v1.0",
   "verdict": "PARTIAL",
-  "verdict_reason": "Four gates pass. G2-E is partial: its auditor leg (independent read-only review of the actual WSL repository files) could not be performed because the Lead session runs in the Windows opencode.exe domain and the auditor was denied external_directory access to every WSL path. The design states inline-only review is not an acceptable P2 independent file review.",
+  "verdict_reason": "All five gates are supported by code and by tests the Lead executed, and the six findings from the first WSL read-only review (including BLOCKER F1) are fixed and covered by tests. G2-E nevertheless remains PARTIAL: its second conjunct requires an independent read-only auditor to review the ACTUAL WSL repository files, and no auditor session available to this Lead can read that path. The Lead's subagents run in the Windows opencode.exe domain rooted at Desktop\\PA4 and receive permission.rejected: external_directory for every WSL path. A reviewer DID gain access in the user's own WSL session and produced the F1-F6 findings; a second such session is required to re-check the fixes.",
   "pa4_base_sha": "892f136f3704b773257a377c9a41c4fa50c74770",
-  "pa4_tested_code_sha": "67f1d59dccf51d1be7f39d7452c86a0dcf30033a",
-  "pa4_final_head_sha": "9545e6bce558b808d50699ac73d7f73a6731d18b",
+  "pa4_tested_code_sha": "e95349567e1a043f6e5042b8670876acd9f9913c",
+  "pa4_final_head_sha": "RECORDED_IN_SUBSEQUENT_METADATA_COMMIT",
   "pa3_reference_sha": "65bc980abd8e0bbec14158b9ddc2884bb1726a4e",
   "pa3_worktree_clean": true,
   "dependency_lock_sha256": "8f414f526aad676f6466099da9bf96240f739abae9b9376a5c32fe845340d96e",
@@ -21,27 +21,76 @@
   "native_engine_build_source_verified": true,
   "observation_contract_verified": "schema 2, 96 tokens, 41986 bytes, hash dd723dc687a60b0568302fa0b09cfb110cbe67eac2c7022f2b4ffe4dff373e35",
   "naturally_completed_matches": 4,
-  "distinct_seeds": [1, 2, 3, 4],
-  "steps_per_game": [18, 22, 17, 17],
-  "winners": [0, 0, 1, 1],
-  "rewards": [[1.0, -1.0], [1.0, -1.0], [-1.0, 1.0], [-1.0, 1.0]],
+  "distinct_seeds": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "steps_per_game": [
+    20,
+    11,
+    19,
+    14
+  ],
+  "winners": [
+    0,
+    1,
+    0,
+    1
+  ],
+  "rewards": [
+    [
+      1.0,
+      -1.0
+    ],
+    [
+      1.0,
+      -1.0
+    ],
+    [
+      -1.0,
+      1.0
+    ],
+    [
+      -1.0,
+      1.0
+    ]
+  ],
   "operational_errors": 0,
   "illegal_submissions": 0,
   "duplicate_completion_ids": 0,
   "trace_parity_first_mismatch": null,
-  "trace_parity_seeds_checked": [1, 2, 3, 4],
+  "trace_parity_seeds_checked": [
+    1,
+    2,
+    3,
+    4
+  ],
   "partial_reset_pass": true,
   "wait_finished_observed": true,
   "replacement_observed": true,
   "request_kind_pairs_observed": [
-    ["Preview", "Preview"],
-    ["Normal", "Normal"],
-    ["Replacement", "Wait"],
-    ["Wait", "Replacement"]
+    [
+      "Preview",
+      "Preview"
+    ],
+    [
+      "Normal",
+      "Normal"
+    ],
+    [
+      "Replacement",
+      "Wait"
+    ],
+    [
+      "Wait",
+      "Replacement"
+    ]
   ],
   "p1_action_packet_integration_pass": true,
   "p1_regression_test_count": 39,
-  "p2_environment_test_count": 30,
+  "p2_environment_test_count": 41,
   "auditor_read_actual_wsl_repo": false,
   "auditor_access_error": "permission.rejected: Permission denied: external_directory",
   "gates": {
@@ -59,15 +108,16 @@
     "truncation was counted as a completed match (guard was 'term or trunc'); completion now requires term, truncation tracked separately with no payout (found by read-only review)"
   ],
   "limitations": [
-    "Auditor never read the WSL repository; G2-E audit conjunct unmet",
-    "Only 4 seeded games, exactly the G2-B minimum",
-    "Oracle is a second native engine but shares the PA4 decoder path, so decoder bugs would be invisible",
+    "G2-E second conjunct unmet: no auditor session available to this Lead could read the WSL repo; the F1-F6 fixes are therefore not independently re-reviewed",
+    "Four seeded games only; exactly the G2-B minimum",
+    "The oracle is a second native engine but shares the PA4 decoder path, so decoder bugs are invisible to it",
     "CPU native stepping only; no GPU simulation or throughput claim",
     "Max observed legal candidates 18 is an inherited fixture bound, not a global maximum",
-    "P1 policy remains randomly initialised (seed 20261006); no strength claim",
+    "P1 policy is randomly initialised (seed 20261006); no strength claim",
     "No benchmark or performance optimisation performed",
-    "P1 replay still requires the original observation payload",
-    "PA3 pin is the public main tip, not verified live production state"
+    "P1 replay still needs the original observation payload",
+    "PA3 pin is the public main tip, not verified live production state",
+    "The P2 execution prompt named in the task does not exist on this machine; PA4-P2-DESIGN-v1.0 was used as the authority"
   ],
   "test_commands": [
     "uv run --frozen python -m unittest discover -s tests/environment -t .",
@@ -84,5 +134,20 @@
     "No P3 collector, PPO, profiling or cloud work was performed.",
     "The P2 execution prompt file named in the task does not exist on this machine; work followed PA4-P2-DESIGN-v1.0, which is the authoritative design."
   ],
-  "generated_at": "2026-10-21"
+  "generated_at": "2026-10-21",
+  "revisions_observed": 0,
+  "truncated_episodes": 0,
+  "review_findings_status": {
+    "F1_BLOCKER_p1_packet_never_crossed_env": "FIXED - test_p1_integration.py now calls ConditionalPolicy.complete_request for each requesting seat, replays the record to prove it is genuine, asserts an actor_active row exists, and a second test plays a whole battle with P1 policy decisions on both seats",
+    "F2_no_slot_generation_episode_identity": "FIXED - packets carry action_episode_id and action_native_generation; _step rejects mismatches and rejects any submission after the episode concluded",
+    "F3_branch_count_not_compared": "FIXED - supplied prefix length must equal the native branch count; extra actions on a Wait/Finished seat raise; each row is checked against native candidates",
+    "F4_revision_conflated_with_invalid": "FIXED - illegal packets raise before submission; a genuine accepted=False is counted in SlotState.revisions",
+    "F5_metrics_were_prose": "FIXED - test_measured_evidence.py measures illegal_submissions, Replacement/Wait observation, one completion per episode, and adds explicit rejection tests",
+    "F6_concluded_row_reported_not_done": "FIXED"
+  },
+  "harness_bug_found_and_fixed": "The Lead's own measurement harness seeded the action RNG from the step index only, so all four 'distinct seeds' played an identical action sequence (identical 12-step games, all winner 1). Seeding now includes env._seed; the four games are genuinely distinct (20/11/19/14 steps, winners 0/1/0/1).",
+  "p1_code_change": "PA3 refuses to resolve token refs for non-PICK actions without the player-known active->roster map, so build_branch_table and ConditionalPolicy now accept and thread observation.active_to_roster(). P1 had only ever exercised PICK actions. P1 regression remains 39/39 green.",
+  "p1_action_packet_evidence": "Two tests: a single-step packet generated by ConditionalPolicy and verified by replay, and a full battle driven end-to-end by ConditionalPolicy on both seats",
+  "auditor_who_could_read": "A review DID run with access in the user's own WSL opencode session and produced the F1-F6 findings at commit 67f1d59. It was not available to this Lead session.",
+  "to_close_g2_e": "Run the Lead from WSL (cd /home/pa4/projects/PokeAgent4.0 && opencode) so its subagents inherit a workspace that can read the repo, then have pa4-auditor re-check F1-F6 at commit e953495."
 }

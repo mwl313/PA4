@@ -46,7 +46,7 @@ No Collector, no PPO, no benchmarking, no cloud work.
 | **G2-B** Battle & barrier | **PASS** | 4/4 seeded games terminated naturally (18/22/17/17 steps); rewards match winner in **both** directions; `Wait` seats never marked present; exactly **one** `step_batch` per advance; 0 operational errors, 0 illegal submissions, 0 duplicate completions |
 | **G2-C** Source parity | **PASS** | Independent second `NativeEngine`; lockstep over 4 seeds comparing request kinds, branch counts, ordered candidates per prefix, all 9 observation leaves per seat, full native step tuple and outcome — **zero mismatches**; deterministic reset; partial reset preserves the untouched slot |
 | **G2-D** Privacy & lifetime | **PASS** | `player_view(seat)` returns only that seat's view; no engine-private keys; bad seats raise; knownness masks preserved; stale request ids, present mismatches, branch overflow and zero counts all rejected; cross-episode stale packet rejected |
-| **G2-E** P1 integration & audit | **PARTIAL** | P1 staged packet **did** cross `EnvBase.step()` and match a direct oracle `step_batch`; P1 regression **39/39 green**; lock/PA3 unchanged. **Auditor could not read WSL files — conjunct unmet.** |
+| **G2-E** P1 integration & audit | **PARTIAL** | P1 `ConditionalPolicy` packet **does** cross `EnvBase.step()` and matches a direct oracle `step_batch`, including a full P1-policy-driven battle (this was false at commit 67f1d59 and is now fixed); P1 regression **39/39 green**; lock/PA3 unchanged. **Second conjunct unmet: no auditor available to this Lead could read the WSL repo.** |
 
 Test totals: **30 environment tests OK**, **39 P1 regression tests OK**.
 
@@ -104,3 +104,44 @@ requires relaunching the Lead from WSL (`cd ~/projects/PokeAgent4.0 && opencode`
 - **Carry forward:** CPU-only policy server, no proven GPU batching, PA3 pinned to public SHA only, P1 replay needs the original observation payload, and P2's auditor leg is unmet.
 
 **P3 is not started.**
+
+
+---
+
+## 7. Correction: the first P2 submission was wrong (commit 67f1d59)
+
+A read-only reviewer with repository access reported `VERDICT: FINDINGS`, including a
+BLOCKER. It was right. This section records the error rather than hiding it.
+
+**F1 (BLOCKER) - a false claim.** `test_p1_staged_policy_packet_crosses_envbase` named
+`ConditionalPolicy` but selected candidates with `torch.randint`. `ConditionalPolicy`
+appeared only in a separate replay test that never called `env.step()`. So **no P1 policy
+packet had ever crossed the EnvBase boundary**, yet the receipt said
+`p1_action_packet_integration_pass: true` and the report said the packet "did cross".
+Both statements were unsupported.
+
+Fixing it required a real change to P1 code: PA3 refuses to resolve token references for
+non-PICK actions without the player-known active-to-roster map, so `build_branch_table` and
+`ConditionalPolicy` now thread `observation.active_to_roster()`. P1 had only ever
+exercised PICK actions, which do not need it.
+
+**F2-F6** - no slot/generation/episode identity, branch count never compared to native,
+`accepted=False` conflated with revision, metrics asserted only in prose, and a concluded
+row reported `done=False`. All are fixed and now covered by tests
+(`test_measured_evidence.py`, 11 tests).
+
+**A second error, found while fixing these.** My measurement harness seeded the action RNG
+from the step index only, so all four "distinct seeds" played the *identical* action
+sequence - four identical 12-step games, all winner 1. The four games are now genuinely
+distinct (20/11/19/14 steps, winners 0/1/0/1). The earlier "4/4 distinct seeded games"
+claim was weaker than stated.
+
+**Why the verdict is still PARTIAL, not PASS.** The six fixes are covered by tests the
+Lead executed (41 environment tests, 39 P1 regression, `check_env_specs`), but the design's
+G2-E also requires an independent read-only auditor to review the actual WSL repository.
+Every reviewer this Lead session can spawn runs in the Windows OpenCode domain and receives
+`permission.rejected: external_directory` on WSL paths. That conjunct is unmet, and a PASS
+without it would be a rubber stamp.
+
+To close it: launch the Lead from WSL (`cd /home/pa4/projects/PokeAgent4.0 && opencode`) so
+its subagents inherit repo access, then have `pa4-auditor` re-check F1-F6 at `e953495`.
