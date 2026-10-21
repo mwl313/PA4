@@ -1,0 +1,88 @@
+{
+  "phase": "P2",
+  "design_id": "PA4-P2-DESIGN-v1.0",
+  "verdict": "PARTIAL",
+  "verdict_reason": "Four gates pass. G2-E is partial: its auditor leg (independent read-only review of the actual WSL repository files) could not be performed because the Lead session runs in the Windows opencode.exe domain and the auditor was denied external_directory access to every WSL path. The design states inline-only review is not an acceptable P2 independent file review.",
+  "pa4_base_sha": "892f136f3704b773257a377c9a41c4fa50c74770",
+  "pa4_tested_code_sha": "67f1d59dccf51d1be7f39d7452c86a0dcf30033a",
+  "pa4_final_head_sha": "RECORDED_IN_SUBSEQUENT_METADATA_COMMIT",
+  "pa3_reference_sha": "65bc980abd8e0bbec14158b9ddc2884bb1726a4e",
+  "pa3_worktree_clean": true,
+  "dependency_lock_sha256": "8f414f526aad676f6466099da9bf96240f739abae9b9376a5c32fe845340d96e",
+  "lock_unchanged_from_p1": true,
+  "torch": "2.9.1+cu128",
+  "torchrl": "0.14.1",
+  "tensordict": "0.14.3",
+  "rust": "1.90.0",
+  "host": "wsl2_ubuntu_24_04_win11",
+  "real_envbase": true,
+  "check_env_specs_pass": true,
+  "check_env_specs_output": "[torchrl][INFO] check_env_specs succeeded!",
+  "native_engine_build_source_verified": true,
+  "observation_contract_verified": "schema 2, 96 tokens, 41986 bytes, hash dd723dc687a60b0568302fa0b09cfb110cbe67eac2c7022f2b4ffe4dff373e35",
+  "naturally_completed_matches": 4,
+  "distinct_seeds": [1, 2, 3, 4],
+  "steps_per_game": [18, 22, 17, 17],
+  "winners": [0, 0, 1, 1],
+  "rewards": [[1.0, -1.0], [1.0, -1.0], [-1.0, 1.0], [-1.0, 1.0]],
+  "operational_errors": 0,
+  "illegal_submissions": 0,
+  "duplicate_completion_ids": 0,
+  "trace_parity_first_mismatch": null,
+  "trace_parity_seeds_checked": [1, 2, 3, 4],
+  "partial_reset_pass": true,
+  "wait_finished_observed": true,
+  "replacement_observed": true,
+  "request_kind_pairs_observed": [
+    ["Preview", "Preview"],
+    ["Normal", "Normal"],
+    ["Replacement", "Wait"],
+    ["Wait", "Replacement"]
+  ],
+  "p1_action_packet_integration_pass": true,
+  "p1_regression_test_count": 39,
+  "p2_environment_test_count": 30,
+  "auditor_read_actual_wsl_repo": false,
+  "auditor_access_error": "permission.rejected: Permission denied: external_directory",
+  "gates": {
+    "G2_A": "PASS",
+    "G2_B": "PASS",
+    "G2_C": "PASS",
+    "G2_D": "PASS",
+    "G2_E": "PARTIAL"
+  },
+  "defects_fixed": [
+    "torchrl Binary is int8 while the env emits bool; boolean leaves use Unbounded(dtype=torch.bool) so the spec matches truthful data (check_env_specs had failed on dtype mismatch)",
+    "nested players Composite required the full [N,2] shape, not [2]",
+    "independent oracle re-derived its seed after episode_id incremented, replaying the wrong episode; now records used_seed/used_teams",
+    "partial reset used reset_batch, invalidating untouched handles; now uses reset_slots_batch on masked slots only",
+    "truncation was counted as a completed match (guard was 'term or trunc'); completion now requires term, truncation tracked separately with no payout (found by read-only review)"
+  ],
+  "limitations": [
+    "Auditor never read the WSL repository; G2-E audit conjunct unmet",
+    "Only 4 seeded games, exactly the G2-B minimum",
+    "Oracle is a second native engine but shares the PA4 decoder path, so decoder bugs would be invisible",
+    "CPU native stepping only; no GPU simulation or throughput claim",
+    "Max observed legal candidates 18 is an inherited fixture bound, not a global maximum",
+    "P1 policy remains randomly initialised (seed 20261006); no strength claim",
+    "No benchmark or performance optimisation performed",
+    "P1 replay still requires the original observation payload",
+    "PA3 pin is the public main tip, not verified live production state"
+  ],
+  "test_commands": [
+    "uv run --frozen python -m unittest discover -s tests/environment -t .",
+    "uv run --frozen python -m unittest discover -s tests/action_distribution -t ."
+  ],
+  "test_results": {
+    "environment": "Ran 30 tests, OK",
+    "p1_regression": "Ran 39 tests, OK"
+  },
+  "notes": [
+    "One step per native advance attempt; never one step per branch choice and never one step per match.",
+    "match_completed is emitted at most once per naturally terminated episode; truncated episodes are not counted as matches.",
+    "player_view(seat) is the only policy-facing extraction and returns that seat's own observation only.",
+    "No P3 collector, PPO, profiling or cloud work was performed.",
+    "The P2 execution prompt file named in the task does not exist on this machine; work followed PA4-P2-DESIGN-v1.0, which is the authoritative design."
+  ],
+  "generated_at": "2026-10-21"
+}
