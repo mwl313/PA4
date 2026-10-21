@@ -16,6 +16,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+import torch
+
 PA3_SHA = "65bc980abd8e0bbec14158b9ddc2884bb1726a4e"
 
 # Pinned observation contract (verified against the built module).
@@ -37,17 +39,26 @@ POLICY_REQUEST_KINDS = frozenset({0, 1, 2})
 ACTION_TUPLE_LEN = 6
 NO_SLOT = 255
 
-DEFAULT_ENGINE_SO = Path("/home/pa4/.pa3_py")
+DEFAULT_ENGINE_SO = Path("/home/pa4/.pa3_build/engine/python")
 DEFAULT_DATA_DIR = Path("/home/pa4/.pa3_build/engine/data")
 
 
 def _load_engine_module():
-    """Import the pinned PA3 PyO3 module without polluting PA3 itself."""
-    so_dir = Path(os.environ.get("PA4_ENGINE_SO_DIR", DEFAULT_ENGINE_SO))
-    if str(so_dir) not in sys.path:
-        sys.path.insert(0, str(so_dir))
+    """Import the pinned PA3 `pa3_engine` package (native ext + wire decoders).
+
+    The package directory contains the PyO3 extension built from the pinned SHA.
+    No PA3 source is modified; we only put its build output on sys.path.
+    """
+    pkg_dir = Path(os.environ.get("PA4_ENGINE_SO_DIR", DEFAULT_ENGINE_SO))
+    if str(pkg_dir) not in sys.path:
+        sys.path.insert(0, str(pkg_dir))
     import pa3_engine  # noqa: PLC0415  (deliberately late, path depends on env)
 
+    if not hasattr(pa3_engine, "parse_batch"):
+        raise RuntimeError(
+            f"pa3_engine at {pkg_dir} lacks wire decoders; import the package dir, "
+            "not a bare .so file"
+        )
     return pa3_engine
 
 
@@ -175,6 +186,24 @@ class NativeReference:
     def step(self, submissions):
         """submissions: [(slot, generation, [(side, [action,...]), ...]), ...]"""
         return self._engine.step_batch(submissions)
+
+    # -- real observations (PA3 canonical decoding path) -----------------
+    def observe_payload(self, handles: list[tuple[int, int]], sides: list[int]):
+        """Raw (fixed, ragged) byte payloads straight from the engine."""
+        return self._engine.observe_fixed_batch(handles, sides)
+
+    def observe_parsed(self, handles: list[tuple[int, int]], sides: list[int]):
+        """Decoded payload via PA3's own wire parser (no reimplementation)."""
+        fixed, ragged = self._engine.observe_fixed_batch(handles, sides)
+        return self._mod.parse_batch(fixed, ragged, len(handles))
+
+    def observe_batch(self, handles: list[tuple[int, int]], sides: list[int]):
+        """Typed `ObservationBatch` via PA3's canonical adapter."""
+        from agent.types.observation import ObservationBatch  # noqa: PLC0415
+
+        return ObservationBatch.from_native_payload(
+            self.observe_parsed(handles, sides), layout=None, dtype=torch.float32
+        )
 
 
 def load_teams_index(teams_file: str | Path | None = None) -> list[dict]:
