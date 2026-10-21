@@ -69,6 +69,7 @@ class SlotState:
     match_committed: bool = False
     last_kinds: tuple[int, int] = (KIND_PREVIEW, KIND_PREVIEW)
     completed_matches: int = 0
+    truncated_episodes: int = 0
     # The exact seed/teams actually submitted at reset, so an independent oracle
     # can reproduce the episode without re-deriving (and off-by-one-ing) it.
     used_seed: tuple[int, int, int, int] = (0, 0, 0, 0)
@@ -463,11 +464,15 @@ class PA4EnvBase(EnvBase):
             truncated[r, 0] = bool(trunc)
             if win is not None:
                 winner[r] = int(win)
-            if (term or trunc) and not st.match_committed:
+
+            # A NATURAL completion is terminated-only. A native truncation ends
+            # the episode but must never be counted as a completed natural match
+            # (PA4-P2-DESIGN-v1.0 L180). Both are tracked explicitly.
+            if term and not st.match_committed:
                 st.match_committed = True
                 st.completed_matches += 1
                 completed[r] = True
-                if term and win is not None:
+                if win is not None:
                     w = int(win)
                     if w == 0:
                         reward[r, 0, 0] = 1.0
@@ -477,6 +482,11 @@ class PA4EnvBase(EnvBase):
                         reward[r, 1, 0] = 1.0
                     else:
                         reward[r, :, 0] = 0.0
+            elif trunc and not st.match_committed:
+                # Truncated episode: terminal for the env, but no natural match,
+                # no match_completed flag and no terminal payout.
+                st.match_committed = True
+                st.truncated_episodes += 1
 
         obs = self._observation_td()
         obs["request_revised"] = revised
