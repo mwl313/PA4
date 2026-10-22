@@ -164,9 +164,21 @@
         "verdict": "FINDINGS",
         "closed": true,
         "summary": "fresh-process table cited the superseded run's bound excess; audit-round count inconsistent; P3.5 heading still said re-audit pending"
+      },
+      {
+        "round": "6",
+        "verdict": "FINDINGS",
+        "closed": true,
+        "summary": "FINAL_REPORT gate row and PROJECT_STATUS bullet still cited the superseded run; cross-check had no absence rule"
+      },
+      {
+        "round": "7",
+        "verdict": "FINDINGS",
+        "closed": true,
+        "summary": "cross-check section-5 exclusion was dead code (over-escaped regex) and the absence scan skipped RECEIPT.json"
       }
     ],
-    "round_count": 5
+    "round_count": 7
   },
   "tests": {
     "p1_action_distribution": 39,

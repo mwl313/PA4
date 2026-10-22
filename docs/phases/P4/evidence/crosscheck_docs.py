@@ -109,18 +109,39 @@ def main():
         '19 = 19': 'old step count',
     }
     # Strip the deliberately-attributed superseded section before scanning.
+    # NOTE: the pattern needs ONE backslash before each dot. An over-escaped
+    # raw string (two backslashes) demands a literal backslash, matches
+    # nothing, and silently leaves the carve-out dead.
     import re as _re
-    _s5 = _re.search(r"## 5\\..*?(?=## 6\\.)", doc, _re.S)
-    doc = doc.replace(_s5.group(0), "") if _s5 else doc
 
-    for doc_name, doc_text in (("CHECKPOINT_RECOVERY.md", doc),
-                               ("FINAL_REPORT.md", fin),
-                               ("PROJECT_STATUS.md", status)):
+    _s5 = _re.search(r"## 5\..*?(?=## 6\.)", doc, _re.S)
+    if _s5 is None:
+        failures.append("crosscheck: could not locate section 5 to exclude")
+    else:
+        section5 = _s5.group(0)
+        doc = doc.replace(section5, "")
+        # Self-test: section 5 holds the superseded run's numbers, so the
+        # stripped text must have contained at least one of its markers.
+        if "4.307e-09" not in section5 and "1.192e-07" not in section5:
+            failures.append(
+                "crosscheck self-test: section 5 does not look like the "
+                "superseded run, so the exclusion may be mis-scoped")
+
+    def _norm(text):
+        """Collapse whitespace/backticks so 27 -> 186 and 27->186 both match."""
+        return _re.sub(r"[\s`]+", "", text)
+
+    receipt_text = (D / "RECEIPT.json").read_text(encoding="utf-8")
+    for doc_name, doc_text in (
+            ("CHECKPOINT_RECOVERY.md", doc),
+            ("FINAL_REPORT.md", fin),
+            ("PROJECT_STATUS.md", status),
+            ("RECEIPT.json", receipt_text)):
+        norm = _norm(doc_text)
         for token, label in superseded_tokens.items():
-            if token in doc_text:
+            if _norm(token) in norm:
                 failures.append(
                     f"{doc_name} still cites {label}: {token!r}")
-
     for name in ("resume_parity.txt", "_resume_helpers.py", "proof_resume_core.py"):
         if not (E / name).exists():
             failures.append(f"superseded artifact deleted: {name}")
