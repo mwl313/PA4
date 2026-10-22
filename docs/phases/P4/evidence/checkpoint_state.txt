@@ -1,0 +1,28 @@
+checkpoint: ckpt_it0002_v0003.pt
+loaded iteration: 2 version: 3 matches: 32 steps: 8
+{
+ "has_optimizer_state": true,
+ "adam_state_entries": 142,
+ "has_rng": true,
+ "rng_keys": [
+  "numpy",
+  "python",
+  "torch_cpu",
+  "torch_cuda"
+ ],
+ "ledger": [
+  "m1",
+  "m2",
+  "m3"
+ ],
+ "scheduler": {
+  "lr": 0.0003,
+  "committed_matches": 32
+ }
+}
+max model restore delta: 0.000e+00
+adam state ids match: True max moment delta: 0.000e+00
+negative controls: {"tampered_weights": "rejected", "model_only": "rejected"}
+self-parity: {"max_model_delta": 0.0, "max_adam_numeric": 0.0, "counters_match": true, "rng_match": true, "parity_pass": true}
+
+RESULT: PASS

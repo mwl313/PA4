@@ -1,0 +1,7 @@
+  tampered_weights   rejected: checkpoint model weights are corrupted (payload checksum mis
+  truncated          rejected
+  bad_pointer_sha    rejected
+  model_only         rejected
+  foreign_schema     rejected
+
+RESULT: PASS

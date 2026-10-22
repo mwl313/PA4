@@ -21,6 +21,8 @@ from dataclasses import dataclass, field
 import torch
 
 from pa4.collector.batched_core import BatchedConfig
+from pa4.learner import checkpoint as ckpt_mod
+from pa4.learner.checkpoint import CheckpointState
 from pa4.collector.run_batched import run_batched
 from pa4.learner import gae, ppo_loss
 from pa4.learner.ingest import build_cohort
@@ -84,10 +86,25 @@ class IterationRecord:
     collection_seconds: float = 0.0
     update_seconds: float = 0.0
     checkpoint_seconds: float = 0.0
+    checkpoint_path: str | None = None
+    checkpoint_sha256: str | None = None
     params_changed: int = 0
     max_param_delta: float = 0.0
     nan_inf: int = 0
     errors: list = field(default_factory=list)
+
+
+def _git_sha() -> str:
+    """Short provenance SHA, empty when unavailable (never fabricated)."""
+    import subprocess
+
+    try:
+        return subprocess.check_output(
+            ["git", "-C", os.path.dirname(os.path.dirname(os.path.dirname(
+                os.path.abspath(__file__)))), "rev-parse", "--short=7", "HEAD"],
+            text=True, stderr=subprocess.DEVNULL).strip()
+    except Exception:  # noqa: BLE001
+        return ""
 
 
 def _build_model(seed: int):
@@ -111,6 +128,8 @@ class SynchronousTrainer:
         self.committed_matches = 0
         self.policy_version = 1
         self.cumulative_optimizer_steps = 0
+        self.match_ledger: list = []
+        self.iteration = 0
 
     # -- snapshot helpers ---------------------------------------------
     def _publish(self, state_dict, *, matches: int) -> str:
@@ -248,13 +267,55 @@ class SynchronousTrainer:
                 float((after[k].float() - before[k].float()).abs().max())
                 for k in changed)
 
-        # ---- 4. commit, THEN publish the new version -----------------
+        # ---- 4. DURABLE COMMIT, then publish the new version ---------
+        # A crash before the pointer moves leaves the previous checkpoint
+        # authoritative: no clock advance, no new policy version.
         t_ck = time.perf_counter()
-        self.committed_matches += rec.accepted_matches
-        self.cumulative_optimizer_steps += rec.optimizer_steps
+        next_matches = self.committed_matches + rec.accepted_matches
+        next_steps = self.cumulative_optimizer_steps + rec.optimizer_steps
+        next_version = self.policy_version + 1
+        next_ledger = list(self.match_ledger) + [
+            str(t.match_id) for t in cohort.trajectories]
+
+        ckpt = CheckpointState(
+            iteration=self.iteration + 1,
+            policy_version=next_version,
+            committed_matches=next_matches,
+            optimizer_steps=next_steps,
+            model_state=after,
+            optimizer_state=updater.optimizer.state_dict(),
+            scheduler_state={"lr": lr, "committed_matches": next_matches,
+                             "warmup": cfg.warmup_matches,
+                             "horizon": cfg.horizon_matches},
+            rng_state=ckpt_mod._rng_state(),
+            match_ledger=next_ledger,
+            counters={
+                "accepted_matches": rec.accepted_matches,
+                "dropped": rec.dropped,
+                "incomplete": rec.incomplete_episodes,
+                "generated": rec.generated_matches,
+            },
+            provenance={
+                "pa4_git_sha": _git_sha(),
+                "design": "PA4-P4-DESIGN-v1.0",
+                "observation_representation": "pa4.observation.ragged.v2",
+                "theta_k_fingerprint": snap_k.fingerprint,
+                "theta_next_fingerprint": snapshot_fingerprint(after),
+                "policy_version": next_version,
+            },
+        )
+        ckpt_path = ckpt_mod.save_checkpoint(ckpt, self.run_dir)
+        rec.checkpoint_path = ckpt_path
+        rec.checkpoint_sha256 = ckpt_mod._file_sha256(ckpt_path)
+
+        # Pointer is durable: NOW advance the committed state.
+        self.committed_matches = next_matches
+        self.cumulative_optimizer_steps = next_steps
+        self.match_ledger = next_ledger
+        self.iteration += 1
         rec.committed_matches = self.committed_matches
 
-        self.policy_version += 1
+        self.policy_version = next_version
         new_path = self._publish(after, matches=self.committed_matches)
         rec.snapshot_path = new_path
         rec.theta_next_fingerprint = snapshot_fingerprint(after)
