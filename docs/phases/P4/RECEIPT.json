@@ -4,13 +4,12 @@
   "design_sha256": "5d54553d0f5993416985e049486184f21258ac7539ebae478675b12e9d8d0616",
   "verdict": "PASS",
   "entry_head_sha": "ec0d7e2",
-  "pa4_tested_code_sha": "AWAITING_COMMIT",
+  "pa4_tested_code_sha": "7689ed12c1246c12f82b2f9d8624b2eb2b2aaa7a",
   "pa3_reference_sha": "65bc980abd8e0bbec14158b9ddc2884bb1726a4e",
   "pa3_reference_dirty_files": 0,
   "dependency_lock_sha256": "8f414f526aad676f6466099da9bf96240f739abae9b9376a5c32fe845340d96e",
   "dependency_lock_changed": false,
   "rust_engine_modified": false,
-
   "gates": {
     "G4_A_lossless_rollouts": "PASS",
     "G4_B_numerical_golden": "PASS",
@@ -18,7 +17,6 @@
     "G4_D_durable_restore": "PASS",
     "G4_E_full_stack_audit": "PASS"
   },
-
   "gate_evidence": {
     "G4_A": {
       "accepted_transition_drops": 0,
@@ -33,8 +31,8 @@
       "old_joint_logprob_max_abs_delta": 4.768e-07,
       "stored_action_replay_views": 960,
       "independent_golden_module": "pa4/learner/golden.py (imports neither gae nor ppo_loss)",
-      "declared_atol": 1e-5,
-      "declared_rtol": 1e-4,
+      "declared_atol": 1e-05,
+      "declared_rtol": 0.0001,
       "gradient_path_parameters_receiving_grad": "133/142",
       "fixed9_records_refused_at_learner": true,
       "bug_found_and_fixed": "per-level scoring reset the GRU prefix; drift 0 -> 7e-3 -> 9.9e-3 -> 2.5e-2. One multi-level table with real prefix carry gives 1e-7."
@@ -88,7 +86,6 @@
       "audit_access_method": "docs/AUDIT_FROM_WINDOWS.md export of 6027932"
     }
   },
-
   "audit": {
     "round": "P4 round 1",
     "tree": "6027932",
@@ -111,7 +108,6 @@
       "some markdown tables cite an earlier run than the preserved artifact"
     ]
   },
-
   "tests": {
     "p1_action_distribution": 39,
     "p2_environment": 51,
@@ -121,7 +117,6 @@
     "all_ok": true,
     "baseline_note": "the original P4 prompt stated 158 inherited tests; the actual inherited baseline is 193 because the approved P3.5 phase added 35. No inherited test was removed or weakened."
   },
-
   "limitations": [
     "P4 proves a correct, restartable on-policy PPO-2 loop. It does not prove learned playing strength or convergence.",
     "The 20-iteration smoke is a correctness trial, not a throughput or cost-efficiency result.",
@@ -129,6 +124,12 @@
     "The resume parity comparison reuses pre-recorded cohorts, permitted by the design for this narrow check only.",
     "Actor-only P3 throughput (matches/s) is historical context and is NOT comparable to the P4 full-stack rate, which includes learner and checkpoint cost."
   ],
-
-  "not_started": ["C1", "Runpod", "P5", "P6", "P7", "P9"]
+  "not_started": [
+    "C1",
+    "Runpod",
+    "P5",
+    "P6",
+    "P7",
+    "P9"
+  ]
 }
