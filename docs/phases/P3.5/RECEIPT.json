@@ -1,0 +1,165 @@
+{
+  "phase": "P3.5",
+  "design_id": "PA4-P35-OBSERVATION-CONTRACT-REPAIR",
+  "adr": "docs/phases/P3.5/ADR_009.md",
+  "verdict": "IMPLEMENTATION_PASS_AUDIT_BLOCKED",
+  "base_head_sha": "a977a5c344f99cd08552884f19c746f13d566793",
+  "pa4_tested_code_sha": "765fb31",
+  "pa4_tested_code_sha_note": "commit that carries the tested implementation and P3.5 tests",
+  "pa3_reference_sha": "65bc980abd8e0bbec14158b9ddc2884bb1726a4e",
+  "pa3_reference_dirty_files": 0,
+  "dependency_lock_sha256": "8f414f526aad676f6466099da9bf96240f739abae9b9376a5c32fe845340d96e",
+  "dependency_lock_changed": false,
+  "rust_engine_modified": false,
+  "pa3_source_modified": false,
+  "pa3_native_contract_hash_changed": false,
+  "pa3_native_contract_hash": "dd723dc687a60b0568302fa0b09cfb110cbe67eac2c7022f2b4ffe4dff373e35",
+
+  "problem": {
+    "summary": "PA4 served PA3's encoder with all five ragged feature families silently zeroed",
+    "root_cause": "parse_batch decoded ragged, obs_fastpath/transitions/scorer carried only the nine fixed leaves, ObservationBatch.__post_init__ substituted RaggedBatch.empty()",
+    "quantified_encoder_drift_max_abs_token": 4.679,
+    "quantified_encoder_drift_relative": 1.894,
+    "probe": "docs/phases/P3.5/evidence/probe_ragged_gap.py"
+  },
+
+  "family_counts_measured": {
+    "source": "docs/phases/P3.5/evidence/capacity_survey.json",
+    "seat_views": 24000,
+    "max_rows_per_token": {
+      "effects": 2,
+      "repertoire": 4,
+      "types": 2,
+      "base_moves": 4,
+      "move_effects": 3
+    },
+    "max_total_rows_per_view": {
+      "effects": 3,
+      "repertoire": 19,
+      "types": 23,
+      "base_moves": 24,
+      "move_effects": 45
+    }
+  },
+
+  "transport": {
+    "representation": "pa4.observation.ragged.v2",
+    "pre_repair_representation": "pa4.observation.fixed9.v1",
+    "nested_tensor_available": false,
+    "representation": "dense padded tensors + authoritative int64 counts",
+    "truncation": "none; overflow raises RaggedOverflow",
+    "token_capacity": {
+      "effects": 4,
+      "repertoire": 6,
+      "types": 3,
+      "base_moves": 5,
+      "move_effects": 5
+    },
+    "wire_row_bytes_before_capacity_tuning": 153589,
+    "wire_row_bytes_after_capacity_tuning": 119413,
+    "ragged_bytes_after_capacity_tuning": 54189
+  },
+
+  "gates": {
+    "P35_A_source_verified": "PASS",
+    "P35_B_path_repaired": "PASS",
+    "P35_C_transport_exact": "PASS",
+    "P35_D_encoder_parity": "PASS",
+    "P35_E_negative_controls": "PASS",
+    "P35_F_identity_gate_enforced": "PASS",
+    "P35_G_regressions": "PASS",
+    "P35_H_performance_measured": "PASS",
+    "P35_I_auditor_read_real_repo": "BLOCKED"
+  },
+
+  "evidence": {
+    "transport_golden_views": 960,
+    "transport_golden_mismatches": 0,
+    "transport_golden_result": "BYTE-EXACT PASS",
+    "encoder_parity_views": 480,
+    "encoder_parity_max_abs_delta_token": 0.0,
+    "encoder_parity_max_abs_delta_global_repr": 0.0,
+    "encoder_parity_max_abs_delta_value": 0.0,
+    "encoder_parity_device": "cuda (RTX 4060 Ti)",
+    "negative_control_trials": 2264,
+    "negative_control_detected": 2264,
+    "live_path_decision_views": 86,
+    "live_path_max_abs_delta": 0.0,
+    "live_path_result": "PASS",
+    "valid_only_views": 35,
+    "valid_only_mismatches": 0,
+    "collector_smoke_natural_matches": 4,
+    "collector_smoke_seat_records": 108,
+    "collector_smoke_drops": 0,
+    "collector_smoke_all_ragged_v2": true
+  },
+
+  "tests": {
+    "p1_action_distribution": 39,
+    "p2_environment": 51,
+    "p3_collector_including_p35": 82,
+    "total": 172,
+    "all_ok": true,
+    "p35_new_tests": 14,
+    "tests_strengthened": [
+      "tests/environment/test_episode_parity.py::test_deterministic_reset_same_seed",
+      "tests/collector/test_obs_fastpath.py::test_fast_matches_full_all_leaves",
+      "tests/collector/test_obs_fastpath.py::test_fast_matches_full_both_seats"
+    ],
+    "check_env_specs": "OK"
+  },
+
+  "performance": {
+    "method": "same host, minutes apart, repair stashed then restored",
+    "pre_repair_matches_per_sec_16envs": 3.129,
+    "post_repair_matches_per_sec_16envs": 2.42,
+    "delta_16envs_percent": -23,
+    "pre_repair_matches_per_sec_32envs": 4.309,
+    "post_repair_matches_per_sec_32envs": 2.87,
+    "delta_32envs_percent": -33,
+    "p3_receipt_recorded_matches_per_sec_16envs": 5.12,
+    "p3_receipt_recorded_matches_per_sec_32envs": 5.47,
+    "note": "P3 receipt figures measured on a faster host window; today's pre-repair baseline is also below them. Compared to receipt would falsely imply 2.1x regression.",
+    "repair_stage_cost_ms_per_env_step": 2.91,
+    "transport_encode_microseconds_before_opt": 1773,
+    "transport_encode_microseconds_after_opt": 418
+  },
+
+  "bugs_found_during_repair": [
+    "np.ascontiguousarray on a payload slice does not copy; .view(dtype) then read from the base buffer origin and returned uninitialised bytes",
+    "native ragged buffer is laid out PER VIEW, not per family; multi-view decoding was misaligned from view 1"
+  ],
+
+  "auditor": {
+    "invoked": true,
+    "verdict": "INSUFFICIENT_EVIDENCE",
+    "read_zero_files": true,
+    "error": "permission.rejected: Permission denied: external_directory",
+    "auditor_read_real_repo": false,
+    "reason": "auditor sandbox rooted at C:\\Users\\임민우\\Desktop\\PA4 (design docs only); WSL repo paths denied",
+    "same_blocker_as": "P3 G3-E",
+    "concerns_raised_before_block": [
+      "ragged buffer layout per-view vs per-family",
+      "aliasing of retained tensors to reused native buffer",
+      "fail-closed overflow",
+      "identity gate possibly defined but not enforced"
+    ],
+    "adjudication": {
+      "layout": "PASS by executable test test_multi_view_splits_per_view",
+      "aliasing": "PASS by executable test test_transport_is_not_aliased_to_payload",
+      "overflow": "PASS by tests test_overflow_fails_closed / test_no_truncation_at_real_capacity",
+      "identity_gate": "VALID FINDING - gate was defined but unused; now enforced in run_batched._assert_views_representable with 2 tests"
+    }
+  },
+
+  "limitations": [
+    "Padded dense ragged tensors are larger on the inference wire than the native CSR blob",
+    "Padding capacity is empirical (24000 views); overflow fails closed and requires fresh evidence to raise",
+    "P3 receipts preserved as historical evidence, not rewritten",
+    "P3-era fixed9.v1 transition records intentionally refused by the repaired pipeline"
+  ],
+
+  "unblocks": [
+    "P4 G4-B 'real PA3-derived policy/value inputs verified including feature contract' is now satisfiable without tolerance relaxation"
+  ]
+}

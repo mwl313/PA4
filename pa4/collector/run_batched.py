@@ -122,6 +122,7 @@ def run_batched(cfg: BatchedConfig, clients=None, store: BoundedTransitionStore 
             # ---- 2. views for every requesting seat (no second decode) ----
             t = time.perf_counter()
             views = _views_from_players(_obs_td["players"], requests)
+            _assert_views_representable(views)
             requests = [(r, seat, ident, views[i])
                         for i, (r, seat, ident, _) in enumerate(requests)]
             stage["views"] += time.perf_counter() - t
@@ -379,6 +380,22 @@ def account_step(next_td, slots, seen, rep, run_id, worker_index):
             rep.revisions += 1
     rep.natural_matches = len(rep.match_ids)
     return rep
+
+
+def _assert_views_representable(views):
+    """P3.5/ADR-009: refuse to collect rows without the ragged contract.
+
+    A nine-leaf-only view cannot produce a valid PPO training row: the encoder
+    would silently substitute empty ragged sections. Failing here means a
+    pre-repair transition record can never enter the repaired pipeline.
+    """
+    from pa4.env import ragged_transport as _rt
+
+    for i, view in enumerate(views):
+        if "_ragged_row" not in view:
+            raise _rt.ObservationContractMismatch(
+                f"view {i} carries no ragged data; expected representation "
+                f"{_rt.OBSERVATION_REPRESENTATION!r}")
 
 
 def _views_from_players(players, requests):

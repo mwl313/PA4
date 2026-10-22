@@ -188,3 +188,26 @@ class TransitionRetentionTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CollectorGateTest(unittest.TestCase):
+    """The representation gate must be enforced in the real collector loop."""
+
+    def test_collector_rejects_ragged_less_views(self):
+        from pa4.collector.run_batched import _assert_views_representable
+
+        good = {"_ragged_row": {"ragged.types_counts": torch.zeros(96, dtype=torch.long)}}
+        _assert_views_representable([good])  # must not raise
+
+        with self.assertRaises(rt.ObservationContractMismatch):
+            _assert_views_representable([{}])
+
+    def test_collector_rejects_pre_repair_view_shape(self):
+        """A nine-leaf-only view (no _ragged_row) is refused, not downgraded."""
+        from pa4.collector.run_batched import _assert_views_representable
+
+        nine_leaf = {k: torch.zeros(1) for k in
+                     ("token_mask", "categories", "category_known", "floats",
+                      "float_known", "flags", "flag_known", "role_ids", "side_ids")}
+        with self.assertRaises(rt.ObservationContractMismatch):
+            _assert_views_representable([nine_leaf])
