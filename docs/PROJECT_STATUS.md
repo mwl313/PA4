@@ -1,10 +1,10 @@
 # PA4 Project Status
 
 **Last updated:** 2026-10-22
-**Current phase:** P3.5 — Observation Contract Repair (**closed**)
-**Current verdict:** **P3.5 PASS** (9/9 gates; external read-only audit CLEAN with minor docs fixes)
-**Last closed phase:** P3.5 **PASS** (P3 receipt preserved unchanged)
-**Next phase:** P4 — not started (awaiting explicit go-ahead)
+**Current phase:** P4 — Synchronous On-Policy PPO-2 (**closed**)
+**Current verdict:** **P4 PASS** (G4-A..G4-E; 4 audit MAJORs closed and re-run)
+**Last closed phase:** P4 **PASS** (prior receipts preserved unchanged)
+**Next phase:** C1 — not started (requires separate authorization; nothing provisioned)
 
 | Phase | Verdict | Evidence |
 |---|---|---|
@@ -13,6 +13,7 @@
 | **P2** Rust ↔ TorchRL environment adapter | **PASS** (5/5) | `docs/phases/P2/{FINAL_REPORT.md,RECEIPT.json}` |
 | **P3** Batched collector / central inference | **PASS** (5/5) | `docs/phases/P3/{FINAL_REPORT.md,RECEIPT.json,PERFORMANCE_BASELINE.csv}` |
 | **P3.5** Observation contract repair | **PASS** (9/9) | `docs/phases/P3.5/{FINAL_REPORT.md,RECEIPT.json,ADR_009.md}` |
+| **P4** Synchronous on-policy PPO-2 | **PASS** (G4-A..E) | `docs/phases/P4/{FINAL_REPORT.md,RECEIPT.json,FULL_STACK_BASELINE.csv}` |
 
 PASS establishes the phase contracts only. It does not prove Collector
 scalability, PPO stability, agent strength or throughput.
