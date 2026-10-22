@@ -35,17 +35,39 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4,
                                  betas=(0.9, 0.999), eps=1e-5, weight_decay=0.0)
 
-    rng_ok = True
-    save_rng = state.rng_state
+    # MEASURE the RNG round-trip rather than asserting it. `rng_ok` is the
+    # observed outcome of drawing from the restored state and comparing with
+    # the continuation the checkpoint implies.
+    import copy
+
+    # Deep copy: holding a reference to state.rng_state would let the ablation
+    # mutate the very object used as the "expected" stream (an aliasing bug that
+    # silently made the RNG ablation undetectable).
+    saved_rng = copy.deepcopy(state.rng_state)
+
     if mode == "no_rng":
-        # Keep only python RNG; drop the torch/numpy streams the test asserts on.
-        state.rng_state = {"python": save_rng["python"],
-                           "torch_cpu": torch.get_rng_state(),
-                           "numpy": save_rng["numpy"]}
-        rng_ok = False
+        # Replace the torch stream with an unrelated live state. restore_into
+        # then installs a stream that is NOT the checkpointed one.
+        ablated = copy.deepcopy(saved_rng)
+        ablated.pop("torch_cuda", None)
+        torch.manual_seed(1234567)
+        ablated["torch_cpu"] = torch.get_rng_state()
+        state.rng_state = ablated
 
     restore_into(state, model, optimizer)
     model = model.to("cuda")
+
+    # Downgrade the report label using an actual observation: does the restored
+    # torch stream match the one the checkpoint would have produced?
+    from pa4.learner.checkpoint import _set_rng_state
+
+    # expected: the continuation implied by the CHECKPOINT
+    _set_rng_state(saved_rng)
+    expected = torch.randn(4).tolist()
+    # observed: the continuation after restore_into applied state.rng_state
+    _set_rng_state(state.rng_state)
+    observed = torch.randn(4).tolist()
+    rng_ok = (observed == expected)
 
     if mode == "no_adam":
         # A fresh optimizer replicates "Adam moments were never restored".

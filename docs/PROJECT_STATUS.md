@@ -1,8 +1,8 @@
 # PA4 Project Status
 
 **Last updated:** 2026-10-22
-**Current phase:** P4 — Synchronous On-Policy PPO-2 (**closed**)
-**Current verdict:** **P4 PASS** (G4-A..G4-E; 4 audit MAJORs closed and re-run)
+**Current phase:** P4 — Synchronous On-Policy PPO-2 (**closed, fresh-process recovery verified**)
+**Current verdict:** **P4 PASS** (G4-A..G4-E; two audit rounds closed; G4-D proven across a process restart)
 **Last closed phase:** P4 **PASS** (prior receipts preserved unchanged)
 **Next phase:** C1 — not started (requires separate authorization; nothing provisioned)
 
@@ -141,3 +141,40 @@ and `docs/phases/P3/RECEIPT.json`.
 - `docs/phases/P1/` — action distribution design, receipt, final report
 - `docs/phases/P2/` — design, TensorDict spec, episode trace report, final report, receipt
 - `docs/phases/P3/` — design, ADR-008, integration decision, batching evidence, transition spec, baseline CSV + stage timing, final report, receipt
+
+## P4 — Synchronous on-policy PPO-2 (closed)
+
+**Status: PASS (G4-A..G4-E).** A strictly synchronous on-policy PPO-2 loop over
+real Rust battles, with lossless ingestion, per-seat GAE, snapshot-based policy
+identity, real Adam updates and atomic checkpoints.
+
+- **272 tests green:** P1 39 + P2 51 + P3 103 + P4 79. The inherited baseline is
+  193 (the P4 prompt's 158 predates the approved P3.5 phase, which added 35).
+- **20-iteration trial** on the RTX 4060 Ti: 320 generated / 320 accepted natural
+  matches, 0 dropped, 0 duplicates, 265 optimizer steps, 20 distinct policy
+  versions, fingerprint chain intact, 0 NaN/Inf, peak VRAM 574.6 MiB,
+  0.4439 accepted training matches/s.
+- **Fresh-process recovery:** parent `27` → child `186`, distinct processes and a
+  new CUDA context; 142/142 tensors within the predeclared FP32 bound, Adam
+  delta `5.355e-09`, steps `19 = 19`, matches `33 = 33`, ledger identical.
+- **Falsifiable:** dropping Adam restoration moves weights by `9.384e-05`;
+  dropping the RNG blob is caught by a measured stream mismatch; dropping the
+  step counter is caught by `10` vs `19`.
+- **Two audit rounds** are recorded in `docs/phases/P4/RECEIPT.json`. Round 1
+  found four MAJOR training-loop defects; round 2 found that the closure
+  documentation cited values absent from the artifacts. Both were fixed rather
+  than argued.
+
+### Known limitations
+
+- P4 proves a correct, restartable loop. It does **not** prove playing strength,
+  convergence or cost efficiency.
+- Training is **CPU-bound in Python** (~3.5% of learner time is GPU encode), so a
+  faster GPU would not currently help; optimisation is deferred.
+- CUDA kernels are not bitwise-reproducible; CUDA comparisons use the
+  predeclared FP32 bound.
+- The recovery comparison reuses pre-recorded theta_0 cohorts; both branches
+  consume identical data, which is what isolates checkpoint fidelity.
+
+**C1 (Runpod compatibility) is not started and requires separate authorization.**
+No cloud resources have been used.

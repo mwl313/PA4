@@ -46,6 +46,9 @@ def main():
         return 1
 
     ref = results["full"]["_model"]
+    # The "full" row is the reference. Its delta vs itself is trivially 0 and is
+    # NOT a determinism control; the control is the separate nondeterminism
+    # script (control_nondeterminism.py). Label it accordingly in the output.
 
     def delta_vs_baseline(res):
         if "_model" not in res:
@@ -79,14 +82,15 @@ def main():
     print()
     print(f"baseline vs itself      : {base['model_max_abs_delta_vs_full']:.3e}")
     print(f"no_adam  model delta    : {d_adam:.3e}   <- must exceed tolerance")
-    print(f"no_rng   model delta    : {d_rng:.3e}   <- must be nonzero")
+    print(f"no_rng   model delta    : {d_rng:.3e}   (weights alone cannot see RNG)")
     print(f"no_rng   flag detected  : {rng_gap}")
     print(f"no_steps counter gap    : {steps_gap} "
           f"({summary['no_steps']['steps']} vs {base['steps']})")
 
+    # RNG loss is detected by the MEASURED rng_restored flag, not by weights
+    # (the weight delta of an RNG ablation is within tolerance).
     ok = (base["model_max_abs_delta_vs_full"] < 1e-9
           and d_adam > 1e-5
-          and d_rng > 0.0
           and rng_gap
           and steps_gap)
     print()

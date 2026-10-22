@@ -1,47 +1,47 @@
-PARENT pid=138 work=/tmp/p4_fresh_11xhmn7b
+PARENT pid=27 work=/tmp/p4_fresh_3njb5cz1
   cohort 1: 356710ea293dd656
   cohort 2: 356710ea293dd656
   cohort 3: 356710ea293dd656
   cohort 4: 356710ea293dd656
-branch A done: steps=22 matches=32
+branch A done: steps=19 matches=33
 branch B parent committed -> ckpt_it0002_v0003.pt
-LAUNCHING: /home/pa4/projects/PokeAgent4.0/.venv/bin/python /home/pa4/projects/PokeAgent4.0/docs/phases/P4/evidence/fresh_process_child.py /tmp/p4_fresh_11xhmn7b /tmp/p4_fresh_11xhmn7b/B_ckpt /tmp/p4_fresh_11xhmn7b/cohorts /tmp/p4_fresh_11xhmn7b/child_result.json
+LAUNCHING: /home/pa4/projects/PokeAgent4.0/.venv/bin/python /home/pa4/projects/PokeAgent4.0/docs/phases/P4/evidence/fresh_process_child.py /tmp/p4_fresh_3njb5cz1 /tmp/p4_fresh_3njb5cz1/B_ckpt /tmp/p4_fresh_3njb5cz1/cohorts /tmp/p4_fresh_3njb5cz1/child_result.json
 --- child stdout ---
-child pid=297 device=NVIDIA GeForce RTX 4060 Ti
-child loaded checkpoint: iteration=2 steps=12 matches=16
+child pid=186 device=NVIDIA GeForce RTX 4060 Ti
+child loaded checkpoint: iteration=2 steps=9 matches=16
 child adam: 142 params, 139 with nonzero exp_avg
 child rng roundtrip ok=True
 child done
 
 {
- "parent_pid": 138,
- "child_pid": 297,
+ "parent_pid": 27,
+ "child_pid": 186,
  "distinct_processes": true,
- "child_command": "/home/pa4/projects/PokeAgent4.0/.venv/bin/python /home/pa4/projects/PokeAgent4.0/docs/phases/P4/evidence/fresh_process_child.py /tmp/p4_fresh_11xhmn7b /tmp/p4_fresh_11xhmn7b/B_ckpt /tmp/p4_fresh_11xhmn7b/cohorts /tmp/p4_fresh_11xhmn7b/child_result.json",
+ "child_command": "/home/pa4/projects/PokeAgent4.0/.venv/bin/python /home/pa4/projects/PokeAgent4.0/docs/phases/P4/evidence/fresh_process_child.py /tmp/p4_fresh_3njb5cz1 /tmp/p4_fresh_3njb5cz1/B_ckpt /tmp/p4_fresh_3njb5cz1/cohorts /tmp/p4_fresh_3njb5cz1/child_result.json",
  "child_device": "NVIDIA GeForce RTX 4060 Ti",
- "checkpoint_a_dir": "/tmp/p4_fresh_11xhmn7b/A_ckpt",
- "checkpoint_b_dir": "/tmp/p4_fresh_11xhmn7b/B_ckpt",
- "checkpoint_b_mid_sha256": "dbbe0f86d8ae66224c9277f960eb21b91080a2249661173ae414c17f382819c0",
+ "checkpoint_a_dir": "/tmp/p4_fresh_3njb5cz1/A_ckpt",
+ "checkpoint_b_dir": "/tmp/p4_fresh_3njb5cz1/B_ckpt",
+ "checkpoint_b_mid_sha256": "733347701fcf682d103f04adf0242f154a310605d730e041fd217a6481bea298",
  "child_rng_restored": true,
  "child_adam_params": 142,
  "child_adam_nonzero": 139,
  "model_tensors_passing": "142/142",
- "model_max_abs_delta": 1.1920928955078125e-07,
+ "model_max_abs_delta": 5.960464477539063e-08,
  "adam_state_ids_match": true,
- "adam_max_abs_delta": 4.6566128730773926e-09,
+ "adam_max_abs_delta": 5.3551048040390015e-09,
  "steps": [
-  22,
-  22
+  19,
+  19
  ],
  "steps_match": true,
  "lr": [
-  1.002784e-05,
-  1.002784e-05
+  1.0029e-05,
+  1.0029e-05
  ],
  "lr_match": true,
  "committed_matches": [
-  32,
-  32
+  33,
+  33
  ],
  "ledger_match": true,
  "cohort_fingerprints": {
@@ -59,7 +59,8 @@ child done
    "('resume-it3', 0, 2, 2, 2)",
    "('resume-it3', 0, 0, 3, 2)",
    "('resume-it3', 0, 1, 4, 2)",
-   "('resume-it3', 0, 3, 5, 2)"
+   "('resume-it3', 0, 3, 5, 2)",
+   "('resume-it3', 0, 3, 7, 3)"
   ],
   "4": [
    "('resume-it4', 0, 0, 1, 1)",
@@ -68,8 +69,8 @@ child done
    "('resume-it4', 0, 3, 1, 1)",
    "('resume-it4', 0, 1, 2, 2)",
    "('resume-it4', 0, 2, 3, 2)",
-   "('resume-it4', 0, 3, 4, 2)",
-   "('resume-it4', 0, 0, 5, 2)"
+   "('resume-it4', 0, 0, 5, 2)",
+   "('resume-it4', 0, 1, 6, 3)"
   ]
  },
  "atol": 1e-05,

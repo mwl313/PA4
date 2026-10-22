@@ -145,8 +145,11 @@ The earlier proof reloaded the checkpoint **in the same process**, which does no
 exercise "terminate and relaunch a new process". That gap is now closed by
 `evidence/fresh_process_recovery.py`, which:
 
-1. builds theta_0 and collects four on-policy cohorts, each validated against
-   the snapshot fingerprint that produced it;
+1. builds theta_0 and collects four cohorts, each validated against the
+   snapshot fingerprint that produced it. NOTE: all four are produced by
+   theta_0, so they are not on-policy for iterations 2-4. The comparison is
+   still valid because BOTH branches consume identical data; this check
+   isolates checkpoint fidelity, not on-policy collection;
 2. runs iterations 1-4 continuously (branch A);
 3. runs iterations 1-2 and commit a full checkpoint (branch B);
 4. **launches a genuinely new interpreter and CUDA context** via `subprocess`;
@@ -158,16 +161,16 @@ exercise "terminate and relaunch a new process". That gap is now closed by
 
 | Field | Value |
 |---|---|
-| Parent PID → child PID | distinct (`distinct_processes: true`) |
-| Child device | NVIDIA GeForce RTX 4060 Ti (fresh CUDA context) |
-| Model tensors within bound | **142 / 142** |
-| Model max abs delta | `1.192e-07` |
+| Parent PID → child PID | `27` → `186` (`distinct_processes: true`) |
+| Child device | `NVIDIA GeForce RTX 4060 Ti` (fresh CUDA context) |
+| Model tensors within bound | **142/142** |
+| Model max abs delta | `5.960e-08` |
 | Adam state ids match | **true** |
 | Adam params with non-zero `exp_avg` | **139 / 142** |
-| Adam max abs delta | `3.667e-09` |
-| Optimizer steps | **21 = 21** |
+| Adam max abs delta | `5.355e-09` |
+| Optimizer steps | **19 = 19** |
 | LR | identical |
-| Committed matches | **32 = 32** |
+| Committed matches | **33 = 33** |
 | Match ledger | identical |
 | RNG restored | **true** |
 
@@ -179,12 +182,15 @@ ablation child replays the resume four ways against the **same** checkpoint:
 | Ablation | Detection | Magnitude |
 |---|---|---|
 | baseline (full restore) | delta vs itself | `0.000e+00` |
-| **Adam moments dropped** | **detected** | max weight delta **`1.088e-04`** (10x the `1e-5` bound) |
-| **RNG blob dropped** | **detected** | `rng_restored: false` |
-| **step counter dropped** | **detected** | counter `10` vs `22` |
+| **Adam moments dropped** | **detected** | max weight delta **`9.384e-05`** (~9x the `1e-5` bound) |
+| **RNG blob dropped** | **detected** | measured stream mismatch (`rng_restored: false`); weights alone move only `5.960e-08` |
+| **step counter dropped** | **detected** | counter `10` vs `19` |
 
-Dropping Adam restoration moves the weights by `1.09e-04`, far outside the
-predeclared FP32 tolerance, so the recovery gate genuinely fails without it.
+Dropping Adam restoration moves the weights by `9.384e-05`, far outside
+the predeclared FP32 tolerance, so the recovery gate genuinely fails without it.
+RNG loss does not show up in the weights at that magnitude, so it is detected by
+observing that the restored stream does not reproduce the checkpointed
+continuation.
 `tests/ppo/test_fresh_process.py` pins these invariants in the normal suite.
 
 ---
@@ -200,6 +206,7 @@ Two runs exist and both are retained:
 | `fresh_process_ablation.txt` | subprocess relaunch, 4 ablations | **authoritative** |
 | `checkpoint_state.txt`, `checkpoint_corruption.txt` | field/corruption checks | current |
 
-Where an earlier markdown table cited a value from a different run, the table now
-quotes the preserved artifact. No measurement was re-worded to look better; the
-superseded run is named as superseded.
+Every number in this document is read from the artifact named beside it. A first
+attempt at this reconciliation cited values from an earlier run than the
+regenerated artifacts; the audit caught that, and the tables were rebuilt from
+the files rather than adjusted by hand. Superseded runs are named as superseded.

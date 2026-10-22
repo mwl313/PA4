@@ -14,8 +14,8 @@
 | **G4-A** Lossless rollouts | **PASS** | 320 natural matches, **0 dropped**, 0 duplicates, 0 duplicate match ids; P3 ring preserved |
 | **G4-B** Numerical golden | **PASS** | Stored-action replay max joint delta **4.77e-07** (gate 1e-5); independent golden module imports neither GAE nor loss |
 | **G4-C** Live CUDA PPO-2 | **PASS** | **20/20** iterations, **265** optimizer steps, **20 distinct policy versions**, fingerprint chain intact, 0 NaN/Inf |
-| **G4-D** Durable restore | **PASS** | **142/142** tensors within the predeclared FP32 bound; Adam moments persist; 5/5 corruption modes rejected |
-| **G4-E** Full stack + audit | **PASS** | 268 tests green, P0 smoke, real-source audit performed, full-stack baseline recorded |
+| **G4-D** Durable restore | **PASS** | **fresh process** 27→186: 142/142 tensors, Adam delta `5.355e-09`, steps 19=19; Adam/RNG/step ablations all detected |
+| **G4-E** Full stack + audit | **PASS** | 272 tests green, P0 smoke, two real-source audit rounds, full-stack baseline recorded |
 
 ---
 
@@ -79,24 +79,29 @@ helper previously had no callers.
 
 ---
 
-## 5. Resume
+## 5. Resume — fresh-process recovery
 
-Continuous 4 iterations vs 2 → checkpoint → reload from disk → 2.
+Continuous 4 iterations vs 2 → checkpoint → **process terminates** → new
+interpreter and CUDA context resume iterations 3–4 from disk.
 
 | Metric | Value |
 |---|---|
-| Tensors within `atol + rtol·|b|` | **142 / 142** |
-| Max abs weight delta | `1.192e-07` |
-| Worst excess over bound | `−9.994e-06` (inside) |
-| Max Adam delta | `4.307e-09` |
-| Counters / ledger | identical |
+| Processes | `27` → `186` (distinct) |
+| Model tensors within `atol + rtol·|b|` | **142/142** |
+| Max abs weight delta | `5.960e-08` |
+| Adam params with non-zero moments | `139/142` |
+| Max Adam delta | `5.355e-09` |
+| Optimizer steps | `19 = 19` |
+| Committed matches | `33 = 33` |
+| Ledger | identical |
+| RNG restored | `true` |
 
-**Control:** the same update run twice in one process differs by `1.192e-07`.
-CUDA is not bitwise-reproducible, so bitwise equality was never an achievable
-criterion. The tolerance used is the one the design predeclared **before**
-measurement — not one widened to pass.
+**Falsifiable:** dropping Adam restoration moves weights by `9.384e-05`
+(detected); dropping the RNG blob is caught by the measured stream mismatch;
+dropping the step counter is caught by `10` vs `19`.
 
----
+The earlier in-process comparison (`evidence/resume_parity.txt`) is retained as a
+**superseded** artifact and is not the basis for G4-D.
 
 ## 6. Full-stack baseline (local 8 GB profile)
 

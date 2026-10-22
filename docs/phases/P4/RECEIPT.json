@@ -54,22 +54,38 @@
       "peak_vram_mib": 574.6
     },
     "G4_D": {
-      "resume_tensors_passing_combined_bound": "142/142",
-      "resume_max_abs_weight_delta": 1.192e-07,
-      "resume_worst_excess_over_bound": -9.994e-06,
-      "resume_max_abs_adam_delta": 4.307e-09,
-      "nondeterminism_control_same_update_twice": 1.192e-07,
-      "counters_match": true,
-      "ledger_equal": true,
-      "corruption_modes_rejected": [
-        "tampered weights",
-        "truncated file",
-        "bad pointer sha",
-        "model-only save",
-        "foreign schema"
+      "method": "fresh process: parent runs 4 continuous iterations; interrupted branch stops after iteration 2, commits a checkpoint, then a NEW interpreter and CUDA context resume iterations 3-4 from disk",
+      "parent_pid": 27,
+      "child_pid": 186,
+      "distinct_processes": true,
+      "child_device": "NVIDIA GeForce RTX 4060 Ti",
+      "model_tensors_passing": "142/142",
+      "model_max_abs_delta": 5.960464477539063e-08,
+      "adam_state_ids_match": true,
+      "adam_params_nonzero": 139,
+      "adam_max_abs_delta": 5.3551048040390015e-09,
+      "optimizer_steps": [
+        19,
+        19
       ],
-      "adam_persisted_across_iterations": true,
-      "criterion": "|a-b| <= atol + rtol*|b|, predeclared in the design before measurement"
+      "committed_matches": [
+        33,
+        33
+      ],
+      "ledger_match": true,
+      "rng_restored": true,
+      "falsifiability": {
+        "adam_ablation_model_delta": 9.384372970089316e-05,
+        "rng_ablation_detected_by_stream": true,
+        "rng_ablation_model_delta": 5.960464477539063e-08,
+        "step_ablation_counter": [
+          10,
+          19
+        ],
+        "all_detected": true
+      },
+      "criterion": "|a-b| <= atol + rtol*|b| with atol=1e-5, rtol=1e-4, predeclared in the design before measurement",
+      "superseded_artifact": "evidence/resume_parity.txt (in-process reload; retained as history, NOT the basis for this gate)"
     },
     "G4_E": {
       "accepted_training_matches_per_sec": 0.4439,
@@ -98,22 +114,46 @@
     ],
     "majors_closed": true,
     "minors_addressed": [
-      "checkpoint parity gate now uses the elementwise combined bound and includes Adam/RNG",
-      "optimizer step metric no longer double-counts the cumulative counter",
-      "microbatch evidence strengthened so the naive-average control is discriminable",
-      "P4 regression tests added for all four majors"
+      "RNG ablation is now a measured stream comparison, not a hardcoded flag",
+      "all doc tables rebuilt from the preserved artifacts",
+      "test counts corrected to 79 P4 / 272 total"
     ],
     "minors_deferred": [
-      "resume proof reloads the checkpoint from disk in the same process rather than spawning a fresh interpreter",
-      "some markdown tables cite an earlier run than the preserved artifact"
+      "the ablation 'baseline vs itself' row is trivially zero and is labelled as such; cross-run determinism is evidenced by control_nondeterminism.py",
+      "the fresh-process cohorts are all produced by theta_0, so they are not on-policy for iterations 2-4; both branches consume identical data, which is what makes the comparison valid, and CHECKPOINT_RECOVERY.md states this"
+    ],
+    "rounds": [
+      {
+        "round": "1",
+        "tree": "6027932",
+        "verdict": "FINDINGS (4 MAJOR, 6 MINOR)",
+        "majors": [
+          "M1 Adam moments never restored",
+          "M2 finiteness unread / nan_inf hardcoded",
+          "M3 collector errors and partial cohorts admitted",
+          "M4 microbatch accumulation not implemented"
+        ],
+        "closed": true
+      },
+      {
+        "round": "2",
+        "tree": "91bd325",
+        "verdict": "FINDINGS (2 MAJOR, 7 MINOR)",
+        "majors": [
+          "Task 2 doc reconciliation claimed but three cited values existed in no artifact",
+          "Task 3 not completed: receipt (75/268), final report and project status still described the in-process proof"
+        ],
+        "closed": true,
+        "note": "second round audited the acceptance-gap closure, not the training-loop code, and confirmed the fresh-process test is real"
+      }
     ]
   },
   "tests": {
     "p1_action_distribution": 39,
     "p2_environment": 51,
     "p3_collector": 103,
-    "p4_ppo": 75,
-    "total": 268,
+    "p4_ppo": 79,
+    "total": 272,
     "all_ok": true,
     "baseline_note": "the original P4 prompt stated 158 inherited tests; the actual inherited baseline is 193 because the approved P3.5 phase added 35. No inherited test was removed or weakened."
   },
