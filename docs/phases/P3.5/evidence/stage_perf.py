@@ -1,7 +1,10 @@
-"""P3.5: attribute the collector regression to real stages.
+"""P3.5: record stage timing for the repaired collector.
 
-Compares stage timing for the same config with ragged ON vs OFF, so the delta
-is attributable to the repair rather than to run-to-run noise.
+This script is NOT an ON/OFF ablation. It records the repaired path only.
+`payload_to_transport` runs inside `env.step`/`reset` (and therefore inside the
+`env_step`/`reset` stages); the `views` stage only extracts leaves and runs the
+identity gate. The end-to-end -26%/-23% headline came from a separate same-host
+manual stash/restore A/B, not from this script.
 """
 import json
 import os

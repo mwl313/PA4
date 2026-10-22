@@ -2,7 +2,7 @@
 
 For real battles, for every seat view:
   1. take the native payload (fixed+ragged) exactly as PA4 fetches it
-  2. PA3 canonical  -> RaggedBatch via split_batch_ragged_all
+  2. PA3 canonical  -> RaggedBatch via from_native
   3. P3.5 transport -> transport_to_ragged
   4. assert counts/values/host_counts are IDENTICAL (not "close")
   5. build ObservationBatch both ways and compare encoder + value outputs
@@ -22,7 +22,6 @@ from pa4.env import ragged_transport as rt
 
 from agent.types.observation import ObservationBatch
 from agent.types.ragged import FIELDS
-from pa3_engine.observation import split_batch_ragged
 
 
 def canonical_ragged(payload, index):
@@ -36,10 +35,6 @@ def canonical_ragged(payload, index):
     return from_native(payload, 1)
 
 
-def build_fixed(payload, index, layout):
-    """The nine fixed leaves for one view, as PA3 builds them."""
-    from pa4.env.obs_fastpath import SliceDecoder
-    return None
 
 
 def main():

@@ -4,8 +4,8 @@
   "adr": "docs/phases/P3.5/ADR_009.md",
   "verdict": "IMPLEMENTATION_PASS_AUDIT_BLOCKED",
   "base_head_sha": "a977a5c344f99cd08552884f19c746f13d566793",
-  "pa4_tested_code_sha": "765fb31",
-  "pa4_tested_code_sha_note": "commit that carries the tested implementation and P3.5 tests",
+  "pa4_tested_code_sha": "06e3b0479cbe4e86190a220fcc51a49c19c042ef",
+  "pa4_tested_code_sha_note": "commit that carries the tested correction package, tests and evidence scripts; receipt/docs follow in a separate metadata commit",
   "pa3_reference_sha": "65bc980abd8e0bbec14158b9ddc2884bb1726a4e",
   "pa3_reference_dirty_files": 0,
   "dependency_lock_sha256": "8f414f526aad676f6466099da9bf96240f739abae9b9376a5c32fe845340d96e",
@@ -14,7 +14,6 @@
   "pa3_source_modified": false,
   "pa3_native_contract_hash_changed": false,
   "pa3_native_contract_hash": "dd723dc687a60b0568302fa0b09cfb110cbe67eac2c7022f2b4ffe4dff373e35",
-
   "problem": {
     "summary": "PA4 served PA3's encoder with all five ragged feature families silently zeroed",
     "root_cause": "parse_batch decoded ragged, obs_fastpath/transitions/scorer carried only the nine fixed leaves, ObservationBatch.__post_init__ substituted RaggedBatch.empty()",
@@ -22,7 +21,6 @@
     "quantified_encoder_drift_relative": 1.894,
     "probe": "docs/phases/P3.5/evidence/probe_ragged_gap.py"
   },
-
   "family_counts_measured": {
     "source": "docs/phases/P3.5/evidence/capacity_survey.json",
     "seat_views": 24000,
@@ -41,12 +39,9 @@
       "move_effects": 45
     }
   },
-
   "transport": {
-    "representation": "pa4.observation.ragged.v2",
     "pre_repair_representation": "pa4.observation.fixed9.v1",
     "nested_tensor_available": false,
-    "representation": "dense padded tensors + authoritative int64 counts",
     "truncation": "none; overflow raises RaggedOverflow",
     "token_capacity": {
       "effects": 4,
@@ -57,9 +52,10 @@
     },
     "wire_row_bytes_before_capacity_tuning": 153589,
     "wire_row_bytes_after_capacity_tuning": 119413,
-    "ragged_bytes_after_capacity_tuning": 54189
+    "ragged_bytes_after_capacity_tuning": 54189,
+    "representation_id": "pa4.observation.ragged.v2",
+    "encoding": "dense padded tensors + authoritative int64 counts"
   },
-
   "gates": {
     "P35_A_source_verified": "PASS",
     "P35_B_path_repaired": "PASS",
@@ -71,7 +67,6 @@
     "P35_H_performance_measured": "PASS",
     "P35_I_auditor_read_real_repo": "BLOCKED"
   },
-
   "evidence": {
     "transport_golden_views": 960,
     "transport_golden_mismatches": 0,
@@ -89,77 +84,107 @@
     "valid_only_views": 35,
     "valid_only_mismatches": 0,
     "collector_smoke_natural_matches": 4,
-    "collector_smoke_seat_records": 108,
+    "collector_smoke_seat_records": 91,
     "collector_smoke_drops": 0,
-    "collector_smoke_all_ragged_v2": true
+    "collector_smoke_all_ragged_v2": true,
+    "capacity_survey_seat_views": 24000,
+    "server_seam_test": "PASS (non-empty ragged; canonical PA3 encoder equality)"
   },
-
   "tests": {
     "p1_action_distribution": 39,
     "p2_environment": 51,
-    "p3_collector_including_p35": 82,
-    "total": 172,
+    "p3_collector_including_p35": 95,
+    "total": 185,
     "all_ok": true,
-    "p35_new_tests": 14,
+    "p35_new_tests": 13,
     "tests_strengthened": [
       "tests/environment/test_episode_parity.py::test_deterministic_reset_same_seed",
       "tests/collector/test_obs_fastpath.py::test_fast_matches_full_all_leaves",
-      "tests/collector/test_obs_fastpath.py::test_fast_matches_full_both_seats"
+      "tests/collector/test_obs_fastpath.py::test_fast_matches_full_both_seats",
+      "tests/collector/test_obs_fastpath.py::test_batched_decode_matches_full_per_seat",
+      "tests/collector/test_batching.py::make_row (real ragged leaves, not placeholders)"
     ],
     "check_env_specs": "OK"
   },
-
   "performance": {
-    "method": "same host, minutes apart, repair stashed then restored",
-    "pre_repair_matches_per_sec_16envs": 3.129,
-    "post_repair_matches_per_sec_16envs": 2.42,
-    "delta_16envs_percent": -23,
-    "pre_repair_matches_per_sec_32envs": 4.309,
-    "post_repair_matches_per_sec_32envs": 2.87,
-    "delta_32envs_percent": -33,
+    "method": "same host and virtualenv; pre-repair tree a977a5c extracted with git archive, measured with the same venv; repaired tree 06e3b04 measured minutes apart; target_matches=64, seed=1, cuda, FP32",
+    "pre_repair_matches_per_sec_16envs": 3.191,
+    "post_repair_matches_per_sec_16envs": 2.362,
+    "delta_16envs_percent": -26.0,
+    "pre_repair_matches_per_sec_32envs": 4.074,
+    "post_repair_matches_per_sec_32envs": 3.136,
+    "delta_32envs_percent": -23.0,
+    "pre_and_post_runs": "docs/phases/P3.5/evidence/measure_perf_ab.json",
+    "post_rerun_log": "docs/phases/P3.5/evidence/measure_perf.txt",
     "p3_receipt_recorded_matches_per_sec_16envs": 5.12,
     "p3_receipt_recorded_matches_per_sec_32envs": 5.47,
-    "note": "P3 receipt figures measured on a faster host window; today's pre-repair baseline is also below them. Compared to receipt would falsely imply 2.1x regression.",
-    "repair_stage_cost_ms_per_env_step": 2.91,
-    "transport_encode_microseconds_before_opt": 1773,
-    "transport_encode_microseconds_after_opt": 418
+    "note": "The old 5.12/5.47 P3 numbers were measured in a different host window; comparing to them would overstate the repair cost. The fresh same-session A/B is -26%/-23%.",
+    "views_stage_ms_per_env_step": 8.26,
+    "env_step_stage_ms_per_env_step": 13.03,
+    "reset_stage_ms_per_env_step": 7.26,
+    "stage_attribution_note": "payload_to_transport runs inside env_step/reset, not the views stage. docs/phases/P3.5/evidence/stage_perf.py records the repaired path only; it is not an ON/OFF ablation and no longer claims to be one.",
+    "payload_to_transport_us_per_16_views": 948.0,
+    "decode_batch_us_per_16_views": 1741.1
   },
-
   "bugs_found_during_repair": [
     "np.ascontiguousarray on a payload slice does not copy; .view(dtype) then read from the base buffer origin and returned uninitialised bytes",
-    "native ragged buffer is laid out PER VIEW, not per family; multi-view decoding was misaligned from view 1"
+    "native ragged buffer is laid out PER VIEW, not per family; multi-view decoding was misaligned from view 1",
+    "F1: the collector gate checked a key that _views_from_players had just synthesised; the real representation id was never validated and the server silently omitted ragged",
+    "F2: next_observation carried only nine leaves while stamping the ragged v2 id",
+    "F5: payload_to_transport created an overflow tensor shaped [B,96] instead of [B]; transport_rows skipped it, so the defect was invisible until validation was added",
+    "F9: _ragged_from_td collapsed a 3-D [B, seats, tokens] input to seat 0 instead of rejecting it"
   ],
-
   "auditor": {
     "invoked": true,
-    "verdict": "INSUFFICIENT_EVIDENCE",
-    "read_zero_files": true,
-    "error": "permission.rejected: Permission denied: external_directory",
-    "auditor_read_real_repo": false,
-    "reason": "auditor sandbox rooted at C:\\Users\\임민우\\Desktop\\PA4 (design docs only); WSL repo paths denied",
-    "same_blocker_as": "P3 G3-E",
-    "concerns_raised_before_block": [
-      "ragged buffer layout per-view vs per-family",
-      "aliasing of retained tensors to reused native buffer",
-      "fail-closed overflow",
-      "identity gate possibly defined but not enforced"
+    "verdict": "FINDINGS_ROUND8",
+    "read_zero_files": false,
+    "auditor_read_real_repo": true,
+    "round8_commit": "d0be6e3",
+    "round8_result": "FINDINGS",
+    "round8_findings": [
+      "F1 identity gate vacuous at its live call site",
+      "F2 next_observation stamped v2 with only nine leaves",
+      "F3 no non-empty ragged test through the real server seam",
+      "F4 stale tested sha and duplicate transport.representation key",
+      "F5-F9 lesser decode/aliasing/performance/evidence/3-D issues"
     ],
-    "adjudication": {
-      "layout": "PASS by executable test test_multi_view_splits_per_view",
-      "aliasing": "PASS by executable test test_transport_is_not_aliased_to_payload",
-      "overflow": "PASS by tests test_overflow_fails_closed / test_no_truncation_at_real_capacity",
-      "identity_gate": "VALID FINDING - gate was defined but unused; now enforced in run_batched._assert_views_representable with 2 tests"
-    }
+    "round8_fixes_commit": "06e3b0479cbe4e86190a220fcc51a49c19c042ef",
+    "round9_status": "PENDING - fresh-context re-audit of the corrected tree",
+    "auditor_pa3_reference_read": "DENIED (external_directory); PA4 repository read succeeded"
   },
-
   "limitations": [
     "Padded dense ragged tensors are larger on the inference wire than the native CSR blob",
     "Padding capacity is empirical (24000 views); overflow fails closed and requires fresh evidence to raise",
     "P3 receipts preserved as historical evidence, not rewritten",
-    "P3-era fixed9.v1 transition records intentionally refused by the repaired pipeline"
+    "P3-era fixed9.v1 transition records intentionally refused by the repaired pipeline",
+    "The fresh A/B is one run per configuration; run-to-run variance is not characterised"
   ],
-
   "unblocks": [
-    "P4 G4-B 'real PA3-derived policy/value inputs verified including feature contract' is now satisfiable without tolerance relaxation"
-  ]
+    "P4 G4-B 'real PA3-derived policy/value inputs verified including feature contract' remains satisfiable on the repaired contract, pending the P3.5 audit gate"
+  ],
+  "pa4_base_head_sha": "a977a5c344f99cd08552884f19c746f13d566793",
+  "verdict_note": "The correction package closes the round-8 audit findings F1-F4 and the lesser F5-F9 items. P35_I stays BLOCKED until a fresh-context auditor reads the corrected tree and returns CLEAN.",
+  "correction_package": {
+    "reason": "round-8 fresh-context audit returned FINDINGS (not CLEAN) at d0be6e3",
+    "fixed": {
+      "F1_identity_gate": "views carry an explicit representation id; _views_from_players validates leaves and raises ObservationContractMismatch; _assert_views_representable checks id+leaves; encode_all validates; server _obs_batch fails closed on missing ragged",
+      "F2_next_observation": "retains observation_ragged; v2 is never stamped without matching ragged",
+      "F3_server_seam": "real env->_views_from_players->StagedInference->InferenceServer->_obs_batch->encoder test with non-empty ragged; falsifiability demonstrated",
+      "F4_provenance": "duplicate transport key fixed; tested sha repointed to 06e3b04; all evidence regenerated",
+      "F5_decode_overflow": "validate_transport_row checks counts<=cap, non-negative counts, lengths and overflow on every transport->RaggedBatch decode; overflow flag retained; ADR corrected",
+      "F6_aliasing": "aliasing test mutates the payload buffer in place; permute/truncate controls added",
+      "F7_performance": "fresh A/B -26%/-23%; stage attribution corrected; stage_perf no longer claims ON/OFF",
+      "F8_evidence_hygiene": "smoke drop check uses store.dropped and checks every seat; golden import/dead helper fixed; probe itemsize fixed; probe scripts import the repo",
+      "F9_seat0_collapse": "3-D [B, seats, tokens] ragged input is rejected, not collapsed"
+    },
+    "f3_falsifiability": {
+      "test": "tests.collector.test_server_seam_ragged.ServerSeamRaggedTest.test_real_server_seam_receives_nonempty_ragged",
+      "disabled_log": "docs/phases/P3.5/evidence/f3_ragged_forwarding_disabled.txt",
+      "restored_log": "docs/phases/P3.5/evidence/f3_ragged_forwarding_restored.txt",
+      "disabled_result": "FAIL: server encoder output differs from the canonical path",
+      "restored_result": "OK",
+      "disabled_digest": "17f75a0e444168a731cf0ffe453865781925b81603ad8949233d04e715085512",
+      "canonical_digest": "9bf2772b9d30ce5a8ad103bffc4b4f7ec49848f59d7811d169254a3e9fca652e"
+    }
+  }
 }

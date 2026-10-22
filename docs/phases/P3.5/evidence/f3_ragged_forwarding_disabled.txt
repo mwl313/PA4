@@ -1,0 +1,17 @@
+test_real_server_seam_receives_nonempty_ragged (tests.collector.test_server_seam_ragged.ServerSeamRaggedTest.test_real_server_seam_receives_nonempty_ragged) ... FAIL
+
+======================================================================
+FAIL: test_real_server_seam_receives_nonempty_ragged (tests.collector.test_server_seam_ragged.ServerSeamRaggedTest.test_real_server_seam_receives_nonempty_ragged)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/pa4/projects/PokeAgent4.0/tests/collector/test_server_seam_ragged.py", line 170, in test_real_server_seam_receives_nonempty_ragged
+    self.assertEqual(probe["encoded"], _encoded_digest(gold_encoded),
+AssertionError: '17f75a0e444168a731cf0ffe453865781925b81603ad8949233d04e715085512' != '9bf2772b9d30ce5a8ad103bffc4b4f7ec49848f59d7811d169254a3e9fca652e'
+- 17f75a0e444168a731cf0ffe453865781925b81603ad8949233d04e715085512
++ 9bf2772b9d30ce5a8ad103bffc4b4f7ec49848f59d7811d169254a3e9fca652e
+ : server encoder output differs from the canonical path
+
+----------------------------------------------------------------------
+Ran 1 test in 3.731s
+
+FAILED (failures=1)

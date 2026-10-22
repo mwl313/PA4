@@ -1,0 +1,8 @@
+report: {'natural_matches': 4, 'duplicate_match_ids': 0, 'env_steps': 13, 'seat_records': 91, 'actor_active_rows': 83, 'transitions_stored': 52, 'transitions_dropped': 0}
+retained records: 52
+representations seen: {'pa4.observation.ragged.v2'}
+nonempty family counts: {'effects': 56, 'repertoire': 67, 'types': 91, 'base_moves': 91, 'move_effects': 91}
+
+seat records with ragged: 91 of 91
+dropped: 0
+RESULT: PASS

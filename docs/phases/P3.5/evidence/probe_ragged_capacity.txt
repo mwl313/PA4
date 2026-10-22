@@ -1,0 +1,10 @@
+step 0 views 32 completed 0
+step 150 views 2432 completed 8
+step 300 views 4832 completed 8
+step 450 views 7232 completed 8
+total views: 9616 completed: 8
+  effect_counts          -> effects      max_total_rows=    3 max_per_token=  2
+  repertoire_counts      -> repertoire   max_total_rows=   19 max_per_token=  4
+  type_counts            -> types        max_total_rows=   23 max_per_token=  2
+  base_move_counts       -> base_moves   max_total_rows=   24 max_per_token=  4
+  move_effect_counts     -> move_effects max_total_rows=   45 max_per_token=  3

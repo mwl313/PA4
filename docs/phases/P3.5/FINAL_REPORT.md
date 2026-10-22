@@ -2,9 +2,9 @@
 
 **Phase:** P3.5 (prerequisite to P4)
 **ADR:** `ADR_009.md`
-**Status:** implementation complete with **one unresolved environmental gate** (fresh-context auditor access; see §8)
+**Status:** implementation + round-8 correction package complete; P35_I fresh-context re-audit pending (see §8)
 **Base commit:** `a977a5c`
-**Tested implementation commit:** `765fb31`
+**Tested implementation commit:** `06e3b04`
 **PA3 reference (read-only, unmodified):** `65bc980abd8e0bbec14158b9ddc2884bb1726a4e`
 **Frozen `uv.lock` sha256:** `8f414f526aad676f6466099da9bf96240f739abae9b9376a5c32fe845340d96e` (unchanged)
 
@@ -64,8 +64,9 @@ not reimplement parsing. No Rust change, no PA3 change, no policy/PPO change.
 | `pa4/env/obs_fastpath.py` | all three decoders (`decode_fast`, `decode_full`, `decode_batch`) carry ragged |
 | `pa4/actions/batched_scorer.py` | `request_spec` carries ragged; `_obs_batch` forwards it into `ObservationBatch.ragged` |
 | `pa4/collector/batched_core.py` | `StagedInference.encode_all` ships ragged with the row |
-| `pa4/collector/run_batched.py` | `_views_from_players` includes ragged; **representation gate enforced** |
-| `pa4/collector/transitions.py` | retains ragged, digest covers it, stamps representation id |
+| `pa4/collector/run_batched.py` | `_views_from_players` validates the actual ragged leaves and carries an explicit representation id; `_assert_views_representable` checks both the id and the leaves |
+| `pa4/collector/batched_core.py` | `StagedInference.encode_all` validates the view contract before shipping ragged with the row |
+| `pa4/collector/transitions.py` | retains ragged in both pre-action and next observations, digest covers it, stamps representation id only with matching ragged |
 
 ### Transport representation
 
@@ -83,9 +84,9 @@ ever truncated. Capacities come from the 24,000-view survey with margin
 (`effects 4, repertoire 6, types 3, base_moves 5, move_effects 5`) — note
 `base_moves` is structurally 4 because a Pokémon knows at most four moves.
 
-### Two real bugs found and fixed during the work
+### Real bugs found and fixed during the work
 
-Both were caught by tests rather than shipped:
+All were caught by tests rather than shipped:
 
 1. **`np.ascontiguousarray` on a slice does not copy.** `.view(dtype)` then
    reinterpreted from the *base* buffer's origin and read uninitialised bytes
@@ -94,6 +95,15 @@ Both were caught by tests rather than shipped:
 2. **The native ragged buffer is laid out PER VIEW, not per family.** Multi-view
    decoding was misaligned from view 1 onward. Fixed to walk view-major, and a
    dedicated regression test now pins it.
+3. **The overflow flag was `[B, 96]`, not `[B]`.** It was skipped by
+   `transport_rows`, so the shape defect was invisible until the correction
+   package added redundancy validation. Fixed to one flag per view
+   (`counts > cap).any(axis=1)`).
+4. **The collector gate checked a key it had just synthesised**, and
+   `next_observation` stamped the v2 representation while storing only nine
+   leaves. Both are corrected: the extractor validates the real leaves and
+   raises `ObservationContractMismatch`, the gate checks the carried id and
+   leaves, and next observations retain ragged.
 
 ---
 
@@ -108,7 +118,8 @@ All figures are from committed scripts under `docs/phases/P3.5/evidence/`.
 | Negative controls | `verify_encoder_parity.py` | **2264 / 2264 detected** |
 | Live TensorDict → encoder path | `verify_live_path.py` | **86 decision views, 0.000e+00** — `LIVE-PATH PARITY: PASS` |
 | Valid-view-only equivalence | `verify_valid_only.py` | 35 decision views, **0 mismatches** |
-| Real collector end-to-end | `smoke_collector.py` | 4 natural matches, 108 seat records, all `ragged.v2`, 0 drops |
+| Real collector end-to-end | `smoke_collector.py` | 4 natural matches, **91 seat records, all `ragged.v2`, 0 drops** |
+| **Real server seam with non-empty ragged** | `test_server_seam_ragged.py` | **PASS** — encoder output equals canonical PA3; forwarding disabled makes it FAIL (F3) |
 | Capacity survey | `capacity_survey.py` | 24,000 seat-views |
 
 Note on the live-path check: Wait/Finished rows legitimately carry the previous
@@ -122,63 +133,82 @@ rather than every row. This is the documented contract, not a workaround.
 |---|---|
 | `tests/action_distribution` (P1) | **39 OK** |
 | `tests/environment` (P2) | **51 OK** |
-| `tests/collector` (P3 + P3.5) | **82 OK** |
-| **Total** | **172 tests OK** |
+| `tests/collector` (P3 + P3.5) | **95 OK** |
+| **Total** | **185 tests OK** |
 | `check_env_specs` (`env.rollout(2)`) | **OK** |
 | `uv.lock` | unchanged (`8f414f52…`) |
 | PA3 reference | unchanged, 0 dirty |
 
-Two pre-existing tests were **strengthened, not loosened**: the P2 determinism
-test now also asserts ragged determinism, and the fast/full decoder equivalence
-test now asserts ragged equality instead of only the nine fixed leaves.
+Pre-existing tests were **strengthened, not loosened**: the P2 determinism test
+now asserts ragged determinism (and the representation id), the fast/full
+decoder equivalence tests assert ragged equality for both seats and the batched
+path, and `make_row` now carries real ragged leaves instead of placeholders.
 
 ---
 
 ## 4. Performance — a real regression, reported as measured
 
-Measured on the same host, **minutes apart**, same config, with the repair
-stashed and restored (`measure_perf.py`):
+Fresh same-session A/B: the pre-repair tree `a977a5c` was extracted with
+`git archive` and measured with the same virtualenv and config; the repaired
+tree `06e3b04` was measured minutes later (`evidence/measure_perf_ab.json`):
 
 | Config | Pre-repair (this host, now) | P3.5 ragged | Delta |
 |---|---|---|---|
-| 16 envs | 3.129 matches/s | 2.42 matches/s | **−23%** |
-| 32 envs | 4.309 matches/s | 2.87 matches/s | **−33%** |
+| 16 envs | 3.191 matches/s | 2.362 matches/s | **−26%** |
+| 32 envs | 4.074 matches/s | 3.136 matches/s | **−23%** |
 
-**Important context:** the pre-repair numbers measured *today* (3.13 / 4.31) are
-themselves well below the P3 receipt's recorded 5.12 / 5.47. Comparing the
-repaired figure to the old receipt would imply a 2.1× regression, which is
-**wrong** — most of that gap is host variance, not the repair. The honest
-attributable cost is **23–33%**.
+**Important context:** the pre-repair numbers measured *today* are themselves
+well below the P3 receipt's recorded 5.12 / 5.47. Comparing the repaired figure
+to the old receipt would imply a much larger regression, which is **wrong** —
+most of that gap is host variance, not the repair. The attributable cost in this
+A/B is **23–26%**, one run per configuration.
 
-Where the cost sits (`stage_perf.py`, per env step):
+Where the time sits (`stage_perf.py`, repaired path only, per env step):
 
 | Stage | ms/step |
 |---|---|
-| `step_levels` (transport latency) | 225.45 |
-| `encode` | 64.81 |
-| `env_step` | 12.13 |
-| `packet` | 12.13 |
-| `reset` | 6.65 |
-| `accounting` | 6.61 |
-| **`views` (all P3.5 work)** | **2.91** |
+| `step_levels` (inference transport latency) | 236.18 |
+| `encode` | 71.63 |
+| `env_step` (contains `payload_to_transport`) | 13.03 |
+| `packet` | 11.75 |
+| `accounting` | 10.11 |
+| `views` (leaf extraction + identity gate only) | 8.26 |
+| `reset` (also contains `payload_to_transport`) | 7.26 |
+| `request_info` | 0.04 |
 
-The repair itself is ~2.9 ms/step. Two optimisations were applied during the
-work: `payload_to_transport` went 1773 µs → 418 µs (4.2×) by removing per-token
-Python loops and per-view `_matrix` calls, and the inference wire row went
-154 KB → 119 KB by right-sizing padding from evidence. What remains is mostly
-the larger padded tensors crossing the inference transport — an expected and
-acceptable cost for correct inputs.
+The `views` stage rose from 2.91 to 8.26 ms/step because the gate now validates
+every ragged leaf rather than checking a key. The `views` stage is **not** the
+repair cost: `payload_to_transport` runs inside `env.step`/`reset`.
+`stage_perf.py` records the repaired path only; it is **not** an ON/OFF ablation
+and no longer claims to be one. `bench_ragged.py` times the
+components directly: `payload_to_transport` ≈ 948 µs and `decode_batch` ≈ 1741 µs
+for 16 views. The inference wire row is 119 KB after right-sizing padding
+(was 154 KB). What remains is mostly the larger padded tensors crossing the
+inference transport — an expected and acceptable cost for correct inputs.
 
 ---
 
-## 5. Representation identity
+## 5. Representation identity and enforcement
 
 `OBSERVATION_REPRESENTATION = "pa4.observation.ragged.v2"` is stamped on every
-seat record. Pre-repair records are `"pa4.observation.fixed9.v1"`.
+seat record and every decoded view. Pre-repair records are
+`"pa4.observation.fixed9.v1"`.
 
-Enforcement is **real, not merely defined**: `run_batched._assert_views_representable`
-runs in the collector loop and raises `ObservationContractMismatch` for any view
-without ragged. Two tests prove a nine-leaf-only view is refused.
+Enforcement is **real at the live boundary, not merely defined**:
+
+- `run_batched._views_from_players` checks the actual fixed and ragged leaves
+  before building a view and raises `ObservationContractMismatch` (never
+  `KeyError`) when any leaf is missing.
+- `_assert_views_representable` validates the view's carried
+  `_observation_representation` and calls `validate_transport_row` on its
+  leaves; a wrong id or a nine-leaf view is refused.
+- `StagedInference.encode_all` validates the same contract before submitting.
+- The server's `batched_scorer._obs_batch` no longer returns `None` for missing
+  ragged; it raises `ObservationContractMismatch`.
+- `transitions.next_observation` retains `observation_ragged`, so a v2 stamp
+  never describes a nine-leaf-only record. Wait/Finished rows still carry stale
+  leaves (`observation_valid=False`); P4 must mask them, never bootstrap them.
+- `assert_representation` refuses fixed9 records at any P4 ingest boundary.
 
 The **PA3 native contract hash is unchanged** (`dd723dc6…`), because the native
 payload format did not change — only how much of it PA4 forwards.
@@ -200,6 +230,12 @@ payload format did not change — only how much of it PA4 forwards.
    the corrected comparison.
 4. **P3-collected transitions are not trainable.** Any P3-era record is
    `fixed9.v1` and is refused by design.
+5. **The fresh A/B is one run per configuration.** Run-to-run variance is not
+   characterised; the measured deltas are −26%/−23% in this A/B, not a
+   universal constant.
+6. **The auditor can read the PA4 repo but not the PA3 checkout** in its
+   sandbox (`external_directory`). PA3-side layout claims are verified by the
+   committed golden scripts and tests, not by the auditor's direct PA3 read.
 
 ---
 
@@ -207,40 +243,49 @@ payload format did not change — only how much of it PA4 forwards.
 
 G4-B's conjunct *"real PA3-derived policy/value inputs verified including feature
 contract"* is now satisfiable on the true PA3 forward contract, with **no
-tolerance relaxation**. P4 may resume from `765fb31` with the corrected
-observation contract.
+tolerance relaxation**. P4 may resume from `06e3b04` **only after P35_I closes**.
 
 ---
 
-## 8. Unresolved gate — auditor access (BLOCKED, environmental)
+## 8. Round-8 audit findings, correction package, and P35_I
 
-A fresh-context `pa4-auditor` was spawned and returned **`INSUFFICIENT_EVIDENCE`**:
+A fresh-context `pa4-auditor` **did read the real WSL repository** at `d0be6e3`
+(`ACCESS_OK`) and returned `FINDINGS`, not CLEAN. The four MAJOR findings were
+independently confirmed and fixed in the correction package at `06e3b04`:
+
+| ID | Finding | Fix |
+|---|---|---|
+| F1 | The collector gate was vacuous: `_views_from_players` synthesised the key the gate checked; a missing leaf raised raw `KeyError`; the server silently omitted ragged. | The extractor validates the actual leaves and raises `ObservationContractMismatch`; views carry an explicit representation id; the gate checks id+leaves; `encode_all` validates; `_obs_batch` fails closed. |
+| F2 | `next_observation` was stamped `ragged.v2` while storing only nine leaves. | It now retains `observation_ragged`; a v2 view without ragged raises. |
+| F3 | No test exercised non-empty ragged through the real server seam; deleting the forwarding left all tests green. | `tests/collector/test_server_seam_ragged.py` runs env → `_views_from_players` → `StagedInference.encode_all` → `InferenceServer` → `_obs_batch` → encoder and compares to canonical PA3. |
+| F4 | `pa4_tested_code_sha` was stale; the receipt had a duplicate `transport.representation` key. | The receipt pins `06e3b04`; the duplicate key is split into `representation_id` and `encoding`; all evidence was regenerated. |
+| F5 | Decode-side overflow was not fail-closed; the ADR claimed an assertion that did not exist. | `validate_transport_row` checks counts/capacity/lengths/overflow on every decode; the ADR is corrected; the `[B,96]` overflow shape bug is fixed. |
+| F6 | The aliasing test re-decoded the same state, so it could not detect aliasing. | It now mutates the payload buffer in place; permute and truncate digest controls were added. |
+| F7 | Performance stage attribution was wrong (`views` is not all repair work); `stage_perf.py` claimed an ON/OFF ablation it did not run. | Corrected in §4 and the receipt; `stage_perf.py` no longer claims ON/OFF. |
+| F8 | Evidence hygiene defects (vacuous drop check, dead golden import/helper, wrong probe itemsize). | Fixed and evidence regenerated. |
+| F9 | 3-D `[B, seats, tokens]` ragged input silently collapsed to seat 0. | Rejected explicitly. |
+
+### F3 falsifiability demonstration
+
+With `kwargs["ragged"] = ragged` temporarily removed from
+`batched_scorer._obs_batch`, the server-seam test **FAILED**:
 
 ```
-{"error":{"type":"permission.rejected","message":"Permission denied: external_directory"}}
+FAIL: test_real_server_seam_receives_nonempty_ragged
+AssertionError: '17f75a0e444168a731cf0ffe453865781925b81603ad8949233d04e715085512'
+                != '9bf2772b9d30ce5a8ad103bffc4b4f7ec49848f59d7811d169254a3e9fca652e'
+: server encoder output differs from the canonical path
+Ran 1 test ... FAILED (failures=1)
 ```
 
-It read **zero files**. It correctly refused to approve on the strength of a
-summary, and explicitly did not fabricate findings. Its sandbox is rooted at
-`C:\Users\임민우\Desktop\PA4`, which contains only design documents.
+After restoring the forwarding, the same test **PASSED** (`Ran 1 test ... OK`).
+Both logs are retained as `evidence/f3_ragged_forwarding_disabled.txt` and
+`evidence/f3_ragged_forwarding_restored.txt`.
 
-This is the **same environmental blocker recorded for G3-E**: only an OpenCode
-session launched *from WSL inside the repository* gives an auditor read access.
-The auditors available to a Windows-rooted session inherit that root.
+### P35_I status
 
-I am **not** claiming an auditor PASS. This phase is therefore reported as:
-
-> **P3.5 implementation: PASS on all executable gates. Auditor review: BLOCKED.**
-
-The three substantive concerns the auditor raised before being blocked were
-independently adjudicated by executable tests and recorded: byte layout
-(`test_multi_view_splits_per_view`), aliasing
-(`test_transport_is_not_aliased_to_payload`), and fail-closed overflow
-(`test_overflow_fails_closed`, `test_no_truncation_at_real_capacity`). Its
-concern #5 — that the identity gate was only defined, never enforced — was
-**valid and was acted on**, which is why `_assert_views_representable` now runs
-in the collector loop.
-
-To close this gate, relaunch OpenCode from WSL:
-`wsl` → `cd /home/pa4/projects/PokeAgent4.0` → `opencode`, then have
-`pa4-auditor` review commit `765fb31` read-only.
+P35_I remains **BLOCKED** until the round-9 fresh-context auditor reads the
+corrected tree and returns CLEAN. No PASS is claimed here. The auditor could
+not read `/home/pa4/projects/_pa3_ref` (external-directory denial), so PA3-side
+layout claims remain verified through the committed evidence and tests rather
+than by the auditor's direct PA3 read.

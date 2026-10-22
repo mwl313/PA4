@@ -1,0 +1,3 @@
+
+valid (decision) views : 35 mismatches: 0
+invalid (Wait/Finished): 5 (stale leaves by contract)

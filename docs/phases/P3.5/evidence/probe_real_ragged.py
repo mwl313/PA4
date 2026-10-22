@@ -1,5 +1,6 @@
 import sys
-for p in ("/home/pa4/.pa3_build/engine/python", "/home/pa4/projects/_pa3_ref"):
+for p in ("/home/pa4/.pa3_build/engine/python", "/home/pa4/projects/_pa3_ref",
+          "/home/pa4/projects/PokeAgent4.0"):
     if p not in sys.path: sys.path.insert(0, p)
 import numpy as np
 from pa4.env.native_env import PA4EnvBase
@@ -21,7 +22,7 @@ print("=== REAL ragged counts (slot0 gen%d seat0) ===" % st.generation)
 for fam in FAM:
     c = np.asarray(payload[FAM[fam]])
     print("  %-22s itemsize=%d sum=%5d nonzero_tokens=%3d max=%3d" % (
-        FAM[fam], int(c.sum()), int(c.sum()), int((c>0).sum()), int(c.max())))
+        FAM[fam], int(c.dtype.itemsize), int(c.sum()), int((c>0).sum()), int(c.max())))
 tm = np.asarray(payload["token_mask"])
 print("  token_mask active =", int(tm.sum()), "of", tm.shape[-1])
 print()

@@ -97,10 +97,10 @@ def main():
         print(f"  {name:14s} width={len(fields):2d}  fields={fields}")
     print()
 
-    print("=== (a) ragged content in a real battle ===")
-    print("  P2 boundary exposes ONLY the nine fixed leaves (verified by grep of")
-    print("  pa4/env/native_env.py::_player_obs_keys). The Rust extension in this")
-    print("  repo exports no ragged_* family. So every P3 request carries 0 ragged rows.")
+    print("=== (a) pre-repair context (historical) ===")
+    print("  Before P3.5, PA4's P2 boundary forwarded only the nine fixed leaves even")
+    print("  though the native payload carried all five ragged families. The")
+    print("  comparison below toggles ragged to quantify what that path discarded.")
     print()
 
     with torch.no_grad():
@@ -126,7 +126,7 @@ def main():
         )
     print()
 
-    print("=== conclusion data recorded to JSON ===")
+    print("=== conclusion: non-empty ragged materially changes encoder/value ===")
 
 
 if __name__ == "__main__":

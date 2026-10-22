@@ -1,8 +1,8 @@
 # PA4 Project Status
 
 **Last updated:** 2026-10-22
-**Current phase:** P3.5 — Observation Contract Repair (**implementation complete; auditor gate BLOCKED**)
-**Current verdict:** **P3.5 implementation PASS**, fresh-context audit **BLOCKED** (environmental)
+**Current phase:** P3.5 — Observation Contract Repair (**correction package complete; re-audit pending**)
+**Current verdict:** **P3.5 implementation PASS**, fresh-context audit **BLOCKED** (round-8 findings fixed; round-9 re-audit pending)
 **Last closed phase:** P3 **PASS** (receipt preserved unchanged)
 **Next phase:** P4 — not started; blocked on the P3.5 auditor gate
 
@@ -12,7 +12,7 @@
 | **P1** Conditional action feasibility | **PASS** (G1-D CPU-scoped) | `docs/phases/P1/RECEIPT.json` |
 | **P2** Rust ↔ TorchRL environment adapter | **PASS** (5/5) | `docs/phases/P2/{FINAL_REPORT.md,RECEIPT.json}` |
 | **P3** Batched collector / central inference | **PASS** (5/5) | `docs/phases/P3/{FINAL_REPORT.md,RECEIPT.json,PERFORMANCE_BASELINE.csv}` |
-| **P3.5** Observation contract repair | **Implementation PASS; audit BLOCKED** | `docs/phases/P3.5/{FINAL_REPORT.md,RECEIPT.json,ADR_009.md}` |
+| **P3.5** Observation contract repair | **Implementation PASS; re-audit pending** | `docs/phases/P3.5/{FINAL_REPORT.md,RECEIPT.json,ADR_009.md}` |
 
 PASS establishes the phase contracts only. It does not prove Collector
 scalability, PPO stability, agent strength or throughput.
@@ -92,6 +92,27 @@ fresh context, so this is a process control, not independent-model proof.
   `next_observation`, per-level legal mask/token refs, observation digest and
   per-seat policy provenance.
 
+## P3.5 — Observation Contract Repair (correction package applied; re-audit pending)
+
+**Status: implementation PASS; P35_I BLOCKED pending round-9 audit.** The
+round-8 fresh-context auditor read the real repo and returned `FINDINGS`; the
+four MAJOR findings (vacuous identity gate, mislabelled `next_observation`, no
+server-seam ragged test, stale provenance/duplicate key) and F5–F9 were fixed
+at `06e3b04` with tests that fail if the fix is reverted.
+
+- **185 tests green:** P1 39 + P2 51 + collector 95; `check_env_specs` OK.
+- Transport byte-exact on **960** real views, encoder/value parity on CUDA
+  **0.000e+00** over **480** views, **2264/2264** negative controls detected.
+- Real server seam with **non-empty ragged** passes; disabling the forwarding
+  makes it fail (both runs retained in `evidence/f3_ragged_forwarding_*.txt`).
+- Collector smoke: 4 natural matches, **91 seat records, all `ragged.v2`, 0 drops**.
+- Fresh same-session A/B: pre-repair 3.191/4.074 vs repaired 2.362/3.136
+  matches/s → **−26%/−23%**; `views` (8.26 ms/step) is only leaf extraction and
+  the gate, not the repair cost (`payload_to_transport` runs inside
+  `env_step`/`reset`).
+- PA3 untouched (0 dirty), `uv.lock` unchanged.
+- **P35_I remains BLOCKED** until the round-9 fresh-context audit returns CLEAN.
+
 ## Open limitations (carried forward, not blocking)
 
 1. Auditor independence is same-model only.
@@ -106,9 +127,11 @@ fresh context, so this is a process control, not independent-model proof.
 
 ## Immediate next task
 
-**P3 is closed. Do not start P4 without a separate instruction.** P4 (GAE,
-PPO-2, optimizer, checkpoint parity) is not started. The P3 audit history is in
-`docs/phases/P3/RECEIPT.json` under `audit_findings` and `review_history`.
+**P3.5 re-audit.** Do not start P4. The round-9 fresh-context `pa4-auditor`
+must read the corrected tree (`06e3b04` + this metadata commit) and return
+CLEAN before P35_I can be set PASS. P4 (GAE, PPO-2, optimizer, checkpoint
+parity) is not started. Audit history is in `docs/phases/P3.5/RECEIPT.json`
+and `docs/phases/P3/RECEIPT.json`.
 
 ## Artifacts
 

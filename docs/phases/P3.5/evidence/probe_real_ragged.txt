@@ -1,0 +1,14 @@
+slot state: 0 gen 1 ep 1 step 0
+slot state: 1 gen 1 ep 1 step 0
+
+payload keys: ['base_move_counts', 'categories', 'category_known', 'contract_hash', 'effect_counts', 'flag_known', 'flags', 'float_known', 'floats', 'move_effect_counts', 'ragged', 'repertoire_counts', 'schema_version', 'token_mask', 'type_counts']
+
+=== REAL ragged counts (slot0 gen1 seat0) ===
+  effect_counts          itemsize=2 sum=    0 nonzero_tokens=  0 max=  0
+  repertoire_counts      itemsize=2 sum=    0 nonzero_tokens=  0 max=  0
+  type_counts            itemsize=2 sum=   23 nonzero_tokens= 12 max=  2
+  base_move_counts       itemsize=2 sum=   24 nonzero_tokens=  6 max=  4
+  move_effect_counts     itemsize=2 sum=   30 nonzero_tokens= 24 max=  2
+  token_mask active = 64 of 96
+
+ragged bytes total: 1594  fixed bytes: 41986

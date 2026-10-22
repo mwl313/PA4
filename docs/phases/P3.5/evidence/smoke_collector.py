@@ -47,8 +47,10 @@ def main():
     reps = set()
     ragged_ok = 0
     checked = 0
+    total_seats = 0
     for rec in records:
         for sr in rec.get("seat_records", []):
+            total_seats += 1
             reps.add(sr.get("observation_representation"))
             row = sr.get("observation_ragged") or {}
             if not row:
@@ -65,15 +67,16 @@ def main():
                 ragged_ok += 1
 
     print("representations seen:", reps)
-    print("seat records with ragged:", checked, "finite round-trips:", ragged_ok)
     print("nonempty family counts:", fam_nonempty)
     print()
-    ok = (checked > 0 and ragged_ok == checked
+    drops = int(getattr(store, "dropped", -1))
+    ok = (total_seats > 0 and checked == total_seats
+          and ragged_ok == checked
           and reps == {rt.OBSERVATION_REPRESENTATION}
-          and rec.get("transitions_dropped", 0) == 0)
-    print("dropped:", getattr(store, "dropped", "n/a"))
+          and drops == 0)
+    print("seat records with ragged:", checked, "of", total_seats)
+    print("dropped:", drops)
     print("RESULT:", "PASS" if ok else "FAIL")
-
 
 if __name__ == "__main__":
     main()

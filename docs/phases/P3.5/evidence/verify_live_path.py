@@ -25,7 +25,7 @@ def live_ragged(players, r, side, dev):
     for f in _rt.family_names():
         for field in ("counts", "values", "lengths", "overflow"):
             flat[f"ragged.{f}_{field}"] = row[f"ragged.{f}_{field}"].unsqueeze(0)
-    return _ragged_from_td(flat, [0], dev, already_flat=True)
+    return _ragged_from_td(flat, [0], dev)
 
 
 def main():

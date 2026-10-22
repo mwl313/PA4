@@ -1,0 +1,43 @@
+{
+ "seat_views": 24000,
+ "steps": 1500,
+ "batches": 8,
+ "max_rows_per_token": {
+  "effect_counts": 2,
+  "repertoire_counts": 4,
+  "type_counts": 2,
+  "base_move_counts": 4,
+  "move_effect_counts": 3
+ },
+ "max_total_rows_per_view": {
+  "effect_counts": 3,
+  "repertoire_counts": 19,
+  "type_counts": 23,
+  "base_move_counts": 24,
+  "move_effect_counts": 45
+ },
+ "distribution_max_per_token": {
+  "effect_counts": {
+   "0": 3030,
+   "1": 20960,
+   "2": 10
+  },
+  "repertoire_counts": {
+   "0": 32,
+   "1": 36,
+   "2": 3020,
+   "3": 11984,
+   "4": 8928
+  },
+  "type_counts": {
+   "2": 24000
+  },
+  "base_move_counts": {
+   "4": 24000
+  },
+  "move_effect_counts": {
+   "2": 9009,
+   "3": 14991
+  }
+ }
+}

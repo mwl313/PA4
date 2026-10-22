@@ -1,0 +1,18 @@
+=== ragged families and widths ===
+  effects        width= 8  fields=['id', 'present', 'duration', 'duration_known', 'stacks', 'stacks_known', 'source', 'source_known']
+  repertoire     width= 1  fields=['id']
+  types          width= 1  fields=['id']
+  base_moves     width= 5  fields=['id', 'pp', 'max_pp', 'disabled', 'used']
+  move_effects   width=13  fields=['kind', 'chance', 'status', 'volatile', 'boost_0', 'boost_1', 'boost_2', 'boost_3', 'boost_4', 'boost_5', 'boost_6', 'heal', 'heal_known']
+
+=== (a) pre-repair context (historical) ===
+  Before P3.5, PA4's P2 boundary forwarded only the nine fixed leaves even
+  though the native payload carried all five ragged families. The
+  comparison below toggles ragged to quantify what that path discarded.
+
+=== (b) effect of NON-EMPTY ragged on encoder/value ===
+  1 ragged row(s)/token: max|dToken|=4.679438 (rel 1.8942)  max|dGlobal|=4.533492  max|dV|=0.019048  mean|dV|=0.018489
+  2 ragged row(s)/token: max|dToken|=4.725961 (rel 1.9130)  max|dGlobal|=4.611108  max|dV|=0.020152  mean|dV|=0.018894
+  3 ragged row(s)/token: max|dToken|=4.768149 (rel 1.9301)  max|dGlobal|=4.410561  max|dV|=0.018975  mean|dV|=0.018561
+
+=== conclusion: non-empty ragged materially changes encoder/value ===

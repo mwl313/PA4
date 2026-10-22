@@ -1,5 +1,6 @@
 import sys
-for p in ("/home/pa4/.pa3_build/engine/python", "/home/pa4/projects/_pa3_ref"):
+for p in ("/home/pa4/.pa3_build/engine/python", "/home/pa4/projects/_pa3_ref",
+          "/home/pa4/projects/PokeAgent4.0"):
     if p not in sys.path: sys.path.insert(0, p)
 import numpy as np
 from pa4.env.native_env import PA4EnvBase

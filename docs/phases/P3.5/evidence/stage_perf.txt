@@ -1,0 +1,17 @@
+{
+ "label": "ragged_on",
+ "num_envs": 16,
+ "wall_s": 21.119,
+ "matches_per_s": 2.32,
+ "matches": 49,
+ "stages_ms": {
+  "accounting": 10.11,
+  "encode": 71.63,
+  "env_step": 13.03,
+  "packet": 11.75,
+  "request_info": 0.04,
+  "reset": 7.26,
+  "step_levels": 236.18,
+  "views": 8.26
+ }
+}

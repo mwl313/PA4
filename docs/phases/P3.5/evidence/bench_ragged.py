@@ -50,21 +50,18 @@ def main():
 
     trans = transport()
 
-    def fixed_only():
+    def decode():
         return env._decoder.decode_batch(payload, 16)
-
-    def with_ragged():
-        env._decoder.decode_batch(payload, 16)
 
     print("=== per-call cost at num_envs=16 ===")
     bench("native observe_fixed_batch(16)", native)
     bench("parse_batch(16)", parse)
     bench("payload_to_transport(16)  <-- added", transport)
-    bench("decode_batch(16) fixed+ragged", with_ragged)
+    bench("decode_batch(16) fixed+ragged", decode)
     print()
     total = 0.0
     for label, fn in (("native", native), ("parse", parse),
-                      ("transport", transport), ("decode", fixed_only)):
+                      ("transport", transport), ("decode", decode)):
         total += bench(f"  component: {label}", fn)
     print(f"{'TOTAL per step (16 views)':42s} {total*1e6:9.1f} us")
 
