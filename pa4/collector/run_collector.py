@@ -170,7 +170,9 @@ def run_collector(cfg: CollectorConfig) -> CollectorReport:
 
         # Each worker may have up to 2 in-flight seat requests (one per seat), so
         # allocate 2 clients per worker and hand each request a dedicated slot.
-        clients = [srv.client() for _ in range(cfg.num_workers * 2)]
+        # srv.client() CACHES one client, so a list comprehension would alias
+        # every entry to slot 0 (the exact defect documented in ADR/evidence).
+        clients = srv.clients(cfg.num_workers * 2)
         bridges = [_Bridge(c, req_sp, cfg.policy_version) for c in clients]
         free_slots = list(range(len(clients)))
         slot_busy = set()

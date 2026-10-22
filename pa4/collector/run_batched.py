@@ -1,4 +1,9 @@
-"""P3 optimized batched collection loop."""
+"""P3 optimized batched collection loop.
+
+One native advance per loop iteration. Records are emitted into a bounded
+PA4ActorTransitionV1 store (see `pa4/collector/transitions.py`) and match
+accounting is exactly-once, guarded against the environment's own counter.
+"""
 
 from __future__ import annotations
 
@@ -12,23 +17,37 @@ import torch
 from pa4.collector.batched_core import (
     OBS_LEAVES, POLICY_KINDS, BatchedConfig, BatchedReport, StagedInference, _ensure_paths,
 )
+from pa4.collector.transitions import BoundedTransitionStore, seat_record, transition
+
+STAGES = ("request_info", "views", "encode", "step_levels", "packet",
+          "env_step", "accounting", "reset")
 
 
-def run_batched(cfg: BatchedConfig) -> BatchedReport:
+def run_batched(cfg: BatchedConfig, clients=None, store: BoundedTransitionStore | None = None):
+    """Run a bounded collection.
+
+    `clients` may be supplied by a caller that owns a central server (see
+    `multi_driver.run_multi`); otherwise this function creates and owns one.
+    """
     _ensure_paths()
-    from torchrl.modules.inference_server import InferenceServer
+    from tensordict import TensorDict
 
-    from pa4.actions.batched_factory_instrumented import build_instrumented_service
-    from pa4.actions.batched_scorer import request_spec, response_spec
-    from pa4.env.native_env import KIND_FINISHED, NUM_SEATS, PA4EnvBase
+    from pa4.actions.batched_scorer import (
+        fingerprint_id, model_fingerprint, request_spec, response_spec,
+    )
+    from pa4.collector.transitions import BoundedTransitionStore as _Store
+    from pa4.env.native_env import NUM_SEATS, PA4EnvBase
 
+    t_start = time.perf_counter()
     os.environ["PA4_POLICY_DEVICE"] = cfg.device
     stats_path = f"/tmp/pa4_p3_batched_{cfg.run_id}.json"
-    os.environ["PA4_P3_STATS_PATH"] = stats_path
-    try:
-        os.remove(stats_path)
-    except OSError:
-        pass
+    own_stats_path = clients is None
+    if own_stats_path:
+        os.environ["PA4_P3_STATS_PATH"] = stats_path
+        try:
+            os.remove(stats_path)
+        except OSError:
+            pass
 
     teams = cfg.teams or [(i % 4, (i + 1) % 4) for i in range(cfg.num_envs)]
     env = PA4EnvBase(batch_size=cfg.num_envs, seed=cfg.seed,
@@ -36,57 +55,85 @@ def run_batched(cfg: BatchedConfig) -> BatchedReport:
     env.verify_contract()
     _obs_td = env.reset()
 
-    n_clients = max(cfg.num_envs * 2, 2)
-    srv = InferenceServer(
-        model=None, policy_factory=build_instrumented_service,
-        transport="process_slot", service_backend="process",
-        request_spec=request_spec(), response_spec=response_spec(),
-        num_clients=n_clients,
-        max_batch_size=cfg.max_batch_size,
-        min_batch_size=cfg.min_batch_size,
-        timeout=cfg.server_timeout,
-    )
-    srv.start()
-    clients = srv.clients(n_clients)
-    inf = StagedInference(clients, request_spec(), cfg.policy_version)
+    srv = None
+    if clients is None:
+        from torchrl.modules.inference_server import InferenceServer
+
+        from pa4.actions.batched_factory_instrumented import build_instrumented_service
+
+        n_clients = max(cfg.num_envs * 2, 2)
+        srv = InferenceServer(
+            model=None, policy_factory=build_instrumented_service,
+            transport="process_slot", service_backend="process",
+            request_spec=request_spec(), response_spec=response_spec(),
+            num_clients=n_clients,
+            max_batch_size=cfg.max_batch_size,
+            min_batch_size=cfg.min_batch_size,
+            timeout=cfg.server_timeout,
+        )
+        srv.start()
+        clients = srv.clients(n_clients)
+
+    expected_fp = fingerprint_id(model_fingerprint(cfg.policy_seed))
+    inf = StagedInference(clients, request_spec(), cfg.policy_version,
+                          run_id_int=cfg.worker_index, fingerprint_id=expected_fp,
+                          result_timeout=cfg.result_timeout)
+    store = store if store is not None else _Store(cfg.transition_capacity)
+    contract_hash = str(getattr(env.module, "CONTRACT_HASH", ""))
 
     rep = BatchedReport(run_id=cfg.run_id, num_envs=cfg.num_envs)
+    rep.policy_weight_fingerprint = model_fingerprint(cfg.policy_seed)
+    rep.observation_contract_hash = contract_hash
+    rep.setup_seconds = time.perf_counter() - t_start
     seen = set()
-    t_start = time.perf_counter()
+    stage = {k: 0.0 for k in STAGES}
+    warm_seconds = 0.0
+    steady_seconds = 0.0
+    steady_matches = 0
 
     try:
         while rep.natural_matches < cfg.target_matches and rep.env_steps < cfg.max_steps:
             rep.env_steps += 1
+            step_t0 = time.perf_counter()
+            matches_before = rep.natural_matches
 
             # ---- 1. one native call for every row/seat's kind + branches ----
+            t = time.perf_counter()
             kinds_and_branches = _request_info_all(env)
-
-            # ---- 2. collect views for every requesting seat (one native call) --
-            requests = []      # (row, seat, ident, view)
+            requests = []
             for r, st in enumerate(env._slots):
-                k, nb = kinds_and_branches[r]
+                k, _nb = kinds_and_branches[r]
                 for seat in range(NUM_SEATS):
                     if k[seat] not in POLICY_KINDS:
                         continue
-                    requests.append((r, seat, _ident(cfg.run_id, r, st, seat, rep.env_steps), None))
+                    requests.append((r, seat,
+                                     _ident(cfg.run_id, r, st, seat, rep.env_steps), None))
+            stage["request_info"] += time.perf_counter() - t
 
             if not requests:
+                rep.env_steps -= 1
                 break
 
-            # Reuse the observations the environment already decoded for this
-            # transition instead of issuing a second native decode pass.
+            # Pre-action request identity, captured before the step.
+            pre_request_ids = {r: tuple(env._slots[r].request_ids) for r in range(env._batch)}
+
+            # ---- 2. views for every requesting seat (no second decode) ----
+            t = time.perf_counter()
             views = _views_from_players(_obs_td["players"], requests)
             requests = [(r, seat, ident, views[i])
                         for i, (r, seat, ident, _) in enumerate(requests)]
+            stage["views"] += time.perf_counter() - t
 
             # ---- 3. ENCODE every request in one phase ----
+            t = time.perf_counter()
             enc = inf.encode_all([(ident, view) for _, _, ident, view in requests])
             enc_map = {e[0]: (e[1], e[2], e[3]) for e in enc}
+            stage["encode"] += time.perf_counter() - t
 
-            # ---- 4. STEP level by level, all requests at once ----
+            # ---- 4. STEP level by level, all pending requests at once ----
+            t = time.perf_counter()
             prefixes = {ident: [] for _, _, ident, _ in requests}
             snaps = {ident: [] for _, _, ident, _ in requests}
-            # Each request has its OWN branch count; never walk past it.
             n_levels = {}
             for (r, seat, ident, _v) in requests:
                 st = env._slots[r]
@@ -111,8 +158,6 @@ def run_batched(cfg: BatchedConfig) -> BatchedReport:
                     lvl_items.append((ident, cands, layout, a2r))
                 if not lvl_items:
                     continue
-                if not lvl_items:
-                    continue
                 outs = inf.step_level(lvl_items, level)
                 for (ident, idx, k, lp) in outs:
                     cands = next(c for (i2, c, _, _) in lvl_items if i2 == ident)
@@ -126,8 +171,10 @@ def run_batched(cfg: BatchedConfig) -> BatchedReport:
                     })
 
             inf.reset_all([ident for _, _, ident, _ in requests])
+            stage["step_levels"] += time.perf_counter() - t
 
             # ---- 5. assemble the exact P2 packet and advance once ----
+            t = time.perf_counter()
             n = env._batch
             action = torch.zeros((n, NUM_SEATS, 4, 6), dtype=torch.long)
             counts = torch.zeros((n, NUM_SEATS), dtype=torch.long)
@@ -149,15 +196,13 @@ def run_batched(cfg: BatchedConfig) -> BatchedReport:
                 counts[r, seat] = len(prefix)
                 present[r, seat] = True
                 s = snaps[ident]
-                seat_records.append({
-                    "row": r, "seat": seat,
-                    "actor_active": any(x["branch_k"] >= 2 for x in s),
-                    "joint_logprob_fp32": sum(x["branch_logprob_fp32"] for x in s),
-                    "branches": s,
-                })
-                rep.seats_by_seat[seat] += 1
-
-            from tensordict import TensorDict
+                seat_records.append(seat_record(
+                    seat=seat, request_id=pre_request_ids[r][seat], view=view,
+                    branches=s,
+                    actor_active=any(x["branch_k"] >= 2 for x in s),
+                    joint_logprob_fp32=sum(x["branch_logprob_fp32"] for x in s),
+                ))
+                seat_records[-1]["row"] = r
 
             packet = TensorDict(
                 {"action": action, "action_branch_count": counts,
@@ -165,45 +210,119 @@ def run_batched(cfg: BatchedConfig) -> BatchedReport:
                  "action_episode_id": ep_ids, "action_native_generation": gens},
                 batch_size=[n],
             )
+            stage["packet"] += time.perf_counter() - t
+
+            t = time.perf_counter()
             out = env.step(packet)
             _obs_td = out["next"]
+            stage["env_step"] += time.perf_counter() - t
             rep.env_transitions += n
-            rep.seat_records += len(seat_records)
-            rep.actor_active_rows += sum(1 for s in seat_records if s["actor_active"])
 
             # ---- 6. accounting (exactly-once, truncations excluded) ----
+            t = time.perf_counter()
+            revised_rows = {r for r in range(n) if bool(out["next", "request_revised"][r])}
+            accepted = [s for s in seat_records if s["row"] not in revised_rows]
+            rep.revised_seat_records += len(seat_records) - len(accepted)
+            rep.seat_records += len(accepted)
+            rep.actor_active_rows += sum(1 for s in accepted if s["actor_active"])
+            for s in accepted:
+                rep.seats_by_seat[s["seat"]] += 1
+
+            for r in range(n):
+                row_seats = [s for s in accepted if s["row"] == r]
+                if not row_seats:
+                    continue
+                st = env._slots[r]
+                completed = bool(out["next", "match_completed"][r])
+                mid = (cfg.run_id, cfg.worker_index, st.slot, st.generation,
+                       st.episode_id) if completed else None
+                store.put(transition(
+                    run_id=cfg.run_id, worker_id=cfg.worker_index,
+                    native_slot=st.slot, native_generation=st.generation,
+                    episode_id=st.episode_id, step_index=st.step_index,
+                    request_ids=pre_request_ids[r],
+                    policy_version=cfg.policy_version,
+                    policy_weight_fingerprint=rep.policy_weight_fingerprint,
+                    observation_contract_hash=contract_hash,
+                    action_packet={
+                        "action": action[r].tolist(),
+                        "action_branch_count": counts[r].tolist(),
+                        "action_present": present[r].tolist(),
+                        "action_request_id": req_ids[r].tolist(),
+                        "action_episode_id": ep_ids[r].tolist(),
+                        "action_native_generation": gens[r].tolist(),
+                    },
+                    reward=out["next", "reward"][r].flatten().tolist(),
+                    done=bool(out["next", "done"][r, 0]),
+                    terminated=bool(out["next", "terminated"][r, 0]),
+                    truncated=bool(out["next", "truncated"][r, 0]),
+                    match_completed=completed,
+                    winner=int(out["next", "winner"][r]),
+                    request_revised=bool(out["next", "request_revised"][r]),
+                    match_id=mid,
+                    seat_records=[{k: v for k, v in s.items() if k != "row"}
+                                  for s in row_seats],
+                ))
+
             account_step(out["next"], env._slots, seen, rep,
                          cfg.run_id, cfg.worker_index)
+            stage["accounting"] += time.perf_counter() - t
 
             # refill finished rows
+            t = time.perf_counter()
             done_rows = [r for r in range(n) if bool(out["next", "done"][r, 0])]
             if done_rows:
-                from tensordict import TensorDict as _TD
-
                 mask = torch.zeros(n, dtype=torch.bool)
                 mask[done_rows] = True
-                env.reset(_TD({"_reset": mask}, batch_size=[n]))
+                env.reset(TensorDict({"_reset": mask}, batch_size=[n]))
+            stage["reset"] += time.perf_counter() - t
+
+            dt = time.perf_counter() - step_t0
+            if rep.env_steps <= cfg.warmup_steps:
+                warm_seconds += dt
+            else:
+                steady_seconds += dt
+                steady_matches += rep.natural_matches - matches_before
     except Exception as exc:
         import traceback
 
         rep.errors.append(f"{exc!r}")
         rep.errors.append(traceback.format_exc()[-1200:])
     finally:
-        try:
-            rep.server_stats = dict(srv.stats())
-        except Exception:
-            pass
-        try:
-            srv.shutdown()
-        except Exception:
-            pass
+        if srv is not None:
+            try:
+                rep.server_stats = dict(srv.stats())
+            except Exception:
+                pass
+            try:
+                srv.shutdown()
+            except Exception:
+                pass
         rep.wall_seconds = time.perf_counter() - t_start
 
-    try:
-        with open(stats_path) as fh:
-            rep.service_stats = json.load(fh)
-    except Exception:
-        pass
+    if own_stats_path:
+        try:
+            with open(stats_path) as fh:
+                rep.service_stats = json.load(fh)
+        except Exception:
+            pass
+
+    rep.transitions_stored = store.stored
+    rep.transitions_dropped = store.dropped
+    rep.transitions_retained = len(store)
+    rep.warmup_seconds = warm_seconds
+    rep.steady_seconds = steady_seconds
+    rep.steady_matches = steady_matches
+    rep.steady_env_steps = max(0, rep.env_steps - cfg.warmup_steps)
+    rep.stage_seconds = {k: round(v, 6) for k, v in stage.items()}
+    rep.env_completed_matches = int(sum(st.completed_matches for st in env._slots))
+    if inf.server_fingerprint is not None and inf.server_fingerprint != expected_fp:
+        rep.errors.append(
+            f"server weight fingerprint {inf.server_fingerprint} != expected {expected_fp}")
+    if not rep.errors and rep.env_completed_matches != rep.natural_matches:
+        rep.errors.append(
+            f"lost completion: env counted {rep.env_completed_matches}, "
+            f"collector ledger has {rep.natural_matches}")
     return rep
 
 

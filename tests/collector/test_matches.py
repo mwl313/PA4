@@ -15,6 +15,7 @@ from tensordict import TensorDict
 
 from pa4.collector.batched_core import BatchedConfig, BatchedReport
 from pa4.collector.run_batched import account_step, run_batched
+from pa4.collector.transitions import BoundedTransitionStore
 from pa4.env.native_env import SlotState
 
 
@@ -24,8 +25,10 @@ class NaturalMatchIntegrityTest(unittest.TestCase):
         cfg = BatchedConfig(
             num_envs=8, target_matches=16, max_steps=8000, seed=11,
             run_id="g3c", min_batch_size=4, server_timeout=0.002,
+            warmup_steps=4, transition_capacity=64,
         )
-        cls.rep = run_batched(cfg)
+        cls.store = BoundedTransitionStore(cfg.transition_capacity)
+        cls.rep = run_batched(cfg, store=cls.store)
         cls.d = cls.rep.as_dict()
 
     def test_no_errors(self):
@@ -83,17 +86,128 @@ class NaturalMatchIntegrityTest(unittest.TestCase):
 
 
 class MultiContextTest(unittest.TestCase):
-    """>= 2 independent actor contexts (design G3-C)."""
+    """>= 2 independent actor worker processes (design G3-C)."""
 
-    def test_two_independent_drivers_complete_matches(self):
+    @classmethod
+    def setUpClass(cls):
         from pa4.collector.multi_driver import run_multi
 
-        out = run_multi(num_drivers=2, num_envs=8, target=8, seed=21)
+        cls.out = run_multi(num_drivers=2, num_envs=8, target=8, seed=21,
+                            central=True)
+
+    def test_two_independent_drivers_complete_matches(self):
+        out = self.out
+        self.assertTrue(out["central"])
         self.assertEqual(out["errors"], [], out["errors"][:1])
         self.assertEqual(out["dupes"], 0)
         self.assertGreaterEqual(out["matches"], 16,
                                 f"expected >=16 matches, got {out['matches']}")
         self.assertEqual(len(out["per_driver_mps"]), 2)
+
+    def test_one_forward_mixes_two_worker_processes(self):
+        """G3-B: a single forward must contain requests from different workers."""
+        out = self.out
+        self.assertGreaterEqual(
+            out["max_worker_ids_per_forward"], 2,
+            f"no forward mixed workers: {out['service_stats'].get('forward_run_ids')}")
+        self.assertGreaterEqual(out["cross_worker_forwards"], 1)
+        self.assertGreaterEqual(out["transitions_stored"], 1)
+        self.assertGreaterEqual(out["steady_matches"], 1)
+
+
+class TransitionRetentionTest(unittest.TestCase):
+    """P3-C: bounded PA4ActorTransitionV1 records with replay necessities."""
+
+    REQUIRED = ("run_id", "worker_id", "native_slot", "native_generation",
+                "episode_id", "step_index", "request_ids", "policy_version",
+                "policy_weight_fingerprint", "observation_contract_hash",
+                "real_p2_action_packet", "reward", "done", "terminated",
+                "truncated", "match_completed", "winner", "request_revised",
+                "match_id", "seat_records")
+
+    @classmethod
+    def setUpClass(cls):
+        cfg = BatchedConfig(
+            num_envs=2, target_matches=2, max_steps=400, seed=31,
+            run_id="g3c-transitions", min_batch_size=2, server_timeout=0.002,
+            warmup_steps=1, transition_capacity=8,
+        )
+        cls.store = BoundedTransitionStore(cfg.transition_capacity)
+        cls.rep = run_batched(cfg, store=cls.store)
+        cls.d = cls.rep.as_dict()
+
+    def test_records_were_retained(self):
+        self.assertEqual(self.d["errors"], [], self.d["errors"][:1])
+        self.assertGreater(self.d["transitions_stored"], 0)
+        self.assertLessEqual(len(self.store), self.store.capacity)
+        self.assertEqual(self.d["transitions_retained"], len(self.store))
+
+    def test_record_has_every_replay_field(self):
+        rec = next(iter(self.store))
+        for key in self.REQUIRED:
+            self.assertIn(key, rec)
+        self.assertEqual(len(rec["policy_weight_fingerprint"]), 64,
+                         "weight fingerprint is not a sha256")
+        self.assertEqual(rec["policy_weight_fingerprint"],
+                         self.rep.policy_weight_fingerprint)
+        self.assertEqual(rec["observation_contract_hash"],
+                         "dd723dc687a60b0568302fa0b09cfb110cbe67eac2c7022f2b4ffe4dff373e35")
+
+    def test_pre_action_observation_and_candidates_stored(self):
+        rec = next(iter(self.store))
+        self.assertTrue(rec["seat_records"])
+        for seat in rec["seat_records"]:
+            self.assertEqual(set(seat["observation"]),
+                             {"token_mask", "categories", "category_known", "floats",
+                              "float_known", "flags", "flag_known", "role_ids",
+                              "side_ids"})
+            for leaf in seat["observation"].values():
+                self.assertEqual(leaf.device.type, "cpu")
+            self.assertTrue(seat["branches"])
+            for b in seat["branches"]:
+                self.assertIn(b["selected_index"], range(len(b["candidates"])))
+                self.assertGreaterEqual(b["branch_k"], 1)
+
+    def test_action_packet_is_the_real_six_key_packet(self):
+        rec = next(iter(self.store))
+        self.assertEqual(set(rec["real_p2_action_packet"]),
+                         {"action", "action_branch_count", "action_present",
+                          "action_request_id", "action_episode_id",
+                          "action_native_generation"})
+
+    def test_match_records_carry_a_match_id(self):
+        recs = list(self.store)
+        completed = [r for r in recs if r["match_completed"]]
+        for r in completed:
+            self.assertIsNotNone(r["match_id"])
+            self.assertIn(r["match_id"], self.rep.match_ids)
+
+    def test_stage_timing_and_windows_recorded(self):
+        self.assertGreater(self.rep.setup_seconds, 0.0)
+        self.assertGreaterEqual(self.rep.steady_seconds, 0.0)
+        for key in ("request_info", "views", "encode", "step_levels",
+                    "packet", "env_step", "accounting", "reset"):
+            self.assertIn(key, self.rep.stage_seconds)
+            self.assertGreaterEqual(self.rep.stage_seconds[key], 0.0)
+
+    def test_lost_completion_guard_matches_env(self):
+        self.assertEqual(self.rep.env_completed_matches, self.rep.natural_matches)
+
+
+class BoundedStoreTest(unittest.TestCase):
+    def test_drops_oldest_and_counts(self):
+        s = BoundedTransitionStore(2)
+        s.put({"i": 1})
+        s.put({"i": 2})
+        s.put({"i": 3})
+        self.assertEqual([r["i"] for r in s], [2, 3])
+        self.assertEqual((s.stored, s.dropped), (3, 1))
+        self.assertEqual(s.summary(), {"capacity": 2, "stored": 3,
+                                       "dropped": 1, "retained": 2})
+
+    def test_rejects_zero_capacity(self):
+        with self.assertRaises(ValueError):
+            BoundedTransitionStore(0)
 
 
 class AccountingUnitTest(unittest.TestCase):

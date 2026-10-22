@@ -15,6 +15,7 @@ PA3's score mathematics is untouched: this is dispatch/batching only.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import sys
 from dataclasses import dataclass
@@ -46,6 +47,34 @@ ERR_MIXED_LEVEL = 7
 ID_FIELDS = ("run_id", "worker_id", "native_slot", "native_generation",
              "episode_id", "seat", "request_local_id")
 
+_FP_CACHE: dict[int, str] = {}
+
+
+def model_fingerprint(seed: int = 20261006) -> str:
+    """sha256 over the exact served weights, computed once per seed.
+
+    Built on CPU so clients and tests can compute the same value without a GPU;
+    the bytes are identical to the CUDA model because the weights are the same.
+    """
+    if seed in _FP_CACHE:
+        return _FP_CACHE[seed]
+    from agent.model.config import PA3Config
+    from agent.model.pa3_model import PA3Model
+
+    torch.manual_seed(seed)
+    model = PA3Model(PA3Config(initialization="random", seed=seed)).eval()
+    h = hashlib.sha256()
+    for name, value in sorted(model.state_dict().items()):
+        h.update(name.encode())
+        h.update(value.detach().cpu().contiguous().numpy().tobytes())
+    _FP_CACHE[seed] = h.hexdigest()
+    return _FP_CACHE[seed]
+
+
+def fingerprint_id(hex_digest: str) -> int:
+    """Stable 63-bit id carried in the fixed int64 transport layout."""
+    return int(hex_digest[:16], 16) & ((1 << 63) - 1)
+
 
 def request_spec() -> TensorDict:
     """Unbatched single-slot request row (transport adds the batch dim)."""
@@ -54,6 +83,7 @@ def request_spec() -> TensorDict:
             "op": torch.zeros((), dtype=torch.long),
             "request_key": torch.zeros((), dtype=torch.long),
             "policy_version": torch.zeros((), dtype=torch.long),
+            "policy_fingerprint": torch.zeros((), dtype=torch.long),
             "branch_level": torch.zeros((), dtype=torch.long),
             # full collision-free identity
             "run_id": torch.zeros((), dtype=torch.long),
@@ -93,6 +123,7 @@ def response_spec() -> TensorDict:
             "request_key": torch.zeros((), dtype=torch.long),
             "branch_level": torch.zeros((), dtype=torch.long),
             "policy_version": torch.zeros((), dtype=torch.long),
+            "policy_fingerprint": torch.zeros((), dtype=torch.long),
             "cache_size": torch.zeros((), dtype=torch.long),
             "error_code": torch.zeros((), dtype=torch.long),
         },
@@ -141,6 +172,10 @@ class BatchedConditionalScorer(nn.Module):
         self.forward_batch_sizes: list[int] = []
         self.model_forward_count = 0
         self.cache_high_water = 0
+        # Provenance: which worker namespaces contributed to each forward.
+        self.forward_run_ids: list[list[int]] = []
+        self.fingerprint = model_fingerprint(self._seed)
+        self.fingerprint_id = fingerprint_id(self.fingerprint)
 
     # -- model ------------------------------------------------------------
     def _ensure_model(self):
@@ -240,6 +275,7 @@ class BatchedConditionalScorer(nn.Module):
             "request_key": _row_int(td, "request_key", row),
             "branch_level": _row_int(td, "branch_level", row),
             "policy_version": self.policy_version,
+            "policy_fingerprint": self.fingerprint_id,
             "cache_size": len(self._cache),
             "error_code": ERR_OK,
         }
@@ -250,12 +286,27 @@ class BatchedConditionalScorer(nn.Module):
             self.reset_calls += 1
             results[r]["cache_size"] = len(self._cache)
 
+    def _version_ok(self, td, r) -> bool:
+        if _row_int(td, "policy_version", r) != self.policy_version:
+            return False
+        fp = _row_int(td, "policy_fingerprint", r)
+        return fp == 0 or fp == self.fingerprint_id
+
     def _do_encode(self, td, rows, results):
         model = self._ensure_model()
+        keys = {r: identity_key(td, r) for r in rows}
+        counts: dict[tuple, int] = {}
+        for k in keys.values():
+            counts[k] = counts.get(k, 0) + 1
         valid_rows = []
         for r in rows:
-            key = identity_key(td, r)
-            if key in self._cache:
+            key = keys[r]
+            if key in self._cache or counts[key] > 1:
+                # Either a genuine retry or two rows claiming the same identity
+                # in one batch: both must fail closed, never overwrite.
+                results[r]["error_code"] = ERR_STALE_IDENTITY
+                continue
+            if not self._version_ok(td, r):
                 results[r]["error_code"] = ERR_STALE_IDENTITY
                 continue
             valid_rows.append(r)
@@ -263,6 +314,8 @@ class BatchedConditionalScorer(nn.Module):
             return
         obs = self._obs_batch(td, valid_rows)
         with torch.no_grad():
+            run_ids = sorted({_row_int(td, "run_id", r) for r in valid_rows})
+            self.forward_run_ids.append(run_ids)
             encoded = model.encode(obs)
         self.encode_calls += len(valid_rows)
         for i, r in enumerate(valid_rows):
@@ -278,11 +331,23 @@ class BatchedConditionalScorer(nn.Module):
     def _do_step(self, td, rows, results):
         model = self._ensure_model()
         ready = []
+        keys = {r: identity_key(td, r) for r in rows}
+        counts: dict[tuple, int] = {}
+        for k in keys.values():
+            counts[k] = counts.get(k, 0) + 1
         for r in rows:
-            key = identity_key(td, r)
+            key = keys[r]
             entry = self._cache.get(key)
             level = _row_int(td, "branch_level", r)
             pv = _row_int(td, "policy_version", r)
+            if counts[key] > 1:
+                self._cache.pop(key, None)
+                results[r]["error_code"] = ERR_STALE_IDENTITY
+                continue
+            if not self._version_ok(td, r):
+                self._cache.pop(key, None)
+                results[r]["error_code"] = ERR_STALE_IDENTITY
+                continue
             if entry is None or entry.policy_version != pv or entry.steps_done != level:
                 self._cache.pop(key, None)
                 results[r]["error_code"] = ERR_NO_CACHE
@@ -324,6 +389,7 @@ class BatchedConditionalScorer(nn.Module):
         # If all hidden states share a shape we can run a single batched pass.
         stacked_hidden = _try_stack(hidden_list)
         if stacked_hidden is not None and len(ready) > 1 and _same_level(td, ready):
+            self.forward_run_ids.append(sorted({_row_int(td, "run_id", r) for r in ready}))
             out = self._batched_step(ready, td, tables, stacked_hidden)
         else:
             out = self._serial_step(ready, td, tables, hidden_list)
@@ -391,6 +457,8 @@ class BatchedConditionalScorer(nn.Module):
                 "request_key": torch.tensor([r["request_key"] for r in results], dtype=torch.long),
                 "branch_level": torch.tensor([r["branch_level"] for r in results], dtype=torch.long),
                 "policy_version": torch.tensor([r["policy_version"] for r in results], dtype=torch.long),
+                "policy_fingerprint": torch.tensor(
+                    [r["policy_fingerprint"] for r in results], dtype=torch.long),
                 "cache_size": torch.tensor([r["cache_size"] for r in results], dtype=torch.long),
                 "error_code": torch.tensor([r["error_code"] for r in results], dtype=torch.long),
             },

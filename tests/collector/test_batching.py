@@ -27,10 +27,24 @@ OBS = ("token_mask", "categories", "category_known", "floats", "float_known",
        "flags", "flag_known", "role_ids", "side_ids")
 
 
+_FP_CACHE = {}
+
+
+def default_fingerprint():
+    """The fingerprint of the weights every scorer in these tests serves."""
+    if "fp" not in _FP_CACHE:
+        from pa4.actions.batched_scorer import fingerprint_id, model_fingerprint
+
+        _FP_CACHE["fp"] = fingerprint_id(model_fingerprint())
+    return _FP_CACHE["fp"]
+
+
 def make_row(env, st, obs, *, w, op=0, level=0, cands=None, table=None,
-             gen=None, pv=1):
+             gen=None, pv=1, fp=None):
     td = request_spec().clone()
     td["op"] = torch.tensor(op)
+    td["policy_fingerprint"] = torch.tensor(
+        default_fingerprint() if fp is None else fp)
     td["worker_id"] = torch.tensor(w)
     td["native_slot"] = torch.tensor(st.slot)
     td["native_generation"] = torch.tensor(
@@ -205,7 +219,7 @@ class BatchedForwardTest(unittest.TestCase):
 
         stale = make_row(e, st, obs, w=0, op=1, level=0, cands=cands, table=table, pv=2)
         out = svc(torch.stack([stale]))
-        self.assertEqual(int(out["error_code"][0]), ERR_NO_CACHE,
+        self.assertEqual(int(out["error_code"][0]), ERR_STALE_IDENTITY,
                          "a mixed-version request was accepted")
 
         # the pv=1 entry must still be intact and usable
@@ -213,6 +227,45 @@ class BatchedForwardTest(unittest.TestCase):
         out = svc(torch.stack([live]))
         self.assertEqual(int(out["error_code"][0]), 0,
                          "the rejected version corrupted the live cache entry")
+
+    def test_fabricated_identity_fails_closed(self):
+        """A STEP whose identity was never encoded must not be served."""
+        svc = BatchedConditionalScorer(device="cuda")
+        e, st, obs = self.envs[0]
+        cands, table = branch_table(e, st, obs)
+        r = make_row(e, st, obs, w=0, op=1, level=0, cands=cands, table=table)
+        for field in ("worker_id", "native_slot", "native_generation",
+                      "episode_id", "seat", "request_local_id", "request_key"):
+            r[field] = torch.tensor(999)
+        out = svc(torch.stack([r]))
+        self.assertEqual(int(out["error_code"][0]), ERR_NO_CACHE)
+
+    def test_duplicate_identity_in_one_batch_is_rejected(self):
+        """Two rows claiming the same identity must not overwrite each other."""
+        svc = BatchedConditionalScorer(device="cuda")
+        e, st, obs = self.envs[0]
+        row = make_row(e, st, obs, w=0)
+        out = svc(torch.stack([row, row]))
+        self.assertEqual(int(out["error_code"][0]), ERR_STALE_IDENTITY)
+        self.assertEqual(int(out["error_code"][1]), ERR_STALE_IDENTITY)
+        self.assertEqual(svc.cache_size(), 0,
+                         "a duplicate batch must not leave a half-written cache entry")
+
+    def test_wrong_weight_fingerprint_rejected(self):
+        """A client serving different weights must be refused, not silently used."""
+        svc = BatchedConditionalScorer(device="cuda")
+        e, st, obs = self.envs[0]
+        wrong = (default_fingerprint() + 12345) & ((1 << 63) - 1)
+        out = svc(torch.stack([make_row(e, st, obs, w=0, fp=wrong)]))
+        self.assertEqual(int(out["error_code"][0]), ERR_STALE_IDENTITY)
+        self.assertEqual(svc.cache_size(), 0)
+
+    def test_response_carries_server_fingerprint(self):
+        svc = BatchedConditionalScorer(device="cuda")
+        e, st, obs = self.envs[0]
+        out = svc(torch.stack([make_row(e, st, obs, w=0)]))
+        self.assertEqual(int(out["policy_fingerprint"][0]), svc.fingerprint_id)
+        self.assertEqual(svc.fingerprint_id, default_fingerprint())
 
     def test_reset_evicts_only_the_addressed_entry(self):
         svc = BatchedConditionalScorer(device="cuda")

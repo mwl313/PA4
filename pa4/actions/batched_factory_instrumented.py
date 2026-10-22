@@ -29,6 +29,10 @@ class _Instrumented(BatchedConditionalScorer):
                         "cache_high_water": self.cache_high_water,
                         "model_device": self.model_device,
                         "policy_version": self.policy_version,
+                        "policy_weight_fingerprint": self.fingerprint,
+                        "forward_run_ids": list(self.forward_run_ids),
+                        "max_worker_ids_per_forward": max(
+                            (len(set(s)) for s in self.forward_run_ids), default=0),
                     }, fh)
             except Exception:
                 pass

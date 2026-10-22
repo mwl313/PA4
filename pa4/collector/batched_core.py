@@ -52,11 +52,15 @@ class BatchedConfig:
     max_batch_size: int = 64
     min_batch_size: int = 4
     server_timeout: float = 0.05
+    result_timeout: float = 300.0
     strict_validation: bool = False
     use_fast_obs: bool = True
     run_id: str = "pa4-p3-batched"
     worker_index: int = 0
     teams: list | None = None
+    policy_seed: int = 20261006
+    warmup_steps: int = 0
+    transition_capacity: int = 256
 
 
 @dataclass
@@ -83,6 +87,22 @@ class BatchedReport:
     steady_env_steps: int = 0
     service_stats: dict = field(default_factory=dict)
     server_stats: dict = field(default_factory=dict)
+    # P3-C transition retention
+    transitions_stored: int = 0
+    transitions_dropped: int = 0
+    transitions_retained: int = 0
+    policy_weight_fingerprint: str = ""
+    observation_contract_hash: str = ""
+    # Independent integrity check against the environment's own counter
+    env_completed_matches: int = 0
+    revised_seat_records: int = 0
+    # P3-D windows and stage timing
+    setup_seconds: float = 0.0
+    warmup_seconds: float = 0.0
+    steady_seconds: float = 0.0
+    steady_matches: int = 0
+    steady_env_steps: int = 0
+    stage_seconds: dict = field(default_factory=dict)
 
     def as_dict(self):
         d = dict(self.__dict__)
@@ -92,16 +112,24 @@ class BatchedReport:
             self.steady_matches / self.steady_seconds if self.steady_seconds else None)
         d["env_transitions_per_sec"] = (
             self.env_transitions / self.wall_seconds if self.wall_seconds else None)
+        d["steady_matches_per_sec"] = (
+            self.steady_matches / self.steady_seconds if self.steady_seconds else None)
         return d
 
 
 class StagedInference:
     """Phase-batched façade over N transport client slots."""
 
-    def __init__(self, clients, spec, policy_version):
+    def __init__(self, clients, spec, policy_version,
+                 run_id_int: int = 0, fingerprint_id: int = 0,
+                 result_timeout: float = 300.0):
         self.clients = clients
         self.spec = spec
         self.policy_version = policy_version
+        self.run_id_int = int(run_id_int)
+        self.fingerprint_id = int(fingerprint_id)
+        self.result_timeout = float(result_timeout)
+        self.server_fingerprint: int | None = None
         self._free = list(range(len(clients)))
 
     def _acquire(self):
@@ -116,6 +144,10 @@ class StagedInference:
     def _row(self, op, ident, level=0):
         td = self.spec.clone()
         td["op"] = torch.tensor(op)
+        # run_id is the DRIVER namespace, not a row index: it is what proves a
+        # forward mixed requests from different worker processes.
+        td["run_id"] = torch.tensor(self.run_id_int)
+        td["policy_fingerprint"] = torch.tensor(self.fingerprint_id)
         td["worker_id"] = torch.tensor(ident[0])
         td["native_slot"] = torch.tensor(ident[1])
         td["native_generation"] = torch.tensor(ident[2])
@@ -138,11 +170,13 @@ class StagedInference:
             futs.append((slot, ident, view, self.clients[slot].submit(td)))
         out = []
         for slot, ident, view, fut in futs:
-            r = fut.result()
+            r = fut.result(timeout=self.result_timeout)
             err = int(r["error_code"])
             self._release(slot)
             if err:
                 raise RuntimeError(f"ENCODE err {err}")
+            if self.server_fingerprint is None:
+                self.server_fingerprint = int(r["policy_fingerprint"])
             ob = _view_to_obs(view)
             out.append((ident, ob.layout, ob.active_to_roster(), ob))
         return out
@@ -165,7 +199,7 @@ class StagedInference:
             futs.append((slot, ident, self.clients[slot].submit(td)))
         out = []
         for slot, ident, fut in futs:
-            r = fut.result()
+            r = fut.result(timeout=self.result_timeout)
             err = int(r["error_code"])
             self._release(slot)
             if err:
@@ -180,7 +214,7 @@ class StagedInference:
             slot = self._acquire()
             futs.append((slot, self.clients[slot].submit(self._row(2, ident))))
         for slot, fut in futs:
-            fut.result()
+            fut.result(timeout=self.result_timeout)
             self._release(slot)
 
 

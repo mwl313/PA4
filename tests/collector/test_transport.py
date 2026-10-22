@@ -55,15 +55,17 @@ class TransportLifetimeTest(unittest.TestCase):
         srv = self._server()
         try:
             cs = srv.clients(4)
-            futs = []
             for w in range(4):
                 cs[w].submit(make_row(self.env, self.st, self.obs, w=w)).result()
+            futs = []
             for w in range(4):
                 cands, table = branch_table(self.env, self.st, self.obs)
                 futs.append((w, cs[w].submit(make_row(
                     self.env, self.st, self.obs, w=w, op=1, level=0,
                     cands=cands, table=table))))
-            for w, f in futs:
+            # Resolve in REVERSE order: a response must follow its own request,
+            # not completion order.
+            for w, f in reversed(futs):
                 out = f.result()
                 self.assertEqual(int(out["error_code"]), 0)
                 self.assertEqual(int(out["request_key"]), w,
