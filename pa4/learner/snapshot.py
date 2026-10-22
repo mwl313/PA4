@@ -38,6 +38,15 @@ class SnapshotError(RuntimeError):
     """A snapshot is missing, corrupted, foreign, or does not match its metadata."""
 
 
+def _file_sha256(path: str) -> str:
+    """Streaming SHA256 of a file, closing the handle (no fd leak)."""
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
 def snapshot_fingerprint(state_dict) -> str:
     """SHA256 over the actual weights, independent of seed or version.
 
@@ -122,7 +131,7 @@ def save_snapshot(state_dict, out_dir: str, *, policy_version: int,
             os.unlink(tmp)
     _fsync_dir(out_dir)
 
-    checksum = hashlib.sha256(open(tensor_path, "rb").read()).hexdigest()
+    checksum = _file_sha256(tensor_path)
 
     metadata = {
         "schema": SNAPSHOT_SCHEMA,
@@ -181,7 +190,7 @@ def load_snapshot(path: str) -> tuple[dict, PolicySnapshot]:
     if not os.path.exists(tensor_path):
         raise SnapshotError(f"snapshot tensor file missing: {tensor_path}")
 
-    actual = hashlib.sha256(open(tensor_path, "rb").read()).hexdigest()
+    actual = _file_sha256(tensor_path)
     if actual != meta["weights_sha256"]:
         raise SnapshotError(
             "snapshot checksum mismatch: file is torn or corrupted "

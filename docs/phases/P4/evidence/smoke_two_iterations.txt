@@ -1,0 +1,5 @@
+{"iter": 1, "theta_k": "356710ea293dd656", "theta_next": "24bb3bfa38f792b5", "generated": 4, "accepted": 4, "incomplete": 3, "dropped": 0, "actor_rows": 77, "value_rows": 84, "steps": 4, "epochs": 2, "early_stop": false, "lr": 1e-05, "approx_kl": 0.001527, "grad_norm": 2.853, "params_changed": 139, "max_delta": "3.992e-05", "wall_s": 14.91, "errors": []}
+{"iter": 2, "theta_k": "24bb3bfa38f792b5", "theta_next": "aae7855b54de6846", "generated": 4, "accepted": 4, "incomplete": 3, "dropped": 0, "actor_rows": 83, "value_rows": 91, "steps": 4, "epochs": 2, "early_stop": false, "lr": 1.000464e-05, "approx_kl": 0.01093, "grad_norm": 3.6046, "params_changed": 139, "max_delta": "3.995e-05", "wall_s": 12.52, "errors": []}
+
+chained identity: True
+RESULT: PASS

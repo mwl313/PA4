@@ -1,0 +1,11 @@
+theta_0 fingerprint: 356710ea293dd656 | helper: 356710ea293dd656
+iteration 1 served fingerprint: 356710ea293dd656
+adam step: grad_norm=284.867218 tensors_changed=84 max_param_delta=2.991557e-04
+theta_1 fingerprint: e8dc0478d99be7bc
+iteration 2 served fingerprint: e8dc0478d99be7bc
+iteration 2 record fingerprints: {'e8dc0478d99be7bc'}
+stale version refused: snapshot version 2 != configured policy_version 1
+
+RESULT: PASS
+  theta_0 356710ea293dd656 -> theta_1 e8dc0478d99be7bc
+  tensors changed: 84  max delta: 2.992e-04
