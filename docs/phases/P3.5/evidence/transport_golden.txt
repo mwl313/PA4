@@ -1,0 +1,12 @@
+
+views checked : 960
+mismatches    : 0
+
+=== nonempty family observations (real battles) ===
+  effects        views_nonempty=  720  max_rows_per_token=2
+  repertoire     views_nonempty=  944  max_rows_per_token=4
+  types          views_nonempty=  960  max_rows_per_token=2
+  base_moves     views_nonempty=  960  max_rows_per_token=4
+  move_effects   views_nonempty=  960  max_rows_per_token=3
+
+RESULT: BYTE-EXACT PASS

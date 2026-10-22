@@ -21,6 +21,8 @@ from tensordict import TensorDict
 from torchrl.data import Binary, Categorical, Composite, Unbounded
 from torchrl.envs import EnvBase
 
+from pa4.env import ragged_transport as _ragged
+
 # --- inherited contract constants (verified against the built module) -------
 OBS_LEAVES_CONST = ("token_mask", "categories", "category_known", "floats",
                    "float_known", "flags", "flag_known", "role_ids", "side_ids")
@@ -176,6 +178,7 @@ class PA4EnvBase(EnvBase):
         n = [self._batch]
         self.observation_spec = Composite(
             players=Composite(**self._player_obs_keys([self._batch, NUM_SEATS]),
+                              **self._ragged_specs([n[0], NUM_SEATS]),
                               shape=[*n, NUM_SEATS]),
             native_slot=Unbounded(shape=n, dtype=torch.long),
             native_generation=Unbounded(shape=n, dtype=torch.long),
@@ -311,11 +314,43 @@ class PA4EnvBase(EnvBase):
                 "request_id": torch.zeros((n, NUM_SEATS), dtype=torch.long),
                 "branch_count": torch.zeros((n, NUM_SEATS), dtype=torch.long),
             }
+            widths = _ragged.family_widths()
+            for family, width in widths.items():
+                cap = _ragged.RAGGED_TOKEN_CAPACITY[family]
+                buf["ragged." + family + "_counts"] = torch.zeros(
+                    (n, NUM_SEATS, OBSERVATION_TOKENS), dtype=torch.long)
+                buf["ragged." + family + "_values"] = torch.zeros(
+                    (n, NUM_SEATS, OBSERVATION_TOKENS, cap, width), dtype=torch.float32)
+                buf["ragged." + family + "_lengths"] = torch.zeros(
+                    (n, NUM_SEATS), dtype=torch.long)
+                buf["ragged." + family + "_overflow"] = torch.zeros(
+                    (n, NUM_SEATS), dtype=torch.bool)
             self._player_buf = buf
             self._player_buf_shape = shape_key
         # Clear only the seats that will not be overwritten this call.
         buf["observation_valid"].zero_()
         return buf
+
+    def _ragged_specs(self, n_unbatched) -> dict:
+        """P3.5/ADR-009: ragged transport leaves, per seat.
+
+        Each family is carried as (counts, padded values, lengths, overflow) so
+        the TensorDict stays plain dense tensors (the frozen stack has no
+        NestedTensor). `counts` is authoritative; padded rows are unreachable.
+        """
+        widths = _ragged.family_widths()
+        out = {}
+        for family, width in widths.items():
+            cap = _ragged.RAGGED_TOKEN_CAPACITY[family]
+            out["ragged." + family + "_counts"] = Unbounded(
+                shape=(*n_unbatched, OBSERVATION_TOKENS), dtype=torch.long)
+            out["ragged." + family + "_values"] = Unbounded(
+                shape=(*n_unbatched, OBSERVATION_TOKENS, cap, width), dtype=torch.float32)
+            out["ragged." + family + "_lengths"] = Unbounded(
+                shape=n_unbatched, dtype=torch.long)
+            out["ragged." + family + "_overflow"] = Unbounded(
+                shape=n_unbatched, dtype=torch.bool)
+        return out
 
     def _observation_td(self) -> TensorDict:
         """Build the observation TensorDict using ONE batched native call.
@@ -363,6 +398,7 @@ class PA4EnvBase(EnvBase):
                     di += 1
                     for key in OBS_LEAVES_CONST:
                         players[key][r, side] = obs[key]
+                    self._write_ragged(players, obs, r, side)
                     players["observation_valid"][r, side] = True
                 else:
                     players["observation_valid"][r, side] = False
@@ -380,6 +416,23 @@ class PA4EnvBase(EnvBase):
             },
             batch_size=[self._batch],
         )
+
+    def _write_ragged(self, players: dict, obs: dict, r: int, side: int) -> None:
+        """Copy one seat view's ragged transport tensors into `players`.
+
+        Every family is written from that seat's OWN payload. Counts are the
+        authority; padded rows stay zero and are never read by the encoder.
+        Overflow is impossible here because `payload_to_transport` already
+        failed closed, but the flag is recorded for auditability.
+        """
+        row = obs["_ragged_row"]
+        for family in _ragged.family_names():
+            counts = row["ragged." + family + "_counts"]
+            values = row["ragged." + family + "_values"]
+            players["ragged." + family + "_counts"][r, side] = counts
+            players["ragged." + family + "_values"][r, side] = values
+            players["ragged." + family + "_lengths"][r, side] = int(counts.sum())
+            players["ragged." + family + "_overflow"][r, side] = False
 
     def _decode_many(self, pairs) -> list[dict]:
         """Decode several (row, seat) views in ONE native call, with caching."""
@@ -402,6 +455,14 @@ class PA4EnvBase(EnvBase):
                 fixed, ragged = self._engine.observe_fixed_batch(handles, sides)
                 payload = self._mod.parse_batch(fixed, ragged, len(fetch))
                 views = self._decoder.decode_batch(payload, len(fetch))
+                # P3.5/ADR-009: the canonical decoder has always received the
+                # ragged blob; before this repair it was discarded here. Attach
+                # the P3.5 transport tensors so every seat view carries all five
+                # families through the TensorDict instead of silently zeroing them.
+                transport = _ragged.payload_to_transport(payload, len(fetch))
+                for i in range(len(fetch)):
+                    views[i] = dict(views[i])
+                    views[i]["_ragged_row"] = _ragged.transport_rows(transport, i)
             else:
                 # Authoritative path: PA3's full adapter supplies the
                 # layout-derived role/side ids that the raw payload omits.
@@ -443,6 +504,10 @@ class PA4EnvBase(EnvBase):
         fixed, ragged = self._engine.observe_fixed_batch([(st.slot, st.generation)], [side])
         payload = self._mod.parse_batch(fixed, ragged, 1)
         batch = ObservationBatch.from_native_payload(payload, dtype=torch.float32)
+        # P3.5/ADR-009: carry the five ragged families too. `from_native_payload`
+        # already built them canonically; convert to the same transport form the
+        # batched path uses so every consumer sees one representation.
+        transport = _ragged.payload_to_transport(payload, 1)
         return {
             "token_mask": batch.token_mask[0].cpu(),
             "categories": batch.categories[0].cpu(),
@@ -453,6 +518,7 @@ class PA4EnvBase(EnvBase):
             "flag_known": batch.flag_known[0].cpu(),
             "role_ids": batch.role_ids[0].cpu(),
             "side_ids": batch.side_ids[0].cpu(),
+            "_ragged_row": _ragged.transport_rows(transport, 0),
         }
 
     def invalidate_obs_cache(self) -> None:

@@ -16,8 +16,13 @@ from __future__ import annotations
 import hashlib
 from collections import deque
 
+from pa4.env import ragged_transport as _ragged
+
 OBS_LEAVES = ("token_mask", "categories", "category_known", "floats", "float_known",
               "flags", "flag_known", "role_ids", "side_ids")
+
+#: P3.5/ADR-009. Stamped on every record so P4 ingest can refuse pre-repair data.
+OBSERVATION_REPRESENTATION = _ragged.OBSERVATION_REPRESENTATION
 
 SCHEMA_VERSION = "pa4.actor_transition.v1"
 
@@ -71,7 +76,11 @@ def _clone(t):
 
 
 def observation_digest(view: dict) -> str:
-    """Content digest over one decoded view, dtype/shape aware."""
+    """Content digest over one decoded view, dtype/shape aware.
+
+    Covers the nine fixed leaves AND all five ragged families (P3.5/ADR-009),
+    so a missing or mutated ragged family changes the digest.
+    """
     h = hashlib.sha256()
     for name in OBS_LEAVES:
         t = view[name].detach().cpu().contiguous()
@@ -79,7 +88,21 @@ def observation_digest(view: dict) -> str:
         h.update(str(t.dtype).encode())
         h.update(str(tuple(t.shape)).encode())
         h.update(t.numpy().tobytes())
+    row = view.get("_ragged_row")
+    if row:
+        for key in sorted(row):
+            t = row[key].detach().to("cpu").contiguous()
+            h.update(key.encode())
+            h.update(str(t.dtype).encode())
+            h.update(str(tuple(t.shape)).encode())
+            h.update(t.numpy().tobytes())
     return h.hexdigest()
+
+
+def _clone_ragged(view: dict) -> dict:
+    """Detach+clone the ragged transport rows carried by a decoded view."""
+    row = view.get("_ragged_row") or {}
+    return {k: _clone(v) for k, v in row.items()}
 
 
 def seat_record(seat: int, request_id: int, view: dict, branches: list[dict],
@@ -91,6 +114,8 @@ def seat_record(seat: int, request_id: int, view: dict, branches: list[dict],
         "seat": int(seat),
         "request_id": int(request_id),
         "observation": {k: _clone(view[k]) for k in OBS_LEAVES},
+        "observation_ragged": _clone_ragged(view),
+        "observation_representation": OBSERVATION_REPRESENTATION,
         "observation_digest": observation_digest(view),
         "request_kind": int(request_kind),
         "precision_profile": precision_profile,
@@ -121,6 +146,7 @@ def next_observation(seat: int, view: dict, valid: bool) -> dict:
         "seat": int(seat),
         "observation_valid": bool(valid),
         "observation": {k: _clone(view[k]) for k in OBS_LEAVES},
+        "observation_representation": OBSERVATION_REPRESENTATION,
     }
 
 

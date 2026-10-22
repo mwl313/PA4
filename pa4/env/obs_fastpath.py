@@ -28,6 +28,8 @@ from __future__ import annotations
 import numpy as np
 import torch
 
+from pa4.env import ragged_transport as _ragged
+
 OBS_LEAVES = ("token_mask", "categories", "category_known", "floats",
               "float_known", "flags", "flag_known", "role_ids", "side_ids")
 
@@ -71,8 +73,11 @@ class SliceDecoder:
         fixed, ragged = self._engine.observe_fixed_batch([(slot, generation)], [side])
         payload = self._mod.parse_batch(fixed, ragged, 1)
         batch = ObservationBatch.from_native_payload(payload, dtype=torch.float32)
+        transport = _ragged.payload_to_transport(payload, 1)
         self.full_decodes += 1
-        return {k: getattr(batch, k)[0].cpu() for k in OBS_LEAVES}
+        out = {k: getattr(batch, k)[0].cpu() for k in OBS_LEAVES}
+        out["_ragged_row"] = _ragged.transport_rows(transport, 0)
+        return out
 
     # -- tier 2: hot path, no re-validation of trusted engine bytes --------
     def decode_fast(self, slot: int, generation: int, side: int) -> dict:
@@ -103,6 +108,9 @@ class SliceDecoder:
         side = self._layout.default_sides().contiguous().clone()
         out["role_ids"] = role.to(torch.long)
         out["side_ids"] = side.to(torch.long)
+        # P3.5/ADR-009: ragged travels with the view, not behind a second call.
+        transport = _ragged.payload_to_transport(payload, 1)
+        out["_ragged_row"] = _ragged.transport_rows(transport, 0)
         self.fast_decodes += 1
         return out
 
@@ -137,8 +145,15 @@ class SliceDecoder:
         cols["role_ids"] = role.to(torch.long)
         cols["side_ids"] = side.to(torch.long)
 
+        # P3.5/ADR-009: decode ragged for ALL views in one pass and attach it.
+        transport = _ragged.payload_to_transport(payload, n)
         self.fast_decodes += n
-        return [{k: cols[k][i] for k in OBS_LEAVES} for i in range(n)]
+        views = []
+        for i in range(n):
+            view = {k: cols[k][i] for k in OBS_LEAVES}
+            view["_ragged_row"] = _ragged.transport_rows(transport, i)
+            views.append(view)
+        return views
 
     # -- one-time equivalence proof ---------------------------------------
     def verify_contract(self, sample_slot: int, sample_generation: int, samples=(0, 1)) -> None:

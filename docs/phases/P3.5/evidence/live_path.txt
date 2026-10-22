@@ -1,0 +1,10 @@
+device: cuda
+
+views compared       : 86
+max |d token|        : 0.000e+00
+max |d global_repr|  : 0.000e+00
+max |d V|            : 0.000e+00
+
+nonempty family views: {'effects': 65, 'repertoire': 70, 'types': 86, 'base_moves': 86, 'move_effects': 86}
+
+LIVE-PATH PARITY: PASS

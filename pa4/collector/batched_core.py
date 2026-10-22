@@ -158,6 +158,11 @@ class StagedInference:
             td = self._row(0, ident)
             for k in OBS_LEAVES:
                 td[k] = view[k]
+            # P3.5/ADR-009: ragged must travel with the row, otherwise the server
+            # builds an ObservationBatch with empty ragged sections.
+            row = view.get("_ragged_row") or {}
+            for k, v in row.items():
+                td[k] = v
             futs.append((slot, ident, view, self.clients[slot].submit(td)))
         out = []
         for slot, ident, view, fut in futs:

@@ -20,6 +20,7 @@ import os
 import sys
 from dataclasses import dataclass
 
+import numpy as np
 import torch
 import torch.nn as nn
 from tensordict import TensorDict
@@ -74,6 +75,21 @@ def fingerprint_id(hex_digest: str) -> int:
     return int(hex_digest[:16], 16) & ((1 << 63) - 1)
 
 
+def _ragged_spec_rows():
+    """(key, shape, dtype) for every ragged transport leaf of ONE row."""
+    from pa4.env import ragged_transport as _rt
+
+    rows = []
+    for family, width in _rt.family_widths().items():
+        cap = _rt.RAGGED_TOKEN_CAPACITY[family]
+        rows.append(("ragged." + family + "_counts", (MAX_TOKENS,), torch.long))
+        rows.append(("ragged." + family + "_values",
+                     (MAX_TOKENS, cap, width), torch.float32))
+        rows.append(("ragged." + family + "_lengths", (), torch.long))
+        rows.append(("ragged." + family + "_overflow", (), torch.bool))
+    return rows
+
+
 def request_spec() -> TensorDict:
     """Unbatched single-slot request row (transport adds the batch dim)."""
     return TensorDict(
@@ -101,6 +117,11 @@ def request_spec() -> TensorDict:
             "flag_known": torch.zeros(MAX_TOKENS, FLAG_COUNT, dtype=torch.bool),
             "role_ids": torch.zeros(MAX_TOKENS, dtype=torch.long),
             "side_ids": torch.zeros(MAX_TOKENS, dtype=torch.long),
+            # P3.5/ADR-009 ragged transport (counts are authoritative)
+            **{
+                key: torch.zeros(shape, dtype=dt)
+                for key, shape, dt in _ragged_spec_rows()
+            },
             # candidate table
             "candidate_count": torch.zeros((), dtype=torch.long),
             "action_ids": torch.zeros(CANDIDATE_CAPACITY, ACTION_FIELDS, dtype=torch.long),
@@ -151,6 +172,67 @@ class CacheEntry:
     policy_version: int
     steps_done: int
     hidden: object = None
+
+
+def _ragged_from_td(td, rows, device, already_flat: bool = False):
+    """Build PA3 `RaggedBatch` sections from a PA4 transport TensorDict.
+
+    `rows` are indices into the leading axis, exactly as the nine fixed leaves
+    use `td[name][rows]`. Transport leaves may arrive either stacked from the
+    environment ([B, seats, ...]) or already flattened per request row
+    ([n_rows, ...], the wire layout).
+
+    Returns None when the TensorDict carries no ragged transport leaves; such
+    records are refused later by the representation identity check rather than
+    being silently downgraded to empty sections here.
+    """
+    from pa4.env import ragged_transport as _rt
+
+    try:
+        td["ragged." + _rt.family_names()[0] + "_counts"]
+    except KeyError:
+        return None
+
+    from agent.types.ragged import FIELDS, RaggedBatch
+
+    idx = list(rows)
+
+    def _pick(t):
+        """Index axis 0 by `idx`, dropping the leading axis."""
+        if t.dim() == 0:
+            return t.unsqueeze(0)
+        if t.shape[0] <= max(idx):
+            # Not a batched leaf (single residual row): treat as one row.
+            return t.unsqueeze(0)
+        return t[idx]
+
+    out = {}
+    for family, fields in FIELDS.items():
+        counts = _pick(td["ragged." + family + "_counts"]).detach().to("cpu")
+        values = _pick(td["ragged." + family + "_values"]).detach().to("cpu")
+
+        # Collapse any residual seat axis so counts is [n, tokens].
+        if counts.dim() == 3:
+            counts = counts[:, 0]
+            values = values[:, 0]
+        if counts.dim() == 1:
+            counts = counts.unsqueeze(0)
+            values = values.unsqueeze(0)
+
+        counts_np = np.asarray(counts.numpy(), dtype=np.int64)
+        width = len(fields)
+        rows_out = []
+        for b in range(counts_np.shape[0]):
+            packed = []
+            for t in range(counts_np.shape[-1]):
+                k = int(counts_np[b, t])
+                if k:
+                    packed.append(values[b, t, :k].numpy().astype(np.float32))
+            rows_out.append(
+                np.concatenate(packed, axis=0) if packed
+                else np.zeros((0, width), np.float32))
+        out[family] = RaggedBatch.from_rows(rows_out, counts_np, width).to(device)
+    return out
 
 
 class BatchedConditionalScorer(nn.Module):
@@ -219,7 +301,7 @@ class BatchedConditionalScorer(nn.Module):
                 t = t  # already [B, T]
             return t[rows].to(dtype).to(self.device)
 
-        return ObservationBatch(
+        kwargs = dict(
             token_mask=col("token_mask", torch.bool),
             categories=col("categories", torch.long),
             category_known=col("category_known", torch.bool),
@@ -230,6 +312,13 @@ class BatchedConditionalScorer(nn.Module):
             role_ids=col("role_ids", torch.long),
             side_ids=col("side_ids", torch.long),
         )
+        # P3.5/ADR-009: forward all five ragged families into the encoder.
+        # Without this, ObservationBatch silently substitutes empty sections
+        # and the policy is blind to movesets/PP/types/effects.
+        ragged = _ragged_from_td(td, rows, self.device, already_flat=True)
+        if ragged is not None:
+            kwargs["ragged"] = ragged
+        return ObservationBatch(**kwargs)
 
     def _table_for_row(self, td: TensorDict, row: int):
         from agent.types.requests import BranchCandidatesBatch

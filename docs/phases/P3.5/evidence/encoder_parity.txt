@@ -1,0 +1,14 @@
+device: cuda
+params: 9889755
+
+views compared          : 480
+max |d token|           : 0.000e+00
+max |d global_repr|     : 0.000e+00
+max |d V|               : 0.000e+00
+
+negative-control trials : 2264
+negatives DETECTED      : 2264
+
+PARITY  : PASS
+NEGATIVE: PASS
+RESULT  : PASS

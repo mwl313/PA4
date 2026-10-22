@@ -131,6 +131,15 @@ class EpisodeParityTest(unittest.TestCase):
             self.assertTrue(torch.equal(ta["players", k], tb["players", k]))
         oa, ob = a._observe_one(a._slots[0], 0), b._observe_one(b._slots[0], 0)
         for k, v in oa.items():
+            if k == "_ragged_row":
+                # P3.5/ADR-009: every ragged family must also be seed-deterministic.
+                ra, rb = v, ob[k]
+                self.assertEqual(sorted(ra), sorted(rb))
+                for rk in ra:
+                    self.assertTrue(
+                        torch.equal(ra[rk], rb[rk]),
+                        f"ragged {rk} differs on identical seed")
+                continue
             self.assertTrue(torch.equal(v, ob[k]), f"{k} differs on identical seed")
 
     def test_partial_reset_preserves_other_slot(self):

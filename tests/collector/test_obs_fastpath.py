@@ -28,11 +28,18 @@ class FastDecodeEquivalenceTest(unittest.TestCase):
     def test_fast_matches_full_all_leaves(self):
         fast = self.dec.decode_fast(self.st.slot, self.st.generation, 0)
         full = self.dec.decode_full(self.st.slot, self.st.generation, 0)
-        self.assertEqual(set(fast.keys()), set(OBS_LEAVES))
+        # P3.5/ADR-009: the view carries the nine fixed leaves plus ragged.
+        self.assertEqual(set(fast.keys()), set(OBS_LEAVES) | {"_ragged_row"})
         for k in OBS_LEAVES:
             self.assertEqual(fast[k].shape, full[k].shape, f"{k} shape")
             self.assertEqual(fast[k].dtype, full[k].dtype, f"{k} dtype")
             self.assertTrue(torch.equal(fast[k], full[k]), f"{k} values differ")
+        ra, rb = fast["_ragged_row"], full["_ragged_row"]
+        self.assertEqual(sorted(ra), sorted(rb), "ragged key set differs")
+        self.assertTrue(ra, "ragged transport must not be empty")
+        for rk in ra:
+            self.assertEqual(ra[rk].dtype, rb[rk].dtype, f"ragged {rk} dtype")
+            self.assertTrue(torch.equal(ra[rk], rb[rk]), f"ragged {rk} values differ")
 
     def test_fast_matches_full_both_seats(self):
         for side in (0, 1):
@@ -40,6 +47,10 @@ class FastDecodeEquivalenceTest(unittest.TestCase):
             full = self.dec.decode_full(self.st.slot, self.st.generation, side)
             for k in OBS_LEAVES:
                 self.assertTrue(torch.equal(fast[k], full[k]), f"seat{side}.{k}")
+            for rk, rv in fast["_ragged_row"].items():
+                self.assertTrue(
+                    torch.equal(rv, full["_ragged_row"][rk]),
+                    f"seat{side}.ragged.{rk}")
 
     def test_batched_decode_matches_full_per_seat(self):
         """The hot path uses decode_batch, so it must match authoritative decode.

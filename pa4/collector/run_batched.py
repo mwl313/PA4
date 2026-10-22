@@ -382,11 +382,25 @@ def account_step(next_td, slots, seen, rep, run_id, worker_index):
 
 
 def _views_from_players(players, requests):
-    """Extract one 9-leaf view dict per (row, seat) from an existing players TD."""
+    """Extract one view dict per (row, seat) from an existing players TD.
+
+    P3.5/ADR-009: the view carries the nine fixed leaves AND all five ragged
+    families (`_ragged_row`). Before this repair only the nine leaves crossed
+    this boundary, so the encoder saw empty ragged sections.
+    """
+    from pa4.env import ragged_transport as _rt
+
+    families = _rt.family_names()
     out = []
     for (r, seat, _ident_v, _v) in requests:
         v = players[r, seat]
-        out.append({k: v[k] for k in OBS_LEAVES})
+        view = {k: v[k] for k in OBS_LEAVES}
+        view["_ragged_row"] = {
+            f"ragged.{f}_{field}": v[f"ragged.{f}_{field}"]
+            for f in families
+            for field in ("counts", "values", "lengths", "overflow")
+        }
+        out.append(view)
     return out
 
 
