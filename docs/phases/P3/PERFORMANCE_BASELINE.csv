@@ -1,6 +1,8 @@
 run_id,git_sha,mode,worker_count,envs_per_worker,total_envs,setup_s,warmup_s,steady_s,matches,matches_per_s,steady_matches,steady_matches_per_s,env_transitions,env_transitions_per_s,forward_batch_max,forward_batch_mean,transitions_stored,transitions_dropped,duplicate_matches,operational_errors,cross_worker_forwards,max_worker_ids_per_forward
-bl_16_1,e524942,single,1,16,16,1.97,1.89,3.72,33,4.1,33,8.88,576,71.5,29,5.81,576,320,0,0,,
-bl_32_1,e524942,single,1,32,32,1.68,2.47,2.87,35,4.66,33,11.51,640,85.3,61,7.07,640,384,0,0,,
-bl_64_16,e524942,single,1,64,64,1.68,4.08,2.59,32,3.62,30,11.59,896,101.5,64,8.28,896,640,0,0,,
-multi2x16,e524942,central,2,16,32,,2,,64,1.22,64,1.54,1120,21.3,62,,1120,608,0,0,212,2
-multi4x16,e524942,central,4,16,64,,2,,130,1.02,130,1.2,2176,17.1,63,,2176,1152,0,0,177,4
+bl_16_1,62c2b2f,single,1,16,16,2.05,1.97,3.9,34,4.02,33,8.46,576,68.1,29,5.85,576,320,0,0,,
+bl_32_1,62c2b2f,single,1,32,32,1.72,2.78,3.38,32,3.79,31,9.17,672,79.7,61,6.97,672,416,0,0,,
+bl_64_16,62c2b2f,single,1,64,64,1.81,4.43,2.72,36,3.78,33,12.13,896,94.1,64,8.45,896,640,0,0,,
+multi2x16_central,62c2b2f,central,2,16,32,,2,,64,1.21,64,1.53,1120,21.1,62,,1120,608,0,0,258,2
+multi2x16_perdrv,62c2b2f,per_driver,2,16,32,,2,,65,5.4,65,11.16,1120,93.1,,,1120,608,0,0,0,0
+multi4x16_central,62c2b2f,central,4,16,64,,2,,130,0.97,130,1.12,2320,17.3,63,,2320,1296,0,0,190,4
+multi4x16_perdrv,62c2b2f,per_driver,4,16,64,,2,,130,5.48,130,8.11,2336,98.4,,,2336,1312,0,0,0,0

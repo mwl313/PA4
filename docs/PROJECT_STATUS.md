@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-10-22
 **Current phase:** P3 — Batched Collector and Central Inference (**open**)
-**Current verdict:** **P3 PARTIAL** (G3-A–G3-D scoped PASS, G3-E not passed; audit findings open)
+**Current verdict:** **P3 PENDING_FINAL_AUDIT** (G3-A–G3-D PASS; G3-E re-audit in progress)
 **Last closed phase:** P2 **PASS** (5/5)
 **Next phase:** P4 — not started
 
@@ -50,43 +50,33 @@ second reading of real files, **not** independent-model verification.
 
 ## P3 — Batched Collector and Central Inference (open)
 
-**Status: PARTIAL.** G3-A–G3-D are supported in the scoped sense; G3-E did **not**
-pass. The earlier PARTIAL reason (auditor could not read WSL) is resolved — the
-auditor now reads the repo — and the review it produced found **unmet design
-deliverables**, not just missing access.
+**Status: PENDING_FINAL_AUDIT.** The first WSL audit found unmet deliverables
+(not missing access). They are now implemented and measured; the re-audit of the
+tested commit is in progress. No PASS is claimed yet.
 
-- Tested code: `297cf8b7048c6ec1f1841fb00b443a868963520b`
-- Real CUDA batching **per driver** is proven: one model forward covering 4
-  independent requests, `cuda:0`; real runs reached `bmax` 63/64. The receipt
-  reports per-run means 3.78/5.15/9.16.
-- Measured: 5.1–6.0 natural matches/s single driver; 2/4 drivers 4.4/5.5
-  matches/s. The multi-driver comparison is not controlled (startup is inside
-  the multi-driver wall clock, outside the single-driver one).
-- 136 tests green: P1 39 + P2 51 + P3 46.
-- Key finding: `ProcessInferenceServer.client()` caches one client, so
-  `[srv.client() …]` aliased slot 0 and every forward was B=1; `srv.clients(n)`
-  returns distinct slots.
-
-**Unmet or unproven (auditor FINDINGS, `docs/phases/P3/RECEIPT.json`):**
-1. **P3-C transition retention is absent.** `PA4ActorTransitionV1` pre-action
-   observations, ordered candidate tables, weight fingerprints and a bounded
-   queue are documented but never retained on the tested path; seat records are
-   built and discarded after counting.
-2. **"Central" inference is per-driver.** Each driver owns its own
-   `InferenceServer`; no forward ever carries requests from two worker
-   processes, contrary to P3-B's "different workers" wording.
-3. **No weight fingerprint / observation-contract hash** on P3 exchanges.
-4. **Validation gaps:** duplicate identity within one transport batch overwrites
-   silently; a foreign `policy_version` is accepted on ENCODE.
-5. **No independent lost-completion guard** (`env.completed_matches` is never
-   compared with the ledger).
-6. **Revisions are counted as behaviour rows.**
-7. **P3-D timing gaps:** no cold/steady split, no retained stage breakdown,
-   several headline numbers have no artifact, and the "~40 ms" residual is an
-   unmeasured inference.
-8. `run_collector.py` still uses the aliasing `srv.client()` pattern and is
-   untested.
-9. `INTEGRATION_DECISION.md` still records ADR-008 as proposed/blocked.
+- Tested code: `62c2b2fe1b18f33ec3e6c284a0b4265ca276fb14`
+- **151 tests green:** P1 39 + P2 51 + P3 61.
+- Real CUDA batching, both topologies:
+  - per driver: one forward covering 4 independent rows, `cuda:0`, bmax 64;
+  - **central**: one parent-owned `InferenceServer` (`transport="distributed"`)
+    serves 2 and 4 spawned drivers; 258/190 forwards mixed 2/4 worker
+    processes.
+- P3-C **bounded `PA4ActorTransitionV1` retention** implemented: pre-action
+  observations, ordered candidates, selected indices, FP32 logprobs, the real
+  packet, native outcome, match id, policy version and sha256 weight
+  fingerprint; drops are counted.
+- Measured throughput (steady / wall): single driver 8.5–12.1 / 3.8–4.0
+  matches/s; 2 drivers central 1.53 / 1.21, per-driver 11.16 / 5.40; 4 drivers
+  central 1.12 / 0.97, per-driver 8.11 / 5.48.
+- **Finding:** central cross-process inference is correct but ~4.5–5.6× slower
+  than per-driver servers on this host (gloo/TCP per client). A transport
+  selection input for P6/P7.
+- Key earlier finding retained: `ProcessInferenceServer.client()` caches one
+  client; `srv.clients(n)` returns distinct slots.
+- Addressed from the audit: transition retention, central cross-worker batching,
+  weight/observation fingerprints, duplicate-in-batch and foreign-version
+  rejection, lost-completion guard, revision filtering, cold/steady + stage
+  timing, retained artifacts, `run_collector` aliasing, stale docs.
 
 ## Open limitations (carried forward, not blocking)
 

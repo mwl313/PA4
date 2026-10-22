@@ -1,0 +1,25 @@
+{
+ "num_drivers": 2,
+ "num_envs_each": 16,
+ "total_envs": 32,
+ "central": false,
+ "matches": 65,
+ "transitions": 1120,
+ "wall_s": 12.04,
+ "matches_per_s": 5.4,
+ "transitions_per_s": 93.1,
+ "steady_matches": 65,
+ "steady_matches_per_s": 11.16,
+ "dupes": 0,
+ "errors": [],
+ "per_driver_mps": [
+  3.4,
+  3.26
+ ],
+ "transitions_stored": 1120,
+ "transitions_dropped": 608,
+ "cross_worker_forwards": 0,
+ "max_worker_ids_per_forward": 0,
+ "server_stats": {},
+ "service_stats": {}
+}

@@ -94,12 +94,15 @@ def main():
         })
 
     multi = [(2, "multi2x16"), (4, "multi4x16")]
-    for num_drivers, run_id in multi:
+    for num_drivers, base_id in multi:
+      for central in (True, False):
+        run_id = base_id + ("_central" if central else "_perdrv")
         out = run_multi(num_drivers=num_drivers, num_envs=16, target=32, seed=1,
-                        central=True, warmup=2)
+                        central=central, warmup=2)
         _save(f"baseline_{run_id}", out)
         rows.append({
-            "run_id": run_id, "git_sha": sha, "mode": "central",
+            "run_id": run_id, "git_sha": sha,
+            "mode": "central" if central else "per_driver",
             "worker_count": num_drivers, "envs_per_worker": 16,
             "total_envs": num_drivers * 16, "setup_s": None, "warmup_s": 2,
             "steady_s": None, "matches": out["matches"],

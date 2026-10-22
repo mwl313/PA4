@@ -6,6 +6,17 @@ Design: `PA4-P3-DESIGN-v1.0` §3.2
 P3 stores bounded, in-memory transition records so P4 can replay behaviour
 exactly. No database, no long-lived archive, no PPO advantage computation.
 
+Implementation: `pa4/collector/transitions.py` (`BoundedTransitionStore`,
+`seat_record`, `transition`, `accepted_records`), emitted by
+`pa4/collector/run_batched.py`. The store has a fixed capacity
+(`BatchedConfig.transition_capacity`, default 256); when full it drops the
+oldest record and increments `transitions_dropped`, which the report exposes
+alongside `transitions_stored` and `transitions_retained`. Records are emitted
+only for decisions used in an accepted native step: rows whose step was revised
+are excluded and counted separately. Ownership is copy-on-store — every tensor
+is detached and cloned to CPU, so a later env/memory reuse cannot mutate a
+retained record.
+
 ---
 
 ## 1. What is recorded per transition
@@ -48,6 +59,13 @@ Each `branches[j]`:
 | `selected_index` | index into that ordered list |
 | `branch_k` | real legal candidate count |
 | `branch_logprob_fp32` | FP32 logprob of the chosen index |
+
+All of the first table's fields are present in every stored record; the
+`tests/collector/test_matches.py::TransitionRetentionTest` asserts the field
+set, the nine observation leaves (CPU tensors), candidate membership of each
+selected index, the six-key packet, the sha256 weight fingerprint, the pinned
+observation contract hash, and that a stored `match_completed` record carries a
+match id present in the ledger.
 
 ## 3. Replay requirements satisfied
 

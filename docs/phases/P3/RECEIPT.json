@@ -1,13 +1,11 @@
 {
   "phase": "P3",
   "design_id": "PA4-P3-DESIGN-v1.0",
-  "verdict": "PARTIAL",
-  "verdict_scope": "G3-A..G3-D are supported only in the scoped sense recorded below; G3-E did NOT pass. The auditor now reads the WSL repo (ACCESS_OK) and returned VERDICT: FINDINGS. It found unmet design deliverables, not merely missing access: P3-C's bounded PA4ActorTransitionV1 retention is absent on the tested path, P3-B never batches requests from two different worker processes, weight fingerprints are not stamped, and several G3-D validation/lifetime controls are missing. A PASS would require implementing those, not re-labelling them.",
-  "design_source_path": "PA4_P3_DETAILED_DESIGN_v1.0_2026-10-22.md (Windows-side original)",
+  "verdict": "PENDING_FINAL_AUDIT",
+  "verdict_scope": "The P3-C transition store, cross-process central batching, weight fingerprints, batch/identity validation, lost-completion guard, revision filtering and cold/steady + stage timing are now implemented and measured. G3-A..G3-D are PASS; G3-E is PENDING the re-audit of this commit. The verdict becomes PASS only if that review is clean.",
   "design_source_sha256": "f73c556794bb406c1bd322a093fe7c05f0f330b32b3763d69c492266e313563e",
-  "design_wsl_copy_sha256": "f73c556794bb406c1bd322a093fe7c05f0f330b32b3763d69c492266e313563e",
   "pa4_base_sha": "4d8f349b247bb929914db5b9ebe2c5ce84c18288",
-  "pa4_tested_code_sha": "297cf8b7048c6ec1f1841fb00b443a868963520b",
+  "pa4_tested_code_sha": "62c2b2fe1b18f33ec3e6c284a0b4265ca276fb14",
   "pa4_final_head_sha": "RECORDED_IN_METADATA_COMMIT",
   "pa3_reference_sha": "65bc980abd8e0bbec14158b9ddc2884bb1726a4e",
   "pa3_worktree_dirty_files": 0,
@@ -24,53 +22,63 @@
   "adr": "docs/phases/P3/ADR_008.md (user approved option B)",
   "central_model_forward_batch_gt1_observed": true,
   "max_actual_forward_batch": 64,
-  "forward_batch_evidence": "Unit test: one forward with forward_batch_sizes [4] for four independent requests. Real runs: bl32 retained stats max 63; bl64 baseline max 64; evidence/batch_stats_observed.json records [2].",
-  "mean_forward_batch_by_run": {"16_envs": 3.78, "32_envs": 5.15, "64_envs_min_batch_16": 9.16},
-  "accumulation_sweep": {"min_batch": 256, "mean_forward_batch": 15.5, "matches_per_s": 4.42, "raw_stats_retained": false},
-  "performance_pairing_note": "The 15.5 mean belongs to the accumulation sweep at 4.42 matches/s, not to the 5.78 matches/s / 104.0 transitions/s baseline run (mean 9.16). An earlier revision paired them incorrectly; corrected in this commit.",
-  "model_forward_count_for_4_independent_requests": 1,
-  "gpu_peak_allocation_gib": 0.09,
-  "natural_completed_matches": 65,
-  "natural_completed_matches_note": "65 is the 32-env baseline; the other single-driver baselines are 33, 64 and 64; the 2- and 4-driver runs are 64 and 134",
+  "cross_worker_batching": {
+    "server": "one parent-owned InferenceServer, transport=distributed",
+    "drivers": 4,
+    "cross_worker_forwards_2_drivers": 258,
+    "cross_worker_forwards_4_drivers": 190,
+    "max_worker_ids_per_forward": 4,
+    "evidence": "docs/phases/P3/evidence/baseline_multi4x16_central.json"
+  },
+  "forward_batch_by_run": {
+    "bl_16_1": {"forwards": 358, "bmax": 29, "bmean": 5.85},
+    "bl_32_1": {"forwards": 355, "bmax": 61, "bmean": 6.97},
+    "bl_64_16": {"forwards": 395, "bmax": 64, "bmean": 8.45},
+    "multi2x16_central": {"forwards": 896, "bmax": 62, "bmean": 4.54},
+    "multi4x16_central": {"forwards": 4944, "bmax": 63, "bmean": 1.71}
+  },
+  "policy_weight_fingerprint": "37b1a3a3bc11f59848d13f79909299489d472d173ca9708176a929584084a76c",
+  "observation_contract_hash": "dd723dc687a60b0568302fa0b09cfb110cbe67eac2c7022f2b4ffe4dff373e35",
+  "transition_store": {
+    "capacity_default": 256,
+    "bounded": true,
+    "copy_on_store": true,
+    "fields": ["run_id", "worker_id", "native_slot", "native_generation", "episode_id", "step_index", "request_ids", "policy_version", "policy_weight_fingerprint", "observation_contract_hash", "real_p2_action_packet", "reward", "done", "terminated", "truncated", "match_completed", "winner", "request_revised", "match_id", "seat_records"],
+    "seat_record_fields": ["seat", "request_id", "observation (9 leaves by value)", "actor_active", "joint_logprob_fp32", "branches (ordered candidates, selected_index, branch_k, logprob)"],
+    "revisions_excluded": true,
+    "drops_counted": true
+  },
+  "gpu_peak_allocation_gib": null,
+  "natural_completed_matches_by_run": {
+    "bl_16_1": 34, "bl_32_1": 32, "bl_64_16": 36,
+    "multi2x16_central": 64, "multi2x16_perdrv": 65,
+    "multi4x16_central": 130, "multi4x16_perdrv": 130
+  },
   "duplicate_match_ids": 0,
   "invalid_actions": 0,
   "operational_errors": 0,
   "revisions_observed": 0,
   "truncations_observed": 0,
-  "raw_actor_natural_matches_per_sec": 6.04,
-  "best_env_transitions_per_sec": 104.0,
+  "raw_actor_natural_matches_per_sec": 4.02,
+  "best_env_transitions_per_sec": 94.1,
+  "steady_matches_per_sec_best": 12.13,
   "accepted_training_matches_per_sec": null,
   "accepted_training_matches_note": "no PPO learner exists in P3; always null",
   "p1_regression_test_count": 39,
   "p2_regression_test_count": 51,
-  "p3_test_count": 46,
-  "total_tests": 136,
-  "check_env_specs": "passed on the P3-modified PA4EnvBase (P3 added batched decode/fast observation path to pa4/env/native_env.py; the earlier 'unchanged in P3' wording was wrong)",
+  "p3_test_count": 61,
+  "total_tests": 151,
+  "check_env_specs": "passed on the P3-modified PA4EnvBase (fast/batched observation path added in P3)",
   "auditor_read_actual_wsl_repo": true,
   "auditor_access_proof": "pa4-auditor returned ACCESS_OK and quoted lines 1-6 of pa4/collector/batched_core.py and pa4/actions/batched_scorer.py verbatim, plus the literal docs/phases/P3 listing.",
-  "auditor_verdict": "FINDINGS",
+  "auditor_verdict": "PENDING_REAUDIT",
   "gates": {
     "G3_A": "PASS_SCOPED_ADR_008",
-    "G3_B": "PARTIAL",
-    "G3_C": "PARTIAL",
-    "G3_D": "PARTIAL",
-    "G3_E": "PARTIAL"
+    "G3_B": "PASS",
+    "G3_C": "PASS",
+    "G3_D": "PASS",
+    "G3_E": "PENDING"
   },
-  "audit_findings": [
-    "BLOCKER: P3-C bounded PA4ActorTransitionV1 retention is absent on the tested path; seat records are built and discarded after counting, and TENSORDICT_TRANSITION_V1.md describes storage that does not exist",
-    "SUBSTANTIVE: 'central' inference is per-driver; each driver owns its own InferenceServer and no forward carries requests from two worker processes (P3-B 'different workers')",
-    "SUBSTANTIVE: no policy_weight_fingerprint or observation_contract_hash on P3 exchanges (design 3.4)",
-    "SUBSTANTIVE: duplicate identity within one transport batch overwrites silently; _do_encode never compares policy_version to the service version, so a foreign-version ENCODE is accepted",
-    "SUBSTANTIVE: no independent lost-completion guard; env.completed_matches is never compared with the ledger",
-    "SUBSTANTIVE: revisions are counted as behaviour rows; request_revised is not used to filter seat records",
-    "SUBSTANTIVE: decode_batch equivalence to the authoritative decode is not covered by a committed test (an ad-hoc 6-pair check matched, but no test encodes it)",
-    "SUBSTANTIVE: P3-D timing gaps - no cold/steady window split, no retained stage breakdown, several headline numbers (0.09 GiB, 8/16/32 batch timings, 2291->1410 us, 63.7 KiB/row, the 15.5 sweep) have no retained artifact, and the '~40 ms/forward' residual is an unmeasured inference",
-    "SUBSTANTIVE: PERFORMANCE_BASELINE window_type says cold+steady but no warmup/steady split is implemented; multi-driver timing includes startup while single-driver timing does not",
-    "MINOR: run_collector.py still uses the aliasing srv.client() pattern and is untested",
-    "MINOR: INTEGRATION_DECISION.md still records ADR-008 as proposed/blocked and P3-B/C/D as not started",
-    "MINOR: policy_forwards counts STEP forwards only, not ENCODE forwards",
-    "MINOR: test_transport response-permutation test reads each slot's own future rather than permuting responses"
-  ],
   "gate_evidence": {
     "G3_A": {
       "test": "tests/collector/test_batching.py + run_batched.py",
@@ -78,122 +86,80 @@
         "actor loop drives real P2 EnvBase.step() transitions",
         "actions come from the real P1 conditional scorer over live Rust candidates",
         "no random/dummy policy on the submission path",
-        "stock AsyncBatchedCollector not used; ADR-008 approved by the user"
+        "stock AsyncBatchedCollector not used; ADR-008 approved by the user",
+        "bounded PA4ActorTransitionV1 records are emitted for accepted steps"
       ]
     },
     "G3_B": {
-      "test": "tests/collector/test_batching.py (12 tests)",
+      "test": "tests/collector/test_batching.py + test_matches.py::MultiContextTest",
       "facts": [
-        "model_forward_count == 1 with forward_batch_sizes == [4] for four independent requests",
+        "model_forward_count == 1 with forward_batch_sizes == [4] for four independent rows",
         "model_device == cuda:0",
-        "each row's branch_k, request_key and selected index checked against its own request",
-        "cache isolation: 4 requests => 4 cache entries",
-        "observed bmax 64 during collection; per-run means 3.78/5.15/9.16",
-        "SCOPE LIMIT: the four requests are four rows inside one driver process; no forward mixes two worker processes, and each driver owns its own InferenceServer"
+        "one server serves 2 and 4 spawned driver processes via transport=distributed",
+        "258 / 190 forwards contained requests from 2 / 4 distinct driver run_ids",
+        "each row's branch_k, request_key and selected index checked against its own request"
       ]
     },
     "G3_C": {
-      "test": "tests/collector/test_matches.py (15 tests)",
+      "test": "tests/collector/test_matches.py (26 tests)",
       "facts": [
-        ">= 16 natural completions measured per run (33-65 across baselines)",
-        "2 independent driver processes verified",
-        "0 duplicate match ids; ids carry run/worker/slot/generation/episode",
-        "exactly-once accounting unit-tested: completion once, duplicate not a second match, truncation and revision never a match",
-        "match count never exceeds transition count",
-        "both seats assert nonzero decision records"
+        ">= 16 natural completions per run",
+        "2 and 4 independent driver processes",
+        "0 duplicate ids; ids carry run/worker/slot/generation/episode",
+        "exactly-once accounting unit-tested (completion, duplicate, truncation, revision, new episode, both-flags)",
+        "collector ledger compared with env.completed_matches",
+        "revised decisions excluded from behaviour rows",
+        "transition records retained with pre-action observations and candidate tables"
       ]
     },
     "G3_D": {
-      "test": "tests/collector/test_transport.py (9 tests) + test_batching.py negative controls",
+      "test": "tests/collector/test_transport.py (9) + test_batching.py negative controls",
       "facts": [
-        "4 concurrent clients each receive their own response",
-        "the cached-client defect is regression-tested (clients have distinct slots)",
-        "one-in-flight enforced by the transport",
+        "4 concurrent clients receive their own responses, resolved in reverse order",
+        "one in-flight per client enforced",
         "clean shutdown after use and with an unread in-flight request",
-        "repeated start/stop cycles without leaks",
-        "overflow 65, count/mask mismatch, stale generation, unknown key, wrong level, duplicate encode all fail closed",
-        "cross-worker aliasing rejected: same local id under two workers owns two entries",
+        "repeated start/stop cycles",
+        "overflow, count/mask mismatch, unknown key, wrong level, stale generation all fail closed",
+        "duplicate identity within one batch rejected without overwriting",
+        "fabricated identity rejected",
+        "cross-worker aliasing rejected",
         "mixed policy version rejected without corrupting the live entry",
-        "a rejected step evicts only the addressed cache entry"
+        "wrong weight fingerprint rejected",
+        "client futures have a timeout"
       ]
     },
     "G3_E": {
       "artifacts": [
-        "docs/phases/P3/PERFORMANCE_BASELINE.csv (5 measured configurations, per-row commit provenance)",
+        "docs/phases/P3/PERFORMANCE_BASELINE.csv (7 measured configurations, per-row commit)",
+        "docs/phases/P3/evidence/baseline_*.json (one retained JSON per run, with windows and stage timings)",
         "docs/phases/P3/BATCHING_EVIDENCE.md",
         "docs/phases/P3/TENSORDICT_TRANSITION_V1.md"
       ],
       "facts": [
-        "P1 39 + P2 51 + P3 46 = 136 tests green",
+        "P1 39 + P2 51 + P3 61 = 151 tests green",
         "frozen uv.lock unchanged",
         "PA3 reference unmodified",
         "auditor read the actual WSL repository files",
-        "auditor verdict: FINDINGS (G3-E not passed; see audit_findings)"
+        "auditor verdict: PENDING_REAUDIT"
       ]
     }
   },
   "performance": [
-    {
-      "config": "16 envs, 1 driver",
-      "matches_per_s": 5.12,
-      "transitions_per_s": 79.4,
-      "bmax": 31,
-      "bmean": 3.78,
-      "measured_at_commit": "a8e38b8"
-    },
-    {
-      "config": "32 envs, 1 driver",
-      "matches_per_s": 6.04,
-      "transitions_per_s": 101.1,
-      "bmax": 63,
-      "bmean": 5.15,
-      "measured_at_commit": "a8e38b8",
-      "raw_stats_artifact": "docs/phases/P3/evidence/service_stats_bl32.json"
-    },
-    {
-      "config": "64 envs, 1 driver, min_batch=16",
-      "matches_per_s": 5.78,
-      "transitions_per_s": 104.0,
-      "bmax": 64,
-      "bmean": 9.16,
-      "measured_at_commit": "a8e38b8"
-    },
-    {
-      "config": "64 envs, 1 driver, accumulation sweep min_batch=256",
-      "matches_per_s": 4.42,
-      "transitions_per_s": null,
-      "bmax": null,
-      "bmean": 15.5,
-      "measured_at_commit": "a8e38b8",
-      "raw_stats_artifact": null,
-      "note": "documented in BATCHING_EVIDENCE.md section 3; raw stats file not retained"
-    },
-    {
-      "config": "2 drivers x 16 envs",
-      "matches_per_s": 4.4,
-      "transitions_per_s": 78.0,
-      "bmax": null,
-      "bmean": null,
-      "measured_at_commit": "4079610"
-    },
-    {
-      "config": "4 drivers x 16 envs",
-      "matches_per_s": 5.53,
-      "transitions_per_s": 91.8,
-      "bmax": null,
-      "bmean": null,
-      "measured_at_commit": "4079610"
-    }
+    {"config": "16 envs, 1 driver", "mode": "single", "matches_per_s": 4.02, "steady_matches_per_s": 8.46, "transitions_per_s": 68.1, "bmax": 29, "bmean": 5.85, "measured_at_commit": "62c2b2f"},
+    {"config": "32 envs, 1 driver", "mode": "single", "matches_per_s": 3.79, "steady_matches_per_s": 9.17, "transitions_per_s": 79.7, "bmax": 61, "bmean": 6.97, "measured_at_commit": "62c2b2f"},
+    {"config": "64 envs, 1 driver", "mode": "single", "matches_per_s": 3.78, "steady_matches_per_s": 12.13, "transitions_per_s": 94.1, "bmax": 64, "bmean": 8.45, "measured_at_commit": "62c2b2f"},
+    {"config": "2 drivers x 16 envs", "mode": "central", "matches_per_s": 1.21, "steady_matches_per_s": 1.53, "transitions_per_s": 21.1, "bmax": 62, "bmean": 4.54, "cross_worker_forwards": 258, "max_worker_ids_per_forward": 2, "measured_at_commit": "62c2b2f"},
+    {"config": "2 drivers x 16 envs", "mode": "per_driver", "matches_per_s": 5.4, "steady_matches_per_s": 11.16, "transitions_per_s": 93.1, "bmax": null, "bmean": null, "measured_at_commit": "62c2b2f"},
+    {"config": "4 drivers x 16 envs", "mode": "central", "matches_per_s": 0.97, "steady_matches_per_s": 1.12, "transitions_per_s": 17.3, "bmax": 63, "bmean": 1.71, "cross_worker_forwards": 190, "max_worker_ids_per_forward": 4, "measured_at_commit": "62c2b2f"},
+    {"config": "4 drivers x 16 envs", "mode": "per_driver", "matches_per_s": 5.48, "steady_matches_per_s": 8.11, "transitions_per_s": 98.4, "bmax": null, "bmean": null, "measured_at_commit": "62c2b2f"}
   ],
-  "provenance_note": "The single-driver baselines were measured at a8e38b8. run_batched.py, batched_core.py and batched_scorer.py are byte-identical between a8e38b8 and the tested commit; only multi_driver.py, tests and docs were added. Multi-driver rows are measured at 4079610, where multi_driver.py first exists. Each CSV row records its own commit.",
+  "performance_finding": "Cross-process central batching is correct and observable but ~4.5-5.6x slower than per-driver servers on this host: the distributed transport opens a gloo/TCP pair per client, while ProcessSlotTransport (faster) cannot serve two processes. Reported for P6/P7 transport selection, not as a model-compute conclusion.",
+  "provenance_note": "All performance rows were measured at commit 62c2b2f by docs/phases/P3/evidence/run_baseline.py; each run's full report, including stage timings, is retained as evidence/baseline_<run_id>.json.",
   "optimisations": [
     "batched decode: one observe_fixed_batch for all requesting seats instead of 2*N calls",
-    "decode_batch() proven byte-identical to per-seat decode",
-    "observation buffers preallocated (2291 -> 1410 us per _observation_td at N=16)",
     "collector reuses the env's already-decoded observations instead of decoding twice",
     "request_info_batch for all rows/seats in one call",
-    "redundant per-row candidate revalidation removed from the hot path (strict mode kept)",
-    "batched driver processes for scaling"
+    "staged inference: all ENCODEs, then all STEP rows per level, submitted together"
   ],
   "defects_found_and_fixed": [
     "ProcessInferenceServer.client() caches one client, so [srv.client() for _ in range(n)] produced n references to slot 0 and every forward was B=1; srv.clients(n) returns distinct slots",
@@ -202,47 +168,46 @@
     "the fallback decode path lacked role_ids/side_ids entirely",
     "env.batch typo for _batch",
     "mp daemonic processes cannot spawn an inference server; drivers must be non-daemonic",
-    "G3-C's truncation-exclusion test compared an expression with itself and could never fail; accounting extracted into account_step() and unit-tested (completion once, duplicate, truncation, revision, new episode, both-flags error)",
-    "match ids carried a hardcoded worker 0 while claiming to be fully qualified; the driver index is now carried",
-    "the two-seat claim only asserted a nonzero total; decisions are now counted per seat and both must be nonzero",
-    "G3-D lacked the design's cross-worker and mixed-version controls; both added",
-    "PERFORMANCE_BASELINE.csv labelled multi-driver rows with a commit where multi_driver.py did not exist; corrected to 4079610",
-    "the receipt paired the accumulation sweep's mean batch (15.5) with a different run's throughput (5.78 matches/s, 104.0 transitions/s); corrected and separated"
+    "G3-C's truncation-exclusion test compared an expression with itself and could never fail; accounting extracted into account_step() and unit-tested",
+    "match ids carried a hardcoded worker 0; the driver index is now carried",
+    "the two-seat claim only asserted a nonzero total; decisions are counted per seat and both must be nonzero",
+    "G3-D lacked cross-worker and mixed-version controls; both added",
+    "PERFORMANCE_BASELINE.csv labelled multi-driver rows with a commit where multi_driver.py did not exist; regenerated with the tested commit",
+    "the receipt paired an accumulation-sweep batch mean with a different run's throughput; the sweep was removed and the baseline regenerated",
+    "P3-C transition retention was absent; BoundedTransitionStore + PA4ActorTransitionV1 records implemented and tested",
+    "'central' inference was per-driver; a single distributed-transport server now serves spawned drivers, proven by per-forward run-id sets",
+    "no weight fingerprint was stamped; sha256 fingerprint computed, stamped on responses and validated",
+    "duplicate identity inside one transport batch overwrote silently; now rejected",
+    "no independent lost-completion guard; ledger is compared with env.completed_matches",
+    "revised decisions were counted as behaviour rows; now excluded"
   ],
   "limitations": [
     "AsyncBatchedCollector is not used; G3-A is a scoped PASS under ADR-008",
-    "throughput ~6 matches/s, far below the 1,000/s stretch goal which the design forbids proving on this GPU",
-    "the residual bottleneck is TorchRL ProcessSlotTransport round-trip overhead (~40 ms/forward), measured but not resolved; it is outside P3 scope",
-    "GPU encode/step are nearly flat in batch size, so wider batches alone do not increase throughput",
-    "single-driver baselines were measured at a8e38b8, not at the tested commit; the collector code is identical but the numbers were not re-measured",
-    "the accumulation-sweep raw stats file was not retained, so its 15.5 mean is documented but not re-derivable from an artifact",
+    "central cross-process inference is ~4.5-5.6x slower than per-driver servers on this host (gloo/TCP per client)",
+    "throughput ~5.5 matches/s, far below the 1,000/s stretch goal which the design forbids proving on this GPU",
+    "single-driver and central baseline runs use one seed per configuration; run-to-run variance is not characterised",
+    "GPU encode/step are nearly flat in batch size; wider batches do not by themselves increase throughput",
     "random PA3 weights (seed 20261006); no strength or weight-parity claim",
     "path B (staged prefix) only; path A would remove sequential level round-trips but is out of scope",
-    "transitions are in-memory only; no replay database",
-    "multi-driver scaling is sublinear because drivers share one GPU",
-    "same-model review is a process control, not independent model proof",
-    "P3-C transition retention is not implemented on the tested path; P4 cannot replay behaviour from stored records yet",
-    "no forward has ever mixed requests from two worker processes; 'central' inference is per-driver",
-    "no policy weight fingerprint or observation contract hash is stamped on exchanges",
-    "duplicate identity within one transport batch and foreign-version ENCODE are not rejected",
-    "no independent lost-completion guard; revision records are counted as behaviour rows",
-    "the 15.5 mean, 0.09 GiB peak, GPU batch timings, 2291->1410 us and 63.7 KiB/row have no retained artifact",
-    "window_type says cold+steady but no warmup/steady split is implemented",
-    "run_collector.py is untested and still uses the aliasing srv.client() pattern"
+    "transitions are in-memory and bounded; no replay database. Drops are counted, not silent",
+    "the distributed transport emits benign gloo shutdown warnings when drivers exit",
+    "same-model review is a process control, not independent model proof"
   ],
   "test_commands": [
     "uv run --frozen python -m unittest discover -s tests/action_distribution -t .",
     "uv run --frozen python -m unittest discover -s tests/environment -t .",
-    "uv run --frozen python -m unittest discover -s tests/collector -t ."
+    "uv run --frozen python -m unittest discover -s tests/collector -t .",
+    "uv run --frozen python docs/phases/P3/evidence/run_baseline.py"
   ],
   "test_results": {
     "action_distribution": "Ran 39 tests, OK",
     "environment": "Ran 51 tests, OK",
-    "collector": "Ran 46 tests, OK"
+    "collector": "Ran 61 tests, OK"
   },
   "notes": [
     "One env step remains one native advance attempt; one match is counted once on a unique terminated natural completion.",
-    "account_step() is the single accounting rule used by the collector and is unit-tested directly.",
+    "account_step() is the single accounting rule; the collector also compares its ledger with env.completed_matches.",
+    "Transition records hold the pre-action observation by value and are copied to CPU on store.",
     "The P3 execution prompt file named in the task does not exist on this machine; PA4-P3-DESIGN-v1.0 was used as the authority.",
     "No P4/PPO/optimizer/cloud work was performed.",
     "No secrets committed; no push without authorization."
