@@ -176,9 +176,21 @@
         "verdict": "FINDINGS",
         "closed": true,
         "summary": "cross-check section-5 exclusion was dead code (over-escaped regex) and the absence scan skipped RECEIPT.json"
+      },
+      {
+        "round": "8",
+        "verdict": "FINDINGS",
+        "closed": true,
+        "summary": "receipt guard was cosmetic: doc-formatted tokens could not match JSON-native values, so a G4_D revert passed"
+      },
+      {
+        "round": "9",
+        "verdict": "FINDINGS",
+        "closed": true,
+        "summary": "guard completeness: falsifiability block partially compared, receipt text unscanned, in-process run tokens missing from the absence set"
       }
     ],
-    "round_count": 7
+    "round_count": 9
   },
   "tests": {
     "p1_action_distribution": 39,

@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-10-22
 **Current phase:** P4 — Synchronous On-Policy PPO-2 (**closed, fresh-process recovery verified**)
-**Current verdict:** **P4 PASS** (G4-A..G4-E; 7 real-source audit rounds closed; G4-D proven across a process restart)
+**Current verdict:** **P4 PASS** (G4-A..G4-E; 9 real-source audit rounds closed; G4-D proven across a process restart)
 **Last closed phase:** P4 **PASS** (prior receipts preserved unchanged)
 **Next phase:** C1 — not started (requires separate authorization; nothing provisioned)
 
@@ -161,7 +161,7 @@ identity, real Adam updates and atomic checkpoints.
 - **Falsifiable:** dropping Adam restoration moves weights by `1.059e-04`;
   dropping the RNG blob is caught by a measured stream mismatch; dropping the
   step counter is caught by `9 vs 23`.
-- **7 real-source audit rounds** are recorded in `docs/phases/P4/RECEIPT.json`. Round 1
+- **9 real-source audit rounds** are recorded in `docs/phases/P4/RECEIPT.json`. Round 1
   found four MAJOR training-loop defects; round 2 found that the closure
   documentation cited values absent from the artifacts. Both were fixed rather
   than argued.

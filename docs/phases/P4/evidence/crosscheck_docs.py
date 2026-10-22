@@ -107,6 +107,11 @@ def main():
         '9.384e-05': 'old adam ablation',
         '10 vs 19': 'old step ablation pair',
         '19 = 19': 'old step count',
+        # Distinctive values of the SUPERSEDED in-process run (resume_parity.txt).
+        # Section 5 of CHECKPOINT_RECOVERY is carved out to document that run, so
+        # these must not appear anywhere else.
+        '4.307e-09': 'in-process adam delta',
+        '-9.993e-06': 'in-process bound excess',
     }
     # Strip the deliberately-attributed superseded section before scanning.
     # NOTE: the pattern needs ONE backslash before each dot. An over-escaped
@@ -137,7 +142,7 @@ def main():
             ("CHECKPOINT_RECOVERY.md", doc),
             ("FINAL_REPORT.md", fin),
             ("PROJECT_STATUS.md", status),
-            ):
+            ("RECEIPT.json", receipt_text)):
         norm = _norm(doc_text)
         for token, label in superseded_tokens.items():
             if _norm(token) in norm:
@@ -171,10 +176,25 @@ def main():
                 f"RECEIPT.json gate_evidence.G4_D.{key} = {got!r} but the "
                 f"artifact says {want!r} (stale receipt)")
 
+    # Remaining scalar fields the round-8 enumeration skipped.
+    for key, want in {
+        "distinct_processes": fr["distinct_processes"],
+        "adam_state_ids_match": fr["adam_state_ids_match"],
+        "child_device": fr["child_device"],
+    }.items():
+        got = g4d.get(key)
+        if got != want:
+            failures.append(
+                f"RECEIPT.json gate_evidence.G4_D.{key} = {got!r} but the "
+                f"artifact says {want!r} (stale receipt)")
+
     fals = g4d.get("falsifiability") or {}
     fals_expect = {
         "adam_ablation_model_delta": ab["no_adam"]["model_max_abs_delta_vs_full"],
+        "rng_ablation_model_delta": ab["no_rng"]["model_max_abs_delta_vs_full"],
+        "rng_ablation_detected_by_stream": ab["no_rng"]["rng_restored"] is False,
         "step_ablation_counter": [ab["no_steps"]["steps"], ab["full"]["steps"]],
+        "all_detected": True,
     }
     for key, want in fals_expect.items():
         got = fals.get(key)

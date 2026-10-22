@@ -15,7 +15,7 @@
 | **G4-B** Numerical golden | **PASS** | Stored-action replay max joint delta **4.77e-07** (gate 1e-5); independent golden module imports neither GAE nor loss |
 | **G4-C** Live CUDA PPO-2 | **PASS** | **20/20** iterations, **265** optimizer steps, **20 distinct policy versions**, fingerprint chain intact, 0 NaN/Inf |
 | **G4-D** Durable restore | **PASS** | **fresh process** 19→178: 142/142 tensors, max delta `1.192e-07`, Adam delta `5.331e-09`, steps 23=23, matches 33=33; Adam/RNG/step ablations all detected |
-| **G4-E** Full stack + audit | **PASS** | 272 tests green, P0 smoke, 7 real-source audit rounds, full-stack baseline recorded |
+| **G4-E** Full stack + audit | **PASS** | 272 tests green, P0 smoke, 9 real-source audit rounds, full-stack baseline recorded |
 
 ---
 
