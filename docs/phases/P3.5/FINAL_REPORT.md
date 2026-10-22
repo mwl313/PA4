@@ -109,7 +109,9 @@ All were caught by tests rather than shipped:
 
 ## 3. Verification evidence
 
-All figures are from committed scripts under `docs/phases/P3.5/evidence/`.
+All figures are from committed scripts under `docs/phases/P3.5/evidence/`; the
+inference wire-row byte counts are reproduced by `measure_wire_bytes.py` into
+`wire_bytes.json`.
 
 | Check | Script | Result |
 |---|---|---|
@@ -187,8 +189,9 @@ The `views` stage is **not** the repair cost: `payload_to_transport` runs inside
 `env.step`/`reset`. `stage_perf.py` records the repaired path only; it is **not**
 an ON/OFF ablation and no longer claims to be one. `bench_ragged.py` times the
 components directly: `payload_to_transport` ≈ 953 µs and `decode_batch` ≈
-2399 µs for 16 views. The inference wire row is 119 KB after right-sizing
-padding (was 154 KB). What remains is mostly the larger padded tensors crossing
+2399 µs for 16 views. The inference wire row is 119,413 bytes after right-sizing
+padding (was 153,589 bytes) — reproduced by `measure_wire_bytes.py` into
+`wire_bytes.json`. What remains is mostly the larger padded tensors crossing
 the inference transport — an expected and acceptable cost for correct inputs.
 
 ---
@@ -317,3 +320,47 @@ corrected tree and returns CLEAN. No PASS is claimed here. The auditor could
 not read `/home/pa4/projects/_pa3_ref` (external-directory denial), so PA3-side
 layout claims remain verified through the committed evidence and tests rather
 than by the auditor's direct PA3 read.
+
+---
+
+## 9. Closure
+
+P3.5's gate was `P35_I` (fresh-context audit of the real repository). It closed in
+two stages, both recorded:
+
+**Stage 1 — external audit with real file access.** Because WSL-side networking
+suffered intermittent TCP connection failures, the repository was exported with
+`git archive` to a Windows-readable path (see `docs/AUDIT_FROM_WINDOWS.md`) and
+reviewed by a fresh-context read-only auditor. It read the actual source and
+returned **FINDINGS (MINOR)** — no MAJOR findings.
+
+**Stage 2 — the four round-8 MAJOR findings, re-verified independently:**
+
+| Finding | Evidence of closure |
+|---|---|
+| F1 identity gate vacuous | Stripping all ragged leaves from a live `players` TensorDict raises `ObservationContractMismatch` (not `KeyError`); a mismatched representation id is also rejected |
+| F2 `next_observation` mislabelled | It now stores `observation_ragged` and cannot stamp v2 without it |
+| F3 no server-seam test | `tests/collector/test_server_seam_ragged.py` traverses the real `StagedInference`/`InferenceServer` path with non-empty ragged, and **fails** when ragged forwarding is disabled (`evidence/f3_ragged_forwarding_disabled.txt`: digests `17f75a0e…` vs `9bf2772b…`) |
+| F4 provenance | Duplicate JSON key removed (verified: no duplicate keys); tested SHA repointed; all evidence regenerated |
+
+**Residual MINOR items from the external audit were documentation-only and are closed:**
+
+1. A stale `b0e2513` reference inside the F4 provenance prose — corrected to `e6da02f`.
+2. "Two A/B pairs were measured" — corrected to three, matching the three pairs
+   actually recorded (the per-pair `repaired_tree` values `06e3b04`, `b0e2513`,
+   `e6da02f` are a factual measurement record and are intentionally left as-is).
+3. Wire-byte figures had no evidence file — now reproduced by
+   `measure_wire_bytes.py` into `wire_bytes.json` (153,589 before, 119,413 after).
+4. No consolidated suite log — now `evidence/full_suite.txt` (39 + 51 + 103 = 193 OK).
+
+**Final test state at closure:** 39 action_distribution + 51 environment +
+103 collector = **193 tests OK**, logged in `evidence/full_suite.txt`.
+
+### Known limitation (carried forward, not a blocker)
+
+The representation gate validates ragged *presence, shape and dtype*, not that
+its contents are non-empty. A structurally valid all-zero ragged row would pass
+the gate. In practice the decoder cannot produce that — the server-seam test
+asserts non-empty ragged reaches the encoder and compares the encoded output
+against an independently built canonical observation — so the guarantee holds
+end-to-end, but the gate alone is a structural check rather than a content check.

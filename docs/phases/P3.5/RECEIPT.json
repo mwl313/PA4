@@ -2,7 +2,7 @@
   "phase": "P3.5",
   "design_id": "PA4-P35-OBSERVATION-CONTRACT-REPAIR",
   "adr": "docs/phases/P3.5/ADR_009.md",
-  "verdict": "IMPLEMENTATION_PASS_AUDIT_BLOCKED",
+  "verdict": "PASS",
   "base_head_sha": "a977a5c344f99cd08552884f19c746f13d566793",
   "pa4_tested_code_sha": "e6da02f62e0152f4c0db10c7a6a1d9c00b8656eb",
   "pa4_tested_code_sha_note": "commit that carries the tested code, tests and evidence-script fixes; receipt/docs follow in a separate metadata commit",
@@ -54,7 +54,8 @@
     "wire_row_bytes_after_capacity_tuning": 119413,
     "ragged_bytes_after_capacity_tuning": 54189,
     "representation_id": "pa4.observation.ragged.v2",
-    "encoding": "dense padded tensors + authoritative int64 counts"
+    "encoding": "dense padded tensors + authoritative int64 counts",
+    "wire_row_bytes_evidence": "docs/phases/P3.5/evidence/wire_bytes.json (measure_wire_bytes.py)"
   },
   "gates": {
     "P35_A_source_verified": "PASS",
@@ -65,7 +66,7 @@
     "P35_F_identity_gate_enforced": "PASS",
     "P35_G_regressions": "PASS",
     "P35_H_performance_measured": "PASS",
-    "P35_I_auditor_read_real_repo": "BLOCKED"
+    "P35_I_auditor_read_real_repo": "PASS"
   },
   "evidence": {
     "transport_golden_views": 960,
@@ -105,10 +106,11 @@
       "tests/collector/test_batching.py::make_row (real ragged leaves, not placeholders)"
     ],
     "check_env_specs": "OK",
-    "p35_round8_new_tests": 21
+    "p35_round8_new_tests": 21,
+    "full_suite_log": "docs/phases/P3.5/evidence/full_suite.txt"
   },
   "performance": {
-    "method": "same host and virtualenv; pre-repair tree a977a5c extracted with git archive to /tmp and measured with the same venv; repaired tree measured immediately after; same config (target_matches=64, seed=1, cuda, FP32, same policy seed). Two A/B pairs were measured to expose run-to-run variance.",
+    "method": "same host and virtualenv; pre-repair tree a977a5c extracted with git archive to /tmp and measured with the same venv; repaired tree measured immediately after; same config (target_matches=64, seed=1, cuda, FP32, same policy seed). Three A/B pairs were measured to expose run-to-run variance.",
     "pairs": [
       {
         "pair": 1,
@@ -304,7 +306,7 @@
   ],
   "auditor": {
     "invoked": true,
-    "verdict": "FINDINGS_ROUND8",
+    "verdict": "CLEAN_MINOR_DOC_ONLY",
     "read_zero_files": false,
     "auditor_read_real_repo": true,
     "round8_commit": "d0be6e3",
@@ -318,7 +320,27 @@
     ],
     "round8_fixes_commit": "06e3b0479cbe4e86190a220fcc51a49c19c042ef",
     "round9_status": "PENDING - fresh-context re-audit of the corrected tree",
-    "auditor_pa3_reference_read": "DENIED (external_directory); PA4 repository read succeeded"
+    "auditor_pa3_reference_read": "DENIED (external_directory); PA4 repository read succeeded",
+    "access_method": "git archive export to a Windows-readable path; see docs/AUDIT_FROM_WINDOWS.md",
+    "external_round": {
+      "tree": "ecfe72e",
+      "result": "FINDINGS (MINOR) - no MAJOR",
+      "f1_identity_gate": "CLOSED",
+      "f2_next_observation": "CLOSED",
+      "f3_server_seam": "CLOSED and falsifiable",
+      "f4_provenance": "duplicate key CLOSED; tested SHA correct",
+      "minor_items_closed": [
+        "stale b0e2513 in F4_provenance prose corrected to e6da02f",
+        "pair count corrected from two to three",
+        "wire-byte figures now reproduced by measure_wire_bytes.py",
+        "consolidated suite log added as evidence/full_suite.txt"
+      ]
+    },
+    "independent_lead_verification": {
+      "f1_reproduced": "live players TD stripped of ragged -> ObservationContractMismatch; fixed9 id -> ObservationContractMismatch",
+      "f3_reproduced": "seam test passes restored; disabled-forwarding log shows digest mismatch 17f75a0e vs 9bf2772b",
+      "suite": "39 + 51 + 103 = 193 OK at ecfe72e"
+    }
   },
   "limitations": [
     "Padded dense ragged tensors are larger on the inference wire than the native CSR blob",
@@ -338,7 +360,7 @@
       "F1_identity_gate": "views carry an explicit representation id; _views_from_players validates leaves and raises ObservationContractMismatch; _assert_views_representable checks id+leaves; encode_all validates; server _obs_batch fails closed on missing ragged",
       "F2_next_observation": "retains observation_ragged; v2 is never stamped without matching ragged",
       "F3_server_seam": "real env->_views_from_players->StagedInference->InferenceServer->_obs_batch->encoder test with non-empty ragged; falsifiability demonstrated",
-      "F4_provenance": "duplicate transport key fixed; tested sha repointed to the current tested commit (b0e2513; round-8 fixes landed at 06e3b04); all evidence regenerated",
+      "F4_provenance": "duplicate transport key fixed; tested sha repointed to the current tested commit (e6da02f; the round-8 fixes landed at 06e3b04 and the tree was hardened through round 10); all evidence regenerated",
       "F5_decode_overflow": "validate_transport_row checks counts<=cap, non-negative counts, lengths and overflow on every transport->RaggedBatch decode; overflow flag retained; ADR corrected",
       "F6_aliasing": "aliasing test mutates the payload buffer in place; permute/truncate controls added",
       "F7_performance": "fresh A/B -26%/-23%; stage attribution corrected; stage_perf no longer claims ON/OFF",
@@ -365,5 +387,10 @@
     },
     "round8_fixes_commit": "06e3b0479cbe4e86190a220fcc51a49c19c042ef",
     "round9_fixes_commit": "e6da02f62e0152f4c0db10c7a6a1d9c00b8656eb"
+  },
+  "closure": {
+    "closed_at_tree": "ecfe72e (+ this documentation commit)",
+    "known_limitation": "the representation gate checks ragged presence/shape/dtype, not non-emptiness; end-to-end guarantee comes from the server-seam test",
+    "note": "P4 may resume on the corrected full observation contract."
   }
 }

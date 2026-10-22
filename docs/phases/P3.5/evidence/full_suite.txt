@@ -1,0 +1,17 @@
+P3.5 full regression suite
+commit: ecfe72e71114cdb10af5f48e9253aba9988c1afe
+date: 2026-10-22T10:19:17Z
+command: uv run --frozen python -m unittest discover -s <suite> -t .
+
+=== tests/action_distribution ===
+Ran 39 tests in 4.958s
+OK
+
+=== tests/environment ===
+Ran 51 tests in 3.975s
+OK
+
+=== tests/collector ===
+Ran 103 tests in 63.919s
+OK
+

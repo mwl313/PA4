@@ -1,0 +1,22 @@
+{
+ "method": "sizes computed from request_spec() tensor shapes/dtypes",
+ "wire_row_bytes_before_capacity_tuning": 153589,
+ "ragged_bytes_before": 88365,
+ "wire_row_bytes_after_capacity_tuning": 119413,
+ "ragged_bytes_after": 54189,
+ "shipped_capacity": {
+  "effects": 4,
+  "repertoire": 6,
+  "types": 3,
+  "base_moves": 5,
+  "move_effects": 5
+ },
+ "pre_tuning_capacity": {
+  "effects": 8,
+  "repertoire": 8,
+  "types": 4,
+  "base_moves": 8,
+  "move_effects": 8
+ },
+ "saved_bytes": 34176
+}
