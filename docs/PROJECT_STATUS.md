@@ -156,12 +156,11 @@ identity, real Adam updates and atomic checkpoints.
   matches, 0 dropped, 0 duplicates, 265 optimizer steps, 20 distinct policy
   versions, fingerprint chain intact, 0 NaN/Inf, peak VRAM 574.6 MiB,
   0.4439 accepted training matches/s.
-- **Fresh-process recovery:** parent `27` → child `186`, distinct processes and a
-  new CUDA context; 142/142 tensors within the predeclared FP32 bound, Adam
-  delta `5.355e-09`, steps `19 = 19`, matches `33 = 33`, ledger identical.
-- **Falsifiable:** dropping Adam restoration moves weights by `9.384e-05`;
+- **Fresh-process recovery:** parent `19` → child `178`, distinct processes and a
+  new CUDA context; 142/142 tensors within the predeclared FP32 bound, Adam delta `5.331e-09`, steps `23 = 23`, matches `33 = 33`, ledger identical.
+- **Falsifiable:** dropping Adam restoration moves weights by `1.059e-04`;
   dropping the RNG blob is caught by a measured stream mismatch; dropping the
-  step counter is caught by `10` vs `19`.
+  step counter is caught by `9 vs 23`.
 - **5 audit rounds** are recorded in `docs/phases/P4/RECEIPT.json`. Round 1
   found four MAJOR training-loop defects; round 2 found that the closure
   documentation cited values absent from the artifacts. Both were fixed rather

@@ -98,6 +98,29 @@ def main():
     if "closed, fresh-process recovery verified" not in status:
         failures.append("PROJECT_STATUS does not mark P4 closed")
 
+    # Absence rule: numbers belonging to a SUPERSEDED run must not appear
+    # in current documents. Presence-only checks let round 6 certify PASS
+    # over two tables that still cited the previous run.
+    superseded_tokens = {
+        '27` → `186': 'old pid pair',
+        '5.355e-09': 'old adam delta',
+        '9.384e-05': 'old adam ablation',
+        '10 vs 19': 'old step ablation pair',
+        '19 = 19': 'old step count',
+    }
+    # Strip the deliberately-attributed superseded section before scanning.
+    import re as _re
+    _s5 = _re.search(r"## 5\\..*?(?=## 6\\.)", doc, _re.S)
+    doc = doc.replace(_s5.group(0), "") if _s5 else doc
+
+    for doc_name, doc_text in (("CHECKPOINT_RECOVERY.md", doc),
+                               ("FINAL_REPORT.md", fin),
+                               ("PROJECT_STATUS.md", status)):
+        for token, label in superseded_tokens.items():
+            if token in doc_text:
+                failures.append(
+                    f"{doc_name} still cites {label}: {token!r}")
+
     for name in ("resume_parity.txt", "_resume_helpers.py", "proof_resume_core.py"):
         if not (E / name).exists():
             failures.append(f"superseded artifact deleted: {name}")
