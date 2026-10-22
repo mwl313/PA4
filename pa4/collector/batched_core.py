@@ -152,15 +152,26 @@ class StagedInference:
 
     def encode_all(self, items):
         """items: [(ident, view)] -> list of (ident, layout, a2r)."""
+        from pa4.env import ragged_transport as _rt
+
         futs = []
         for ident, view in items:
+            representation = view.get("_observation_representation")
+            if representation != _rt.OBSERVATION_REPRESENTATION:
+                raise _rt.ObservationContractMismatch(
+                    f"encode_all view has representation {representation!r}, "
+                    f"expected {_rt.OBSERVATION_REPRESENTATION!r}")
+            row = view.get("_ragged_row")
+            if not row:
+                raise _rt.ObservationContractMismatch(
+                    "encode_all view carries no ragged transport row")
+            _rt.validate_transport_row(row, where=f"encode_all[{ident}]")
             slot = self._acquire()
             td = self._row(0, ident)
             for k in OBS_LEAVES:
                 td[k] = view[k]
             # P3.5/ADR-009: ragged must travel with the row, otherwise the server
             # builds an ObservationBatch with empty ragged sections.
-            row = view.get("_ragged_row") or {}
             for k, v in row.items():
                 td[k] = v
             futs.append((slot, ident, view, self.clients[slot].submit(td)))

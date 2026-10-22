@@ -432,7 +432,8 @@ class PA4EnvBase(EnvBase):
             players["ragged." + family + "_counts"][r, side] = counts
             players["ragged." + family + "_values"][r, side] = values
             players["ragged." + family + "_lengths"][r, side] = int(counts.sum())
-            players["ragged." + family + "_overflow"][r, side] = False
+            players["ragged." + family + "_overflow"][r, side] = bool(
+                row["ragged." + family + "_overflow"].item())
 
     def _decode_many(self, pairs) -> list[dict]:
         """Decode several (row, seat) views in ONE native call, with caching."""
@@ -519,6 +520,7 @@ class PA4EnvBase(EnvBase):
             "role_ids": batch.role_ids[0].cpu(),
             "side_ids": batch.side_ids[0].cpu(),
             "_ragged_row": _ragged.transport_rows(transport, 0),
+            "_observation_representation": _ragged.OBSERVATION_REPRESENTATION,
         }
 
     def invalidate_obs_cache(self) -> None:

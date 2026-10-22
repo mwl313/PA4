@@ -28,8 +28,12 @@ class FastDecodeEquivalenceTest(unittest.TestCase):
     def test_fast_matches_full_all_leaves(self):
         fast = self.dec.decode_fast(self.st.slot, self.st.generation, 0)
         full = self.dec.decode_full(self.st.slot, self.st.generation, 0)
-        # P3.5/ADR-009: the view carries the nine fixed leaves plus ragged.
-        self.assertEqual(set(fast.keys()), set(OBS_LEAVES) | {"_ragged_row"})
+        # P3.5/ADR-009: the view carries the nine fixed leaves plus ragged and
+        # the explicit representation id.
+        self.assertEqual(set(fast.keys()), set(OBS_LEAVES) | {
+            "_ragged_row", "_observation_representation"})
+        self.assertEqual(fast["_observation_representation"],
+                         full["_observation_representation"])
         for k in OBS_LEAVES:
             self.assertEqual(fast[k].shape, full[k].shape, f"{k} shape")
             self.assertEqual(fast[k].dtype, full[k].dtype, f"{k} dtype")
@@ -74,6 +78,11 @@ class FastDecodeEquivalenceTest(unittest.TestCase):
                 self.assertEqual(batched[i][k].dtype, full[k].dtype, f"{k} dtype")
                 self.assertTrue(torch.equal(batched[i][k], full[k]),
                                 f"row{r} seat{s} {k} differs")
+            self.assertEqual(batched[i]["_observation_representation"],
+                             full["_observation_representation"])
+            for rk, rv in batched[i]["_ragged_row"].items():
+                self.assertTrue(torch.equal(rv, full["_ragged_row"][rk]),
+                                f"row{r} seat{s} ragged {rk} differs")
 
     def test_verify_contract_passes(self):
         d = SliceDecoder(self.env._engine, self.env._mod)

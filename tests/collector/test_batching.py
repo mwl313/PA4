@@ -57,6 +57,12 @@ def make_row(env, st, obs, *, w, op=0, level=0, cands=None, table=None,
     td["branch_level"] = torch.tensor(level)
     for k in OBS:
         td[k] = obs[k]
+    # P3.5/ADR-009: real ragged transport leaves, not an all-zero placeholder.
+    row = obs.get("_ragged_row") or {}
+    if not row:
+        raise AssertionError("test env view carries no ragged row")
+    for k, v in row.items():
+        td[k] = v
     if table is not None:
         k = len(cands)
         td["candidate_count"] = torch.tensor(k)

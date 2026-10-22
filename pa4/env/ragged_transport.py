@@ -261,7 +261,7 @@ def payload_to_transport(payload: dict, n: int) -> dict:
         out[f"ragged.{family}_values"] = torch.from_numpy(values)
         out[f"ragged.{family}_lengths"] = torch.from_numpy(counts.sum(axis=1))
         out[f"ragged.{family}_overflow"] = torch.from_numpy(
-            (counts > cap).copy())
+            (counts > cap).any(axis=1).copy())
 
     if offset != flat.size:
         raise ValueError(
@@ -271,13 +271,78 @@ def payload_to_transport(payload: dict, n: int) -> dict:
 
 
 def transport_rows(td: dict, row: int) -> dict:
-    """Extract one view's ragged transport tensors (already on CPU)."""
+    """Extract one view's ragged transport tensors (already on CPU).
+
+    The overflow flag is retained deliberately: dropping it would make a
+    decoded row unable to prove it was not silently clamped. `payload_to_
+    transport` already raises on overflow, so a valid row always carries
+    `False`; the flag is still part of the row contract and is validated by
+    `validate_transport_row`.
+    """
     out = {}
     for key in list(td):
-        if key.startswith("ragged.") and key.endswith("_overflow"):
-            continue
-        out[key] = td[key][row]
+        if key.startswith("ragged."):
+            out[key] = td[key][row]
     return out
+
+
+def validate_transport_row(row, where: str = "view") -> None:
+    """Validate one view's ragged transport leaves; fail closed on corruption.
+
+    This is the redundant decode-side gate. The encode path already raises
+    `RaggedOverflow`, but a stored, hand-built or future-produced transport must
+    not be able to smuggle counts above the padding cap into a slice such as
+    `values[t, :k]`, where Python would silently clamp to the available rows.
+    """
+    FIELDS = _fields()
+    for family, fields in FIELDS.items():
+        cap = RAGGED_TOKEN_CAPACITY[family]
+        width = len(fields)
+        keys = {field: f"ragged.{family}_{field}"
+                for field in ("counts", "values", "lengths", "overflow")}
+        missing = [key for key in keys.values() if key not in row]
+        if missing:
+            raise ObservationContractMismatch(
+                f"{where}: missing ragged leaves {missing}; expected the "
+                f"{OBSERVATION_REPRESENTATION!r} contract")
+        counts = row[keys["counts"]]
+        values = row[keys["values"]]
+        lengths = row[keys["lengths"]]
+        overflow = row[keys["overflow"]]
+        if not torch.is_tensor(counts) or counts.dim() != 1 or counts.numel() != TOKENS:
+            raise ObservationContractMismatch(
+                f"{where}: ragged.{family}_counts must be int64[{TOKENS}], "
+                f"got {type(counts).__name__} {tuple(counts.shape) if torch.is_tensor(counts) else ''}")
+        if counts.dtype != torch.long:
+            raise ObservationContractMismatch(
+                f"{where}: ragged.{family}_counts dtype {counts.dtype} != torch.long")
+        if bool((counts < 0).any()):
+            raise ObservationContractMismatch(
+                f"{where}: negative ragged count for {family}")
+        worst = int(counts.max().item()) if counts.numel() else 0
+        if worst > cap:
+            raise RaggedOverflow(
+                f"{where}: ragged family {family!r} has {worst} rows for one "
+                f"token, above the transport capacity {cap}. Refusing to "
+                "truncate; raise RAGGED_TOKEN_CAPACITY and re-measure.")
+        if not torch.is_tensor(values) or values.dim() != 3 or tuple(values.shape) != (
+                TOKENS, cap, width):
+            raise ObservationContractMismatch(
+                f"{where}: ragged.{family}_values must be float32"
+                f"[{TOKENS}, {cap}, {width}], got "
+                f"{tuple(values.shape) if torch.is_tensor(values) else type(values).__name__}")
+        expected = int(counts.sum().item())
+        got = int(lengths.item()) if torch.is_tensor(lengths) and lengths.numel() == 1 else -1
+        if got != expected:
+            raise ObservationContractMismatch(
+                f"{where}: ragged.{family}_lengths {got} != sum(counts) {expected}")
+        if not torch.is_tensor(overflow) or overflow.numel() != 1:
+            raise ObservationContractMismatch(
+                f"{where}: ragged.{family}_overflow must be a scalar bool")
+        if bool(overflow.item()):
+            raise RaggedOverflow(
+                f"{where}: ragged family {family!r} carries an overflow flag; "
+                "the transport must not contain clamped rows")
 
 
 # ---------------------------------------------------------------------------
@@ -294,25 +359,17 @@ def transport_to_ragged(td: dict, index: int, device: str | torch.device = "cpu"
     FIELDS = _fields()
     from agent.types.ragged import RaggedBatch  # noqa: PLC0415
 
+    first_key = f"ragged.{next(iter(FIELDS))}_counts"
+    if td[first_key].dim() == 2:
+        row = transport_rows(td, index)
+    else:
+        row = {k: td[k] for k in td if k.startswith("ragged.")}
+    validate_transport_row(row, where=f"transport_to_ragged[{index}]")
+
     out = {}
     for family, fields in FIELDS.items():
-        counts = td[f"ragged.{family}_counts"]
-        values = td[f"ragged.{family}_values"]
-        # Accept either batched ([B, tokens] / [B, tokens, cap, w]) or a single
-        # row's leaves ([tokens] / [tokens, cap, w]).
-        if counts.dim() == 2:
-            counts_i = counts[index]
-        elif counts.dim() == 1:
-            counts_i = counts
-        else:
-            raise ValueError(f"unexpected ragged counts rank for {family}: {counts.shape}")
-        if values.dim() == 4:
-            values_i = values[index]
-        elif values.dim() == 3:
-            values_i = values
-        else:
-            raise ValueError(f"unexpected ragged values rank for {family}: {values.shape}")
-
+        counts_i = row[f"ragged.{family}_counts"]
+        values_i = row[f"ragged.{family}_values"]
         counts_np = np.asarray(counts_i.detach().to("cpu").numpy(), dtype=np.int64)
         if counts_np.ndim == 1:
             counts_np = counts_np[None, :]
@@ -326,50 +383,6 @@ def transport_to_ragged(td: dict, index: int, device: str | torch.device = "cpu"
                 packed.append(values_i[t, :k].detach().to("cpu").numpy().astype(np.float32))
         flat = np.concatenate(packed, axis=0) if packed else np.zeros((0, width), np.float32)
         out[family] = RaggedBatch.from_rows([flat], counts_np, width).to(device)
-    return out
-
-
-def clone_transport(td: dict) -> dict:
-    """Deep-copy transport tensors so they do not alias a reused native buffer.
-
-    `payload_to_transport` builds tensors over the payload bytes; the engine
-    reuses that buffer on the next `observe_fixed_batch`, so anything retained
-    across calls (observation caches, transition records) must own its memory.
-    """
-    return {k: v.clone() for k, v in td.items()}
-
-
-def transport_to_ragged_batch(td: dict, device: str | torch.device = "cpu"):
-    """Rebuild the full-batch ragged dict {family: RaggedBatch} for width B.
-
-    Used to build one `ObservationBatch` covering several rows at once.
-    """
-    FIELDS = _fields()
-    from agent.types.ragged import RaggedBatch  # noqa: PLC0415
-
-    first = next(iter(FIELDS))
-    counts = td[f"ragged.{first}_counts"]
-    n = int(counts.shape[0]) if counts.dim() == 3 else 1
-
-    out = {}
-    for family, fields in FIELDS.items():
-        counts_t = td[f"ragged.{family}_counts"]
-        values_t = td[f"ragged.{family}_values"]
-        if counts_t.dim() == 2:
-            counts_t = counts_t.unsqueeze(0)
-            values_t = values_t.unsqueeze(0)
-        counts_np = counts_t.detach().to("cpu").numpy().astype(np.int64)
-        width = len(fields)
-        rows = []
-        for b in range(n):
-            packed = []
-            for t in range(counts_np.shape[-1]):
-                k = int(counts_np[b, t])
-                if k:
-                    packed.append(values_t[b, t, :k].detach().to("cpu").numpy().astype(np.float32))
-            rows.append(np.concatenate(packed, axis=0) if packed else
-                        np.zeros((0, width), np.float32))
-        out[family] = RaggedBatch.from_rows(rows, counts_np, width).to(device)
     return out
 
 

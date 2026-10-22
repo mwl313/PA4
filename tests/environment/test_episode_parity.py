@@ -131,6 +131,9 @@ class EpisodeParityTest(unittest.TestCase):
             self.assertTrue(torch.equal(ta["players", k], tb["players", k]))
         oa, ob = a._observe_one(a._slots[0], 0), b._observe_one(b._slots[0], 0)
         for k, v in oa.items():
+            if k == "_observation_representation":
+                self.assertEqual(v, ob[k])
+                continue
             if k == "_ragged_row":
                 # P3.5/ADR-009: every ragged family must also be seed-deterministic.
                 ra, rb = v, ob[k]

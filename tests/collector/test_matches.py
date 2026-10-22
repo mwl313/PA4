@@ -177,6 +177,11 @@ class TransitionRetentionTest(unittest.TestCase):
             nxt = next(n for n in rec["next_observation"] if n["seat"] == seat["seat"])
             self.assertEqual(set(nxt["observation"]), set(seat["observation"]))
             self.assertIn("observation_valid", nxt)
+            self.assertEqual(nxt["observation_representation"],
+                             rec["seat_records"][0]["observation_representation"])
+            self.assertTrue(nxt["observation_ragged"])
+            self.assertEqual(set(nxt["observation_ragged"]),
+                             set(seat["observation_ragged"]))
 
     def test_action_packet_is_the_real_six_key_packet(self):
         rec = next(iter(self.store))

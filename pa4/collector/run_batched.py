@@ -383,27 +383,36 @@ def account_step(next_td, slots, seen, rep, run_id, worker_index):
 
 
 def _assert_views_representable(views):
-    """P3.5/ADR-009: refuse to collect rows without the ragged contract.
+    """P3.5/ADR-009: refuse views without the actual ragged representation.
 
-    A nine-leaf-only view cannot produce a valid PPO training row: the encoder
-    would silently substitute empty ragged sections. Failing here means a
-    pre-repair transition record can never enter the repaired pipeline.
+    This gate validates the representation *id carried by the view* and each
+    view's actual transport leaves. It is intentionally not a mere key-presence
+    check: a view that forgot the id, a pre-repair nine-leaf view, and a view
+    whose ragged counts were corrupted all fail closed here.
     """
     from pa4.env import ragged_transport as _rt
 
     for i, view in enumerate(views):
-        if "_ragged_row" not in view:
+        representation = view.get("_observation_representation")
+        if representation != _rt.OBSERVATION_REPRESENTATION:
+            raise _rt.ObservationContractMismatch(
+                f"view {i} has representation {representation!r}, expected "
+                f"{_rt.OBSERVATION_REPRESENTATION!r}")
+        row = view.get("_ragged_row")
+        if not row:
             raise _rt.ObservationContractMismatch(
                 f"view {i} carries no ragged data; expected representation "
                 f"{_rt.OBSERVATION_REPRESENTATION!r}")
+        _rt.validate_transport_row(row, where=f"collector view {i}")
 
 
 def _views_from_players(players, requests):
     """Extract one view dict per (row, seat) from an existing players TD.
 
-    P3.5/ADR-009: the view carries the nine fixed leaves AND all five ragged
-    families (`_ragged_row`). Before this repair only the nine leaves crossed
-    this boundary, so the encoder saw empty ragged sections.
+    P3.5/ADR-009: the view carries the nine fixed leaves, all five ragged
+    families, and the explicit representation id. Missing or malformed ragged
+    leaves raise `ObservationContractMismatch` here, before the gate; they never
+    surface as a raw `KeyError` or get silently downgraded to empty sections.
     """
     from pa4.env import ragged_transport as _rt
 
@@ -411,12 +420,24 @@ def _views_from_players(players, requests):
     out = []
     for (r, seat, _ident_v, _v) in requests:
         v = players[r, seat]
-        view = {k: v[k] for k in OBS_LEAVES}
-        view["_ragged_row"] = {
-            f"ragged.{f}_{field}": v[f"ragged.{f}_{field}"]
-            for f in families
-            for field in ("counts", "values", "lengths", "overflow")
-        }
+        view = {}
+        for k in OBS_LEAVES:
+            if k not in v.keys():
+                raise _rt.ObservationContractMismatch(
+                    f"players[{r},{seat}] is missing fixed leaf {k!r}")
+            view[k] = v[k]
+        row = {}
+        for family in families:
+            for field in ("counts", "values", "lengths", "overflow"):
+                key = f"ragged.{family}_{field}"
+                if key not in v.keys():
+                    raise _rt.ObservationContractMismatch(
+                        f"players[{r},{seat}] is missing {key!r}; a nine-leaf "
+                        f"view is not representable as {_rt.OBSERVATION_REPRESENTATION!r}")
+                row[key] = v[key]
+        _rt.validate_transport_row(row, where=f"players[{r},{seat}]")
+        view["_ragged_row"] = row
+        view["_observation_representation"] = _rt.OBSERVATION_REPRESENTATION
         out.append(view)
     return out
 

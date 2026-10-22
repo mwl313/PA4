@@ -174,60 +174,99 @@ class CacheEntry:
     hidden: object = None
 
 
-def _ragged_from_td(td, rows, device, already_flat: bool = False):
+def _ragged_from_td(td, rows, device):
     """Build PA3 `RaggedBatch` sections from a PA4 transport TensorDict.
 
-    `rows` are indices into the leading axis, exactly as the nine fixed leaves
-    use `td[name][rows]`. Transport leaves may arrive either stacked from the
-    environment ([B, seats, ...]) or already flattened per request row
-    ([n_rows, ...], the wire layout).
-
-    Returns None when the TensorDict carries no ragged transport leaves; such
-    records are refused later by the representation identity check rather than
-    being silently downgraded to empty sections here.
+    `rows` index the leading axis exactly as the nine fixed leaves do. The
+    wire layout is a stacked request row: counts [n, 96], values
+    [n, 96, cap, width], lengths [n], overflow [n]. A missing ragged leaf is a
+    contract failure, never a reason to silently substitute an empty section.
+    A stacked seat axis is rejected rather than collapsed to seat 0.
     """
     from pa4.env import ragged_transport as _rt
-
-    try:
-        td["ragged." + _rt.family_names()[0] + "_counts"]
-    except KeyError:
-        return None
-
     from agent.types.ragged import FIELDS, RaggedBatch
 
-    idx = list(rows)
-
-    def _pick(t):
-        """Index axis 0 by `idx`, dropping the leading axis."""
-        if t.dim() == 0:
-            return t.unsqueeze(0)
-        if t.shape[0] <= max(idx):
-            # Not a batched leaf (single residual row): treat as one row.
-            return t.unsqueeze(0)
-        return t[idx]
-
     out = {}
+    idx = list(rows)
+    if not idx:
+        raise ValueError("_ragged_from_td requires at least one row")
+    if max(idx) < 0:
+        raise ValueError("negative row index")
+
     for family, fields in FIELDS.items():
-        counts = _pick(td["ragged." + family + "_counts"]).detach().to("cpu")
-        values = _pick(td["ragged." + family + "_values"]).detach().to("cpu")
+        keys = {field: f"ragged.{family}_{field}"
+                for field in ("counts", "values", "lengths", "overflow")}
+        missing = [k for k in keys.values() if k not in td.keys()]
+        if missing:
+            raise _rt.ObservationContractMismatch(
+                "request is missing ragged transport leaves "
+                f"{missing}; the repaired encoder contract requires all five "
+                f"families ({_rt.OBSERVATION_REPRESENTATION!r})")
+        counts = td[keys["counts"]]
+        values = td[keys["values"]]
+        lengths = td[keys["lengths"]]
+        overflow = td[keys["overflow"]]
 
-        # Collapse any residual seat axis so counts is [n, tokens].
-        if counts.dim() == 3:
-            counts = counts[:, 0]
-            values = values[:, 0]
-        if counts.dim() == 1:
-            counts = counts.unsqueeze(0)
-            values = values.unsqueeze(0)
+        if counts.dim() == 3 or values.dim() == 5:
+            raise _rt.ObservationContractMismatch(
+                f"stacked seat axis for {family!r} is not a wire row; pass a "
+                "flattened [n, ...] request instead of silently using seat 0")
+        if counts.dim() == 2:
+            counts_sel = counts[idx]
+            values_sel = values[idx]
+        elif counts.dim() == 1:
+            if max(idx) != 0:
+                raise _rt.ObservationContractMismatch(
+                    f"row index {idx} out of range for single-row {family!r}")
+            counts_sel = counts.unsqueeze(0)
+            values_sel = values.unsqueeze(0)
+        else:
+            raise _rt.ObservationContractMismatch(
+                f"unexpected ragged counts rank for {family}: {tuple(counts.shape)}")
 
-        counts_np = np.asarray(counts.numpy(), dtype=np.int64)
+        cap = _rt.RAGGED_TOKEN_CAPACITY[family]
         width = len(fields)
+        if tuple(counts_sel.shape) != (len(idx), _rt.TOKENS):
+            raise _rt.ObservationContractMismatch(
+                f"ragged.{family}_counts selected shape "
+                f"{tuple(counts_sel.shape)} != {(len(idx), _rt.TOKENS)}")
+        if tuple(values_sel.shape) != (len(idx), _rt.TOKENS, cap, width):
+            raise _rt.ObservationContractMismatch(
+                f"ragged.{family}_values selected shape "
+                f"{tuple(values_sel.shape)} != {(len(idx), _rt.TOKENS, cap, width)}")
+        if bool((counts_sel < 0).any()):
+            raise _rt.ObservationContractMismatch(f"negative ragged count for {family}")
+        if int(counts_sel.max().item()) > cap:
+            raise _rt.RaggedOverflow(
+                f"ragged family {family!r} exceeds transport capacity {cap}; "
+                "refusing to truncate")
+        expected_lengths = counts_sel.sum(dim=1)
+        lengths_sel = lengths[idx] if lengths.dim() > 0 else lengths
+        if lengths.dim() == 0:
+            lengths_sel = lengths.unsqueeze(0)
+        if tuple(lengths_sel.shape) != (len(idx),):
+            raise _rt.ObservationContractMismatch(
+                f"ragged.{family}_lengths selected shape "
+                f"{tuple(lengths_sel.shape)} != {(len(idx),)}")
+        if not torch.equal(lengths_sel.to(torch.long), expected_lengths.to(torch.long)):
+            raise _rt.ObservationContractMismatch(
+                f"ragged.{family}_lengths disagree with counts")
+        overflow_sel = overflow[idx] if overflow.dim() > 0 else overflow
+        if overflow.dim() == 0:
+            overflow_sel = overflow.unsqueeze(0)
+        if bool(overflow_sel.any()):
+            raise _rt.RaggedOverflow(
+                f"ragged family {family!r} carries an overflow flag; "
+                "refusing to encode clamped rows")
+
+        counts_np = np.asarray(counts_sel.detach().to("cpu").numpy(), dtype=np.int64)
         rows_out = []
         for b in range(counts_np.shape[0]):
             packed = []
             for t in range(counts_np.shape[-1]):
                 k = int(counts_np[b, t])
                 if k:
-                    packed.append(values[b, t, :k].numpy().astype(np.float32))
+                    packed.append(values_sel[b, t, :k].detach().to("cpu").numpy().astype(np.float32))
             rows_out.append(
                 np.concatenate(packed, axis=0) if packed
                 else np.zeros((0, width), np.float32))
@@ -315,9 +354,8 @@ class BatchedConditionalScorer(nn.Module):
         # P3.5/ADR-009: forward all five ragged families into the encoder.
         # Without this, ObservationBatch silently substitutes empty sections
         # and the policy is blind to movesets/PP/types/effects.
-        ragged = _ragged_from_td(td, rows, self.device, already_flat=True)
-        if ragged is not None:
-            kwargs["ragged"] = ragged
+        ragged = _ragged_from_td(td, rows, self.device)
+        kwargs["ragged"] = ragged
         return ObservationBatch(**kwargs)
 
     def _table_for_row(self, td: TensorDict, row: int):

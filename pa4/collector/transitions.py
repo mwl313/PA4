@@ -75,12 +75,27 @@ def _clone(t):
     return t.detach().to("cpu").clone()
 
 
+def _require_ragged(view: dict, where: str) -> dict:
+    """Require the explicit repaired representation and its ragged payload."""
+    representation = view.get("_observation_representation")
+    _ragged.assert_representation(representation)
+    row = view.get("_ragged_row")
+    if not row:
+        raise _ragged.ObservationContractMismatch(
+            f"{where}: view claims {representation!r} but carries no ragged row")
+    _ragged.validate_transport_row(row, where=where)
+    return row
+
+
 def observation_digest(view: dict) -> str:
     """Content digest over one decoded view, dtype/shape aware.
 
     Covers the nine fixed leaves AND all five ragged families (P3.5/ADR-009),
-    so a missing or mutated ragged family changes the digest.
+    so a missing or mutated ragged family changes the digest. A fixed9-only
+    view is refused here rather than producing a digest of an incomplete
+    representation.
     """
+    _require_ragged(view, "observation_digest")
     h = hashlib.sha256()
     for name in OBS_LEAVES:
         t = view[name].detach().cpu().contiguous()
@@ -88,14 +103,13 @@ def observation_digest(view: dict) -> str:
         h.update(str(t.dtype).encode())
         h.update(str(tuple(t.shape)).encode())
         h.update(t.numpy().tobytes())
-    row = view.get("_ragged_row")
-    if row:
-        for key in sorted(row):
-            t = row[key].detach().to("cpu").contiguous()
-            h.update(key.encode())
-            h.update(str(t.dtype).encode())
-            h.update(str(tuple(t.shape)).encode())
-            h.update(t.numpy().tobytes())
+    row = view["_ragged_row"]
+    for key in sorted(row):
+        t = row[key].detach().to("cpu").contiguous()
+        h.update(key.encode())
+        h.update(str(t.dtype).encode())
+        h.update(str(tuple(t.shape)).encode())
+        h.update(t.numpy().tobytes())
     return h.hexdigest()
 
 
@@ -110,6 +124,7 @@ def seat_record(seat: int, request_id: int, view: dict, branches: list[dict],
                 policy_version: int, policy_weight_fingerprint: str,
                 request_kind: int, precision_profile: str = "fp32") -> dict:
     """One seat's accepted decision, including its pre-action observation."""
+    _require_ragged(view, f"seat_record seat {seat}")
     return {
         "seat": int(seat),
         "request_id": int(request_id),
@@ -141,11 +156,19 @@ def seat_record(seat: int, request_id: int, view: dict, branches: list[dict],
 
 
 def next_observation(seat: int, view: dict, valid: bool) -> dict:
-    """Post-action per-seat P2-visible data (neutral padding kept explicit)."""
+    """Post-action per-seat P2-visible data, including the same ragged contract.
+
+    `observation_valid=False` (Wait/Finished) still carries the previous state's
+    leaves by the P2 contract; P4 must mask them, never bootstrap from them. The
+    representation id is only stamped when the matching ragged payload is
+    retained, so a v2 label can never describe a nine-leaf-only record.
+    """
+    _require_ragged(view, f"next_observation seat {seat}")
     return {
         "seat": int(seat),
         "observation_valid": bool(valid),
         "observation": {k: _clone(view[k]) for k in OBS_LEAVES},
+        "observation_ragged": _clone_ragged(view),
         "observation_representation": OBSERVATION_REPRESENTATION,
     }
 

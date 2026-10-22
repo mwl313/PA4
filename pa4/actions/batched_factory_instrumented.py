@@ -6,13 +6,69 @@ Instrumentation is written to PA4_P3_STATS_PATH after every forward.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+
+import torch
 
 from pa4.actions.batched_scorer import BatchedConditionalScorer
 
 
+def _tensor_feed(h, t):
+    t = t.detach().to("cpu").contiguous()
+    h.update(str(t.dtype).encode())
+    h.update(str(tuple(t.shape)).encode())
+    h.update(t.numpy().tobytes())
+
+
+def _encoded_digest(encoded):
+    h = hashlib.sha256()
+    for name in ("tokens", "global_repr", "token_mask"):
+        h.update(name.encode())
+        _tensor_feed(h, getattr(encoded, name))
+    return h.hexdigest()
+
+
+def _ragged_batch_digest(ragged):
+    """Digest the exact RaggedBatch objects that reach the encoder."""
+    from pa4.env import ragged_transport as _rt
+
+    h = hashlib.sha256()
+    for family in _rt.family_names():
+        section = ragged[family]
+        h.update(f"ragged.{family}_counts".encode())
+        _tensor_feed(h, section.counts)
+        h.update(f"ragged.{family}_values".encode())
+        _tensor_feed(h, section.values)
+    return h.hexdigest()
+
+
 class _Instrumented(BatchedConditionalScorer):
+    def _do_encode(self, td, rows, results):
+        super()._do_encode(td, rows, results)
+        path = os.environ.get("PA4_P3_ENCODE_PROBE_PATH")
+        if not path:
+            return
+        try:
+            from pa4.actions.batched_scorer import _ragged_from_td, identity_key
+
+            for r in rows:
+                key = identity_key(td, r)
+                entry = self._cache.get(key)
+                if entry is None:
+                    continue
+                with open(path, "w") as fh:
+                    json.dump({
+                        "identity": list(key),
+                        "encoded": _encoded_digest(entry.encoded),
+                        "ragged": _ragged_batch_digest(
+                            _ragged_from_td(td, [r], self.device)),
+                    }, fh)
+                break
+        except Exception:
+            pass
+
     def forward(self, td):
         out = super().forward(td)
         path = os.environ.get("PA4_P3_STATS_PATH")

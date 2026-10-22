@@ -77,6 +77,7 @@ class SliceDecoder:
         self.full_decodes += 1
         out = {k: getattr(batch, k)[0].cpu() for k in OBS_LEAVES}
         out["_ragged_row"] = _ragged.transport_rows(transport, 0)
+        out["_observation_representation"] = _ragged.OBSERVATION_REPRESENTATION
         return out
 
     # -- tier 2: hot path, no re-validation of trusted engine bytes --------
@@ -111,6 +112,7 @@ class SliceDecoder:
         # P3.5/ADR-009: ragged travels with the view, not behind a second call.
         transport = _ragged.payload_to_transport(payload, 1)
         out["_ragged_row"] = _ragged.transport_rows(transport, 0)
+        out["_observation_representation"] = _ragged.OBSERVATION_REPRESENTATION
         self.fast_decodes += 1
         return out
 
@@ -152,6 +154,7 @@ class SliceDecoder:
         for i in range(n):
             view = {k: cols[k][i] for k in OBS_LEAVES}
             view["_ragged_row"] = _ragged.transport_rows(transport, i)
+            view["_observation_representation"] = _ragged.OBSERVATION_REPRESENTATION
             views.append(view)
         return views
 
