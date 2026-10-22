@@ -13,8 +13,9 @@ Implementation: `pa4/collector/transitions.py` (`BoundedTransitionStore`,
 oldest record and increments `transitions_dropped`, which the report exposes
 alongside `transitions_stored` and `transitions_retained`. Records are emitted
 only for decisions used in an accepted native step: rows whose step was revised
-are excluded and counted separately. Ownership is copy-on-store — every tensor
-is detached and cloned to CPU, so a later env/memory reuse cannot mutate a
+are excluded and counted separately. Ownership is copy-on-store: every
+observation leaf is detached and cloned to CPU, and everything else is stored
+as plain ints/lists/tuples, so later env or buffer reuse cannot mutate a
 retained record.
 
 ---
@@ -23,6 +24,7 @@ retained record.
 
 | Field | Meaning |
 |---|---|
+| `schema_version` | `pa4.actor_transition.v1` |
 | `run_id` | immutable run identity |
 | `worker_id` / `driver` | which actor context produced it |
 | `native_slot`, `native_generation` | native handle lifetime (never crosses a process) |
@@ -31,6 +33,7 @@ retained record.
 | `policy_version` | frozen policy version (never changes during P3) |
 | `policy_weight_fingerprint` | sha256 over the exact weights served |
 | `observation_contract_hash` | pinned PA3 observation contract |
+| `next_observation` | per-seat post-action nine-leaf view plus `observation_valid`; padding is explicit, never claimed as real data |
 | `real_p2_action_packet` | the exact six-key packet submitted to `env.step` |
 | `reward[2]`, `done`, `terminated`, `truncated` | native outcome, unchanged |
 | `match_completed`, `winner`, `request_revised` | exactly-once accounting |
@@ -46,6 +49,9 @@ Only seats whose request kind is Preview/Normal/Replacement produce a record.
 | `seat` | 0 or 1 |
 | `request_id` | the seat's own request identity |
 | `observation` | **pre-action** nine-leaf view (by value, not a digest) |
+| `observation_digest` | sha256 over the pre-action leaves (dtype/shape aware) |
+| `policy_version` | frozen version used for this decision |
+| `policy_weight_fingerprint` | sha256 of the exact served weights |
 | `actor_active` | true iff any branch had `branch_k >= 2` |
 | `joint_logprob_fp32` | sum of per-branch FP32 logprobs |
 | `branches[]` | ordered per-level evidence |
@@ -56,6 +62,8 @@ Each `branches[j]`:
 |---|---|
 | `level` | 0..3 |
 | `candidates` | **ordered** canonical six-field tuples, exactly as Rust returned them |
+| `legal_mask` | the 64-slot legal mask actually sent to the model |
+| `entity_token` / `move_token` | resolved token refs actually sent to the model |
 | `selected_index` | index into that ordered list |
 | `branch_k` | real legal candidate count |
 | `branch_logprob_fp32` | FP32 logprob of the chosen index |

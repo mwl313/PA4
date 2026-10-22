@@ -121,7 +121,8 @@ structural reason, so the fallback ADR is raised instead of continuing.
 ## 3. ADR: P3-F conditional fallback (requires user approval)
 
 **Status: APPROVED by the user (option B, 2026-10-22) and implemented in
-`pa4/collector/`, with the gaps recorded in `RECEIPT.json` (`audit_findings`).**
+`pa4/collector/`. See `RECEIPT.json` for the current gate status and review
+history.**
 The text below is the original proposal, kept verbatim for history.
 
 **Decision requested.** Approve a narrow, TorchRL-compatible actor loop that
@@ -146,10 +147,15 @@ by §1.3 and §6.2.2) or moving legality into Python (forbidden by invariant 1).
 - **P3-0 preflight:** complete, all values above measured.
 - **P3-A:** ADR-008 was **approved** (option B) and the actor-aware adapter is
   implemented; G3-A is a scoped PASS.
-- **P3-B / P3-C / P3-D:** implemented in part. Batching is proven per driver;
-  cross-worker central batching, bounded transition retention, weight
-  fingerprints and the cold/steady breakdown are **not** implemented. See
-  `RECEIPT.json` under `audit_findings`.
+- **P3-B:** proven per driver (one forward, four rows) and across worker
+  processes: one central server with `transport="distributed"` serves spawned
+  drivers, and per-forward run-id sets prove 2 and 4 workers shared a forward.
+- **P3-C:** bounded `PA4ActorTransitionV1` retention implemented (pre-action
+  observations, candidates, masks/refs, logprobs, next observation, match id,
+  fingerprints).
+- **P3-D:** cold/steady windows and stage timing retained per run; the central
+  server is single-owner (not `ProcessSlotTransport`), because shared-memory
+  slots cannot serve two processes. Its measured cost is reported.
 
-**P3 verdict: PARTIAL** (audited). The earlier "BLOCKED pending the §3 decision"
-was superseded when the user approved ADR-008.
+**P3 verdict: PENDING_FINAL_AUDIT.** The earlier "BLOCKED pending the §3
+decision" was superseded when the user approved ADR-008.

@@ -54,35 +54,40 @@ second reading of real files, **not** independent-model verification.
 (not missing access). They are now implemented and measured; the re-audit of the
 tested commit is in progress. No PASS is claimed yet.
 
-- Tested code: `68d1edf773af5f4e50107b806350e68401bf0f57`
-- **152 tests green:** P1 39 + P2 51 + P3 62.
+- Tested code: `b3fc81eba6c607d33d4d1278628471ae74f53280`
+- **157 tests green:** P1 39 + P2 51 + P3 67.
 - Real CUDA batching, both topologies:
   - per driver: one forward covering 4 independent rows, `cuda:0`, bmax 64;
   - **central**: one parent-owned `InferenceServer` (`transport="distributed"`)
-    serves 2 and 4 spawned drivers; 242/179 forwards mixed 2/4 worker
+    serves 2 and 4 spawned drivers; 220/187 forwards mixed 2/4 worker
     processes.
 - P3-C **bounded `PA4ActorTransitionV1` retention** implemented: pre-action
   observations, ordered candidates, selected indices, FP32 logprobs, the real
   packet, native outcome, match id, policy version and sha256 weight
   fingerprint; drops are counted.
-- Measured throughput (steady / wall): single driver 9.2–13.7 / 4.1–4.4
-  matches/s; 2 drivers central 1.67 / 1.32, per-driver 11.84 / 5.61; 4 drivers
-  central 1.17 / 1.00, per-driver 12.79 / 7.41.
-- **Finding:** central cross-process inference is correct but ~4.3–7.4× slower
-  than per-driver servers on this host (gloo/TCP per client). A transport
-  selection input for P6/P7.
+- Measured throughput (steady / wall): single driver 7.6–12.5 / 3.8–4.2
+  matches/s; 2 drivers central 0.78 / 1.22, per-driver 5.52 / 5.43; 4 drivers
+  central 0.30 / 1.00, per-driver 3.04 / 6.95. For multi-driver runs the steady
+  figure is the mean of per-driver steady rates (drivers run concurrently).
+- **Finding:** central cross-process inference is correct but ~4.5–7× slower
+  than per-driver servers on this host (gloo/TCP per client), with both
+  topologies using the same server batching policy. A transport selection input
+  for P6/P7.
 - Key earlier finding retained: `ProcessInferenceServer.client()` caches one
   client; `srv.clients(n)` returns distinct slots.
 - Addressed from the audit: transition retention, central cross-worker batching,
   weight/observation fingerprints, duplicate-in-batch and foreign-version
   rejection, lost-completion guard, revision filtering, cold/steady + stage
-  timing, retained artifacts, `run_collector` aliasing, stale docs.
+  timing, retained artifacts, removal of the untested legacy collector, stale docs.
+- The P3-C record now matches the design schema: `schema_version`,
+  `next_observation`, per-level legal mask/token refs, observation digest and
+  per-seat policy provenance.
 
 ## Open limitations (carried forward, not blocking)
 
 1. Auditor independence is same-model only.
 2. PA3 pin is the public `main` tip, not verified live production state.
-3. P1 inference server is CPU-only; GPU batching is unproven.
+3. P1's original inference server is CPU-only; P3 proves GPU batching separately (per-driver and cross-process central).
 4. P1 replay needs the original observation payload.
 5. P2 covers 4 seeded games; native truncation was never observed (accounting is
    proven with a synthetic native result).
@@ -95,7 +100,7 @@ tested commit is in progress. No PASS is claimed yet.
 **Do not start P4.** P3 remains open: either implement the unmet P3-C/P3-D
 deliverables listed above, or record an explicit scope amendment. Both require
 user authorisation. The P3 audit findings, in severity order, are in
-`docs/phases/P3/RECEIPT.json` under `audit_findings`.
+`docs/phases/P3/RECEIPT.json` under `audit_findings` and `review_history`.
 
 ## Artifacts
 

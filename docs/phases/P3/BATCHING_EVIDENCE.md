@@ -31,7 +31,8 @@ request could ever be outstanding and **every forward was B=1**.
 Measured: `client() -> 0,0` (same object); `clients(3) -> 1,2,3` (distinct).
 
 **Fix:** `srv.clients(n)`. `tests/collector/test_transport.py::test_clients_have_distinct_slots`
-guards it, and `run_collector.py` no longer uses the aliasing pattern.
+guards it. The legacy `run_collector.py` (which used the aliasing pattern) was
+removed.
 
 ---
 
@@ -65,20 +66,22 @@ max_worker_ids_per_forward >= 2
 cross_worker_forwards >= 1
 ```
 
-The retained 4-driver baseline reaches `max_worker_ids_per_forward = 4` and 179
+The retained 4-driver baseline reaches `max_worker_ids_per_forward = 4` and 187
 mixed forwards (see `evidence/baseline_multi4x16_central.json`).
 
 ### 2.3 Forward-batch histograms
 
-From `PERFORMANCE_BASELINE.csv` and the retained per-run JSON:
+From `PERFORMANCE_BASELINE.csv` and the retained per-run JSON. `forwards` counts
+**STEP** model forwards only; encoding forwards are a separate column in the
+JSON (`encode_forward_count`).
 
 | config | forwards | bmax | mean batch |
 |---|---|---|---|
-| 16 envs, 1 driver | 343 | 29 | 5.64 |
-| 32 envs, 1 driver | 356 | 61 | 7.00 |
-| 64 envs, 1 driver | 387 | 64 | 7.98 |
-| 2 drivers, central | 1065 | 62 | 3.81 |
-| 4 drivers, central | 5195 | 64 | 1.59 |
+| 16 envs, 1 driver | 370 | 29 | 5.61 |
+| 32 envs, 1 driver | 343 | 61 | 7.19 |
+| 64 envs, 1 driver | 374 | 64 | 8.27 |
+| 2 drivers, central | 1211 | 62 | 3.37 |
+| 4 drivers, central | 4868 | 64 | 1.74 |
 
 `model_device` is `cuda:0` in every run; the service stamps a sha256 weight
 fingerprint and the client rejects a mismatch.
@@ -87,27 +90,31 @@ fingerprint and the client rejects a mismatch.
 
 ## 3. Throughput and its transport cost (measured, both topologies)
 
-`PERFORMANCE_BASELINE.csv` (commit `68d1edf`):
+`PERFORMANCE_BASELINE.csv` (commit `b3fc81e`):
 
 | config | matches/s (wall) | steady matches/s | transitions/s |
 |---|---|---|---|
-| 16 envs, 1 driver | 4.25 | 9.22 | 70.2 |
-| 32 envs, 1 driver | 4.36 | 10.23 | 86.2 |
-| 64 envs, 1 driver | 4.07 | 13.70 | 99.6 |
-| 2 drivers × 16 envs, **central** | 1.32 | 1.67 | 22.0 |
-| 2 drivers × 16 envs, **per-driver servers** | 5.61 | 11.84 | 101.0 |
-| 4 drivers × 16 envs, **central** | 1.00 | 1.17 | 17.8 |
-| 4 drivers × 16 envs, **per-driver servers** | 7.41 | 12.79 | 120.4 |
+| 16 envs, 1 driver | 3.83 | 7.61 | 68.9 |
+| 32 envs, 1 driver | 4.18 | 9.61 | 85.1 |
+| 64 envs, 1 driver | 3.82 | 12.52 | 93.4 |
+| 2 drivers × 16 envs, **central** | 1.22 | 0.78 | 21.3 |
+| 2 drivers × 16 envs, **per-driver servers** | 5.43 | 5.52 | 96.2 |
+| 4 drivers × 16 envs, **central** | 1.00 | 0.30 | 18.0 |
+| 4 drivers × 16 envs, **per-driver servers** | 6.95 | 3.04 | 121.3 |
 
 **Finding.** Cross-process central batching is correct and observable, but on
-this host it is ~4.3–7.4× slower than one server per driver (5.61/1.32 and
-7.41/1.00). The distributed transport opens a gloo/TCP pair per client, and
-that cost dominates at 32–64 slots. `ProcessSlotTransport` (shared memory) is
-faster but cannot serve two processes. This is a transport-selection input for
-P6/P7, not a model-compute limit.
+this host it is ~4.5–7× slower than one server per driver (5.43/1.22 and
+6.95/1.00). Both topologies use the same server batching policy
+(`min_batch=2`, `timeout=0.02`), so the difference is the transport: the
+distributed transport opens a gloo/TCP pair per client, while
+`ProcessSlotTransport` uses one shared-memory slot per client and cannot serve
+two processes. This is a transport-selection input for P6/P7, not a
+model-compute limit.
 
-The multi-driver wall clock includes process startup; the steady columns use
-each driver's own post-warmup window, and are the fair comparison.
+The multi-driver wall clock includes process startup. Drivers run concurrently,
+so their steady windows cannot be added into one wall window: the multi steady
+column is the **mean of the per-driver steady rates**, and the full per-driver
+windows are retained in each run's JSON. The wall rate is the aggregate figure.
 
 ### 3.1 Stage timing (retained, first-hand)
 
@@ -117,13 +124,13 @@ each driver's own post-warmup window, and are the fair comparison.
 | stage | seconds |
 |---|---|
 | request_info (native kinds+branches, one call) | 0.002 |
-| views (reuse env-decoded observations) | 0.057 |
-| encode (server round-trip + CUDA encode) | 1.321 |
-| step_levels (all staged STEP phases) | 4.383 |
-| packet assembly | 0.093 |
-| `env.step` (native advance) | 0.210 |
-| accounting + transition emission | 0.040 |
-| reset | 0.075 |
+| views (reuse env-decoded observations) | 0.064 |
+| encode (server round-trip + CUDA encode) | 1.502 |
+| step_levels (all staged STEP phases) | 4.484 |
+| packet assembly | 0.203 |
+| `env.step` (native advance) | 0.211 |
+| accounting + transition emission | 0.258 |
+| reset | 0.106 |
 
 The server round-trip dominates; native stepping is a small fraction.
 
