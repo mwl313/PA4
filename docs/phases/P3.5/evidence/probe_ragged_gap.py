@@ -9,7 +9,6 @@ This probe measures, with identical weights and identical fixed leaves:
   (a) how many ragged rows a realistic battle observation carries,
   (b) the resulting change in encoder output, value, and branch logprobs.
 """
-import json
 import sys
 
 import torch
@@ -17,14 +16,12 @@ import torch
 sys.path.insert(0, "/home/pa4/projects/_pa3_ref")
 sys.path.insert(0, "/home/pa4/projects/PokeAgent4.0")
 
-from types import SimpleNamespace
 
 import numpy as np
 
-from agent.contracts import SPEC
 from agent.model.pa3_model import PA3Model
 from agent.types.observation import ObservationBatch
-from agent.types.ragged import CATEGORICAL, FIELDS, RaggedBatch, _matrix
+from agent.types.ragged import CATEGORICAL, FIELDS, RaggedBatch
 
 
 def build_model(seed=20261006):

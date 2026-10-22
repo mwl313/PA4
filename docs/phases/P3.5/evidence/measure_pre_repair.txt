@@ -1,0 +1,2 @@
+{"num_envs": 16, "wall_seconds": 21.606, "natural_matches": 64, "raw_matches_per_sec": 2.962, "env_transitions": 1024, "transitions_per_sec": 47.39, "duplicate_match_ids": 0}
+{"num_envs": 32, "wall_seconds": 16.504, "natural_matches": 65, "raw_matches_per_sec": 3.938, "env_transitions": 1152, "transitions_per_sec": 69.8, "duplicate_match_ids": 0}

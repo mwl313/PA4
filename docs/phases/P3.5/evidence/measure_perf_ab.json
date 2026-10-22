@@ -1,31 +1,57 @@
 {
-  "method": "same host and virtualenv; pre-repair tree a977a5c extracted with git archive to /tmp and measured with the same venv; repaired tree 06e3b04 measured minutes apart; same config (target_matches=64, seed=1, cuda, FP32, same policy seed)",
-  "pre_repair": {
-    "tree": "a977a5c",
-    "command": "python measure_pre.py (BatchedConfig(num_envs=n, target_matches=64, max_steps=200000, seed=1, device='cuda'))",
-    "runs": [
-      {"num_envs": 16, "wall_seconds": 20.054, "natural_matches": 64,
-       "matches_per_sec": 3.191, "env_transitions": 992,
-       "transitions_per_sec": 49.47, "duplicate_match_ids": 0},
-      {"num_envs": 32, "wall_seconds": 16.202, "natural_matches": 66,
-       "matches_per_sec": 4.074, "env_transitions": 1152,
-       "transitions_per_sec": 71.1, "duplicate_match_ids": 0}
-    ]
-  },
-  "repaired": {
-    "tree": "06e3b04",
-    "command": "uv run --frozen python docs/phases/P3.5/evidence/measure_perf.py",
-    "runs": [
-      {"num_envs": 16, "wall_seconds": 27.523, "natural_matches": 65,
-       "matches_per_sec": 2.362, "env_transitions": 1056,
-       "transitions_per_sec": 38.37, "transitions_dropped": 800,
-       "duplicate_match_ids": 0},
-      {"num_envs": 32, "wall_seconds": 21.367, "natural_matches": 67,
-       "matches_per_sec": 3.136, "env_transitions": 1152,
-       "transitions_per_sec": 53.91, "transitions_dropped": 896,
-       "duplicate_match_ids": 0}
-    ]
-  },
-  "delta_percent": {"16_envs": -26.0, "32_envs": -23.0},
-  "note": "These are the fresh same-session A/B numbers. The earlier P3.5 report recorded -23%/-33% from a different same-host stash/restore run; the repaired endpoint rerun here is 2.362/3.136 matches/s, so the attributable regression is 26%/23% in this A/B. Run-to-run variance is not characterised."
+  "method": "same host and virtualenv; pre-repair tree a977a5c extracted with git archive to /tmp and measured with the same venv; repaired tree measured immediately after; same config (target_matches=64, seed=1, cuda, FP32, same policy seed). Two A/B pairs were measured to expose run-to-run variance.",
+  "pairs": [
+    {
+      "pair": 1,
+      "pre_repair_tree": "a977a5c",
+      "repaired_tree": "06e3b04",
+      "pre_repair": [
+        {"num_envs": 16, "wall_seconds": 20.054, "natural_matches": 64,
+         "matches_per_sec": 3.191, "env_transitions": 992,
+         "transitions_per_sec": 49.47, "duplicate_match_ids": 0},
+        {"num_envs": 32, "wall_seconds": 16.202, "natural_matches": 66,
+         "matches_per_sec": 4.074, "env_transitions": 1152,
+         "transitions_per_sec": 71.1, "duplicate_match_ids": 0}
+      ],
+      "repaired": [
+        {"num_envs": 16, "wall_seconds": 27.523, "natural_matches": 65,
+         "matches_per_sec": 2.362, "env_transitions": 1056,
+         "transitions_per_sec": 38.37, "transitions_dropped": 800,
+         "duplicate_match_ids": 0},
+        {"num_envs": 32, "wall_seconds": 21.367, "natural_matches": 67,
+         "matches_per_sec": 3.136, "env_transitions": 1152,
+         "transitions_per_sec": 53.91, "transitions_dropped": 896,
+         "duplicate_match_ids": 0}
+      ],
+      "delta_percent": {"16_envs": -26.0, "32_envs": -23.0}
+    },
+    {
+      "pair": 2,
+      "pre_repair_tree": "a977a5c",
+      "repaired_tree": "b0e2513",
+      "pre_repair": [
+        {"num_envs": 16, "wall_seconds": 21.606, "natural_matches": 64,
+         "matches_per_sec": 2.962, "env_transitions": 1024,
+         "transitions_per_sec": 47.39, "duplicate_match_ids": 0},
+        {"num_envs": 32, "wall_seconds": 16.504, "natural_matches": 65,
+         "matches_per_sec": 3.938, "env_transitions": 1152,
+         "transitions_per_sec": 69.8, "duplicate_match_ids": 0}
+      ],
+      "repaired": [
+        {"num_envs": 16, "wall_seconds": 26.611, "natural_matches": 65,
+         "matches_per_sec": 2.443, "env_transitions": 1008,
+         "transitions_per_sec": 37.88, "transitions_dropped": 752,
+         "duplicate_match_ids": 0},
+        {"num_envs": 32, "wall_seconds": 20.936, "natural_matches": 64,
+         "matches_per_sec": 3.057, "env_transitions": 1056,
+         "transitions_per_sec": 50.44, "transitions_dropped": 800,
+         "duplicate_match_ids": 0}
+      ],
+      "delta_percent": {"16_envs": -17.5, "32_envs": -22.4}
+    }
+  ],
+  "observed_regression_range_percent": {"16_envs": [-26.0, -17.5],
+                                       "32_envs": [-23.0, -22.4],
+                                       "overall": [-26.0, -17.5]},
+  "note": "The old P3 receipt recorded 5.12/5.47 matches/s in a different host window; comparing to it would overstate the repair cost. The fresh A/B regression is 17.5-26% across two measured pairs, with visible run-to-run variance. One run per configuration per pair."
 }

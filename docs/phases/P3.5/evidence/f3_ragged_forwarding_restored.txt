@@ -1,6 +1,6 @@
 test_real_server_seam_receives_nonempty_ragged (tests.collector.test_server_seam_ragged.ServerSeamRaggedTest.test_real_server_seam_receives_nonempty_ragged) ... ok
 
 ----------------------------------------------------------------------
-Ran 1 test in 3.543s
+Ran 1 test in 3.573s
 
 OK

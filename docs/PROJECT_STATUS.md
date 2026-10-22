@@ -98,18 +98,17 @@ fresh context, so this is a process control, not independent-model proof.
 round-8 fresh-context auditor read the real repo and returned `FINDINGS`; the
 four MAJOR findings (vacuous identity gate, mislabelled `next_observation`, no
 server-seam ragged test, stale provenance/duplicate key) and F5–F9 were fixed
-at `06e3b04` with tests that fail if the fix is reverted.
+at `b0e2513` with tests that fail if the fix is reverted.
 
-- **185 tests green:** P1 39 + P2 51 + collector 95; `check_env_specs` OK.
+- **189 tests green:** P1 39 + P2 51 + collector 99; `check_env_specs` OK.
 - Transport byte-exact on **960** real views, encoder/value parity on CUDA
   **0.000e+00** over **480** views, **2264/2264** negative controls detected.
 - Real server seam with **non-empty ragged** passes; disabling the forwarding
   makes it fail (both runs retained in `evidence/f3_ragged_forwarding_*.txt`).
-- Collector smoke: 4 natural matches, **91 seat records, all `ragged.v2`, 0 drops**.
-- Fresh same-session A/B: pre-repair 3.191/4.074 vs repaired 2.362/3.136
-  matches/s → **−26%/−23%**; `views` (8.26 ms/step) is only leaf extraction and
-  the gate, not the repair cost (`payload_to_transport` runs inside
-  `env_step`/`reset`).
+- Collector smoke: 4 natural matches, **111 seat records, all `ragged.v2`, 0 drops**.
+- Fresh same-session A/B, two pairs: **−26.0%/−23.0%** and **−17.5%/−22.4%**
+  (16/32 envs); `views` (8.56 ms/step) is only leaf extraction and the gate,
+  not the repair cost (`payload_to_transport` runs inside `env_step`/`reset`).
 - PA3 untouched (0 dirty), `uv.lock` unchanged.
 - **P35_I remains BLOCKED** until the round-9 fresh-context audit returns CLEAN.
 

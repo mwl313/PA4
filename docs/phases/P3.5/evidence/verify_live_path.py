@@ -6,12 +6,11 @@ for p in ("/home/pa4/.pa3_build/engine/python", "/home/pa4/projects/_pa3_ref",
     if p not in sys.path:
         sys.path.insert(0, p)
 
-import numpy as np
 import torch
 
 from pa4.env.native_env import PA4EnvBase
 from pa4.env import ragged_transport as _rt
-from pa4.actions.batched_scorer import BatchedConditionalScorer, _ragged_from_td
+from pa4.actions.batched_scorer import _ragged_from_td
 
 from agent.model.pa3_model import PA3Model
 from agent.types.observation import ObservationBatch

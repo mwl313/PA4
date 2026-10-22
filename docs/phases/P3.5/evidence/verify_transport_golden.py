@@ -5,7 +5,8 @@ For real battles, for every seat view:
   2. PA3 canonical  -> RaggedBatch via from_native
   3. P3.5 transport -> transport_to_ragged
   4. assert counts/values/host_counts are IDENTICAL (not "close")
-  5. build ObservationBatch both ways and compare encoder + value outputs
+
+The encoder/value comparison lives in verify_encoder_parity.py.
 """
 import sys
 
@@ -20,11 +21,10 @@ import torch
 from pa4.env.native_env import PA4EnvBase
 from pa4.env import ragged_transport as rt
 
-from agent.types.observation import ObservationBatch
 from agent.types.ragged import FIELDS
 
 
-def canonical_ragged(payload, index):
+def canonical_ragged(payload):
     """PA3's own canonical conversion — the golden reference.
 
     `from_native` is the exact path PA3 uses to turn a native payload into
@@ -38,10 +38,8 @@ def canonical_ragged(payload, index):
 
 
 def main():
-    from pa4.env.obs_fastpath import SliceDecoder
     env = PA4EnvBase(batch_size=4, seed=20261006)
-    td = env.reset()
-    decoder = SliceDecoder(env._engine, env._mod)
+    env.reset()
 
     checked = 0
     mismatch = 0
@@ -59,7 +57,7 @@ def main():
                     continue
 
                 # --- golden: PA3 canonical splitter ---
-                gold = canonical_ragged(payload, 0)
+                gold = canonical_ragged(payload)
 
                 # --- P3.5: transport round-trip ---
                 trans = rt.payload_to_transport(payload, 1)

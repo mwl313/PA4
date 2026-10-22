@@ -11,7 +11,6 @@ for p in ("/home/pa4/.pa3_build/engine/python", "/home/pa4/projects/_pa3_ref",
     if p not in sys.path:
         sys.path.insert(0, p)
 
-import numpy as np
 import torch
 
 from pa4.collector.batched_core import BatchedConfig

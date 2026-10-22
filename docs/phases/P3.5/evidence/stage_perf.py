@@ -4,10 +4,9 @@ This script is NOT an ON/OFF ablation. It records the repaired path only.
 `payload_to_transport` runs inside `env.step`/`reset` (and therefore inside the
 `env_step`/`reset` stages); the `views` stage only extracts leaves and runs the
 identity gate. The end-to-end -26%/-23% headline came from a separate same-host
-manual stash/restore A/B, not from this script.
+git-archive A/B, not from this script.
 """
 import json
-import os
 import sys
 import time
 
@@ -18,7 +17,6 @@ for p in ("/home/pa4/.pa3_build/engine/python", "/home/pa4/projects/_pa3_ref",
 
 from pa4.collector.batched_core import BatchedConfig
 from pa4.collector.run_batched import run_batched
-from pa4.env import ragged_transport as rt
 
 
 def run(label, num_envs, target, seed):
@@ -43,7 +41,7 @@ def run(label, num_envs, target, seed):
 
 def main():
     rows = []
-    rows.append(run("ragged_on", 16, 48, 1))
+    rows.append(run("repaired", 16, 48, 1))
     print(json.dumps(rows[-1], indent=1))
 
 
