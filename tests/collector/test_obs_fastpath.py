@@ -41,6 +41,29 @@ class FastDecodeEquivalenceTest(unittest.TestCase):
             for k in OBS_LEAVES:
                 self.assertTrue(torch.equal(fast[k], full[k]), f"seat{side}.{k}")
 
+    def test_batched_decode_matches_full_per_seat(self):
+        """The hot path uses decode_batch, so it must match authoritative decode.
+
+        Covers several rows and both seats in one payload, which is exactly how
+        the collector decodes: one observe_fixed_batch for all requesting seats.
+        """
+        env = PA4EnvBase(batch_size=3, seed=4)
+        env.reset()
+        dec = SliceDecoder(env._engine, env._mod)
+        pairs = [(r, s) for r in range(3) for s in (0, 1)]
+        handles = [(env._slots[r].slot, env._slots[r].generation) for r, _ in pairs]
+        sides = [s for _, s in pairs]
+        fixed, ragged = env.engine.observe_fixed_batch(handles, sides)
+        payload = env.module.parse_batch(fixed, ragged, len(pairs))
+        batched = dec.decode_batch(payload, len(pairs))
+        for i, (r, s) in enumerate(pairs):
+            full = dec.decode_full(env._slots[r].slot, env._slots[r].generation, s)
+            for k in OBS_LEAVES:
+                self.assertEqual(batched[i][k].shape, full[k].shape, f"{k} shape")
+                self.assertEqual(batched[i][k].dtype, full[k].dtype, f"{k} dtype")
+                self.assertTrue(torch.equal(batched[i][k], full[k]),
+                                f"row{r} seat{s} {k} differs")
+
     def test_verify_contract_passes(self):
         d = SliceDecoder(self.env._engine, self.env._mod)
         d.verify_contract(self.st.slot, self.st.generation)

@@ -11,9 +11,8 @@ Performance techniques, all semantics-preserving:
   * `candidates_batch` is issued per level for ALL pending requests together.
   * `observe_fixed_batch` decodes every requesting seat in ONE call.
   * Observation output tensors are preallocated once and written in place.
-  * Redundant per-row candidate re-validation is removed from the hot path (Rust
-    already enforces legality on submission and returns an explicit error), but a
-    strict mode keeps it available for tests.
+  * The collector does not duplicate candidate legality logic: Rust enforces
+    legality on submission and the P2 env keeps its own pre-submission checks.
   * Inference is submitted phase-wise (all ENCODEs, then all STEP level 0, ...)
     so ProcessSlotTransport sees many simultaneous requests.
 """
@@ -53,7 +52,6 @@ class BatchedConfig:
     min_batch_size: int = 4
     server_timeout: float = 0.05
     result_timeout: float = 300.0
-    strict_validation: bool = False
     use_fast_obs: bool = True
     run_id: str = "pa4-p3-batched"
     worker_index: int = 0
@@ -75,7 +73,6 @@ class BatchedReport:
     seat_records: int = 0
     actor_active_rows: int = 0
     seats_by_seat: list = field(default_factory=lambda: [0, 0])
-    illegal_actions: int = 0
     revisions: int = 0
     truncations: int = 0
     operational_errors: int = 0

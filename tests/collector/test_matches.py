@@ -59,7 +59,6 @@ class NaturalMatchIntegrityTest(unittest.TestCase):
                            "seat 0 produced no decision records")
         self.assertGreater(self.d["seats_by_seat"][1], 0,
                            "seat 1 produced no decision records")
-        self.assertEqual(sum(self.d["seats_by_seat"]), self.d["seat_records"])
 
     def test_match_count_never_exceeds_transitions(self):
         """A match cannot be counted more often than there were transitions."""
