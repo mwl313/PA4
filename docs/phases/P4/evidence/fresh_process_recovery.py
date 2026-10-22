@@ -4,7 +4,7 @@ Satisfies design §6.3: the interrupted path must terminate and relaunch a NEW
 process. The previous proof reloaded in-process, which the auditor flagged.
 
 Flow:
-  1. build theta_0; collect four on-policy cohorts, each validated against the
+  1. build theta_0; collect four cohorts, each validated against the
      snapshot that produced it
   2. Branch A: run iterations 1-4 continuously in this process
   3. Branch B: run iterations 1-2 here, commit a full checkpoint

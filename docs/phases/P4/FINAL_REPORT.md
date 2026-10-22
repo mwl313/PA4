@@ -15,7 +15,7 @@
 | **G4-B** Numerical golden | **PASS** | Stored-action replay max joint delta **4.77e-07** (gate 1e-5); independent golden module imports neither GAE nor loss |
 | **G4-C** Live CUDA PPO-2 | **PASS** | **20/20** iterations, **265** optimizer steps, **20 distinct policy versions**, fingerprint chain intact, 0 NaN/Inf |
 | **G4-D** Durable restore | **PASS** | **fresh process** 27→186: 142/142 tensors, Adam delta `5.355e-09`, steps 19=19; Adam/RNG/step ablations all detected |
-| **G4-E** Full stack + audit | **PASS** | 272 tests green, P0 smoke, two real-source audit rounds, full-stack baseline recorded |
+| **G4-E** Full stack + audit | **PASS** | 272 tests green, P0 smoke, four real-source audit rounds, full-stack baseline recorded |
 
 ---
 
@@ -94,6 +94,7 @@ interpreter and CUDA context resume iterations 3–4 from disk.
 | Optimizer steps | `19 = 19` |
 | Committed matches | `33 = 33` |
 | Ledger | identical |
+| Worst excess over `atol + rtol*|b|` | `-9.993e-06` (inside the bound) |
 | RNG restored | `true` |
 
 **Falsifiable:** dropping Adam restoration moves weights by `9.384e-05`

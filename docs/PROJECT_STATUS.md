@@ -128,11 +128,13 @@ at `e6da02f` with tests that fail if the fix is reverted.
 
 ## Immediate next task
 
-**P3.5 audit (closed).** The Windows-export `pa4-auditor`
-must read the corrected tree (`e6da02f` + this metadata commit) and return
-CLEAN before P35_I can be set PASS. P4 (GAE, PPO-2, optimizer, checkpoint
-parity) is not started. Audit history is in `docs/phases/P3.5/RECEIPT.json`
-and `docs/phases/P3/RECEIPT.json`.
+**P4 is closed.** P3.5 closed PASS and P4 closed PASS with G4-D proven across a
+process restart. The audit history for both phases is in
+`docs/phases/P3.5/RECEIPT.json` and `docs/phases/P4/RECEIPT.json`.
+
+**C1 (Runpod compatibility) is the next phase but is NOT started.** It requires
+separate authorization and spends real money; nothing has been provisioned.
+
 
 ## Artifacts
 
@@ -160,7 +162,7 @@ identity, real Adam updates and atomic checkpoints.
 - **Falsifiable:** dropping Adam restoration moves weights by `9.384e-05`;
   dropping the RNG blob is caught by a measured stream mismatch; dropping the
   step counter is caught by `10` vs `19`.
-- **Two audit rounds** are recorded in `docs/phases/P4/RECEIPT.json`. Round 1
+- **Four audit rounds** are recorded in `docs/phases/P4/RECEIPT.json`. Round 1
   found four MAJOR training-loop defects; round 2 found that the closure
   documentation cited values absent from the artifacts. Both were fixed rather
   than argued.
