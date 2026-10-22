@@ -77,7 +77,7 @@ the no-manifest case.
 ## 5. Continuous vs interrupted-and-resumed (4 iterations)
 
 A controlled comparison at a policy-version boundary. Both branches consume the
-**same on-policy cohorts**, each validated against its own frozen fingerprint.
+**same stored cohorts**, each validated against its own frozen fingerprint.
 
 - **Branch A:** 4 iterations in one process.
 - **Branch B:** 2 iterations → save checkpoint → **reload from disk** → 2 more.
@@ -102,7 +102,7 @@ achievable criterion on this GPU**. The design anticipates this and predeclares
 | Metric | Value |
 |---|---|
 | Resume max abs weight delta | `1.192e-07` |
-| Worst excess over `atol + rtol·\|b\|` | `−9.994e-06` (inside) |
+| Worst excess over `atol + rtol·\|b\|` | `−9.993e-06` (inside) |
 | Tensors passing the criterion | **142 / 142** |
 | Max Adam moment delta | `4.307e-09` |
 | Counters / committed matches / ledger | identical |
@@ -125,8 +125,11 @@ cd /home/pa4/projects/PokeAgent4.0
 uv run --frozen python docs/phases/P4/evidence/proof_checkpoint_state.py
 uv run --frozen python docs/phases/P4/evidence/proof_checkpoint_corruption.py
 uv run --frozen python docs/phases/P4/evidence/control_nondeterminism.py
-uv run --frozen python docs/phases/P4/evidence/proof_resume.py
+uv run --frozen python docs/phases/P4/evidence/fresh_process_recovery.py
+uv run --frozen python docs/phases/P4/evidence/fresh_process_ablation.py \
+    <work_dir> <work_dir>/B_ckpt <work_dir>/cohorts
 uv run --frozen python -m unittest tests.ppo.test_checkpoint -v
+uv run --frozen python -m unittest tests.ppo.test_fresh_process -v
 ```
 
 ## 7. Limitations
@@ -154,8 +157,10 @@ exercise "terminate and relaunch a new process". That gap is now closed by
 3. runs iterations 1-2 and commit a full checkpoint (branch B);
 4. **launches a genuinely new interpreter and CUDA context** via `subprocess`;
 5. the child loads the checkpoint from disk and completes iterations 3-4;
-6. the parent compares model, Adam moments, steps, scheduler, RNG, ledger and
-   accepted cohort identities.
+6. the parent compares model, Adam moments, steps, scheduler, ledger and accepted
+   cohort identities against the child's final artifacts; the child additionally
+   proves a measured RNG round-trip (`check_rng_roundtrip`) from the loaded
+   checkpoint.
 
 ### Measured result (`evidence/fresh_process_recovery.txt`)
 

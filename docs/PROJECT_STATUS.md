@@ -95,7 +95,7 @@ fresh context, so this is a process control, not independent-model proof.
 
 ## P3.5 — Observation Contract Repair (correction package applied; re-audit pending)
 
-**Status: implementation PASS; P35_I BLOCKED pending round-9 audit.** The
+**Status: PASS (9/9). Closed; superseded by P4.** Historical note — the
 round-8 fresh-context auditor read the real repo and returned `FINDINGS`; the
 four MAJOR findings (vacuous identity gate, mislabelled `next_observation`, no
 server-seam ragged test, stale provenance/duplicate key) and F5–F9 were fixed
@@ -112,7 +112,7 @@ at `e6da02f` with tests that fail if the fix is reverted.
   leaf extraction and the gate, not the repair cost (`payload_to_transport`
   runs inside `env_step`/`reset`).
 - PA3 untouched (0 dirty), `uv.lock` unchanged.
-- **P35_I remains BLOCKED** until the round-9 fresh-context audit returns CLEAN.
+- **P35_I closed PASS** after the Windows-export audit (see ADR-009).
 
 ## Open limitations (carried forward, not blocking)
 
@@ -128,7 +128,7 @@ at `e6da02f` with tests that fail if the fix is reverted.
 
 ## Immediate next task
 
-**P3.5 re-audit.** Do not start P4. The round-9 fresh-context `pa4-auditor`
+**P3.5 audit (closed).** The Windows-export `pa4-auditor`
 must read the corrected tree (`e6da02f` + this metadata commit) and return
 CLEAN before P35_I can be set PASS. P4 (GAE, PPO-2, optimizer, checkpoint
 parity) is not started. Audit history is in `docs/phases/P3.5/RECEIPT.json`

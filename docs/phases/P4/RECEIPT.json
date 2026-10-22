@@ -95,8 +95,8 @@
       "optimizer_steps_per_sec": 0.3676,
       "total_wall_seconds": 720.948,
       "inherited_tests": 193,
-      "p4_tests": 75,
-      "total_tests": 268,
+      "p4_tests": 79,
+      "total_tests": 272,
       "p0_smoke": "PASS",
       "audit_read_real_repo": true,
       "audit_access_method": "docs/AUDIT_FROM_WINDOWS.md export of 6027932"

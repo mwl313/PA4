@@ -137,9 +137,15 @@ code and fixed:
 | **M3** collector errors and under-target cohorts silently admitted | `CollectionFailed` raised before training on any error or partial cohort |
 | **M4** microbatch helper had no callers; profile claims false | Real 8-row accumulation inside 64-row minibatches, proven equal to a single forward |
 
-Deferred MINOR items are recorded in `RECEIPT.json` rather than hidden: the resume
-proof reloads from disk in-process rather than spawning a fresh interpreter, and
-some markdown tables cite an earlier run than the preserved artifact.
+Deferred MINOR items are recorded in `RECEIPT.json` rather than hidden. They are
+methodological, not unfixed defects: the ablation's "baseline vs itself" row is
+trivially zero and is labelled as such (cross-run determinism is evidenced
+separately by `control_nondeterminism.py`), and the recovery cohorts are all
+produced by theta_0, so they are not on-policy for iterations 2-4. Both branches
+consume identical data, which is what isolates checkpoint fidelity.
+
+The earlier in-process resume is **superseded** and is no longer described as the
+current proof anywhere in this report.
 
 ---
 
@@ -149,8 +155,10 @@ some markdown tables cite an earlier run than the preserved artifact.
   playing strength, convergence or cost efficiency.
 - CUDA comparisons use the predeclared FP32 bound; exactness is available only on
   CPU paths.
-- The resume check reuses pre-recorded cohorts (permitted for this narrow check
-  only) and is **not** a substitute for the separate 20-iteration live run.
+- The resume check reuses pre-recorded cohorts, all produced by theta_0, so they
+  are not on-policy for iterations 2-4; both branches consume identical data,
+  which is what isolates checkpoint fidelity. It is **not** a substitute for the
+  separate 20-iteration live run.
 
 ## 9. Not started
 

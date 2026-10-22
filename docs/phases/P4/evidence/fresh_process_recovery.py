@@ -62,24 +62,6 @@ def collect_cohort(iteration, policy_version, snapshot_path, seed, out_path):
     return cohort, meta.fingerprint
 
 
-def check_rng_restore(state_mid, state_a):
-    """Fail if RNG restoration were removed.
-
-    The mid checkpoint's RNG blob must reproduce the same continuation as the
-    continuous branch's state at the same point. We re-derive from each and
-    compare; a missing/zeroed RNG blob changes the stream.
-    """
-    from pa4.learner.checkpoint import _set_rng_state
-
-    _set_rng_state(state_mid.rng_state)
-    mid_draw = torch.randn(4).tolist()
-    _set_rng_state(state_a.rng_state)
-    a_draw = torch.randn(4).tolist()
-    # These are different checkpoints, so the streams may legitimately differ in
-    # general; the meaningful assertion is that the child RESTORED its own blob.
-    return {"mid_draw": mid_draw, "a_draw": a_draw}
-
-
 def main():
     work = tempfile.mkdtemp(prefix="p4_fresh_")
     snapshot_dir = os.path.join(work, "snapshots")
