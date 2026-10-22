@@ -19,7 +19,18 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 P3 = os.path.dirname(HERE)
-REPO = os.path.dirname(os.path.dirname(P3))
+
+
+def _repo_root(start):
+    p = start
+    while p != os.path.dirname(p):
+        if os.path.exists(os.path.join(p, "pyproject.toml")):
+            return p
+        p = os.path.dirname(p)
+    raise RuntimeError("repository root not found")
+
+
+REPO = _repo_root(HERE)
 
 
 def _sha():
@@ -116,7 +127,8 @@ def main():
               "duplicate_matches", "operational_errors", "cross_worker_forwards",
               "max_worker_ids_per_forward"]
     with open(os.path.join(P3, "PERFORMANCE_BASELINE.csv"), "w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=fields, extrasaction="ignore")
+        w = csv.DictWriter(fh, fieldnames=fields, extrasaction="ignore",
+                           lineterminator="\n")
         w.writeheader()
         for r in rows:
             w.writerow(r)

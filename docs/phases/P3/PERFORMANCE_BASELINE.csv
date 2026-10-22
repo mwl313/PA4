@@ -1,6 +1,6 @@
-run_id,git_sha,policy_version,device,worker_count,envs_per_worker,total_envs,forward_batch_max,server_batch_mean,window_type,wall_seconds,natural_completions,raw_natural_matches_per_sec,env_transitions,env_transitions_per_sec,behavior_actor_rows,server_encode_calls,server_step_calls,server_reset_calls,policy_forwards,policy_forward_rows,cache_entries_peak,operational_errors,duplicate_completions,stale_rejections,accepted_training_matches_per_sec,profile_notes
-bl_16_1,a8e38b8,1,cuda,1,16,16,31,3.78,cold+steady,6.45,33,5.12,512,79.4,849,904,1864,904,493,1864,32,0,0,,,"single driver, no batch wait; collector code unchanged at 4079610"
-bl_32_1,a8e38b8,1,cuda,1,32,32,63,5.15,cold+steady,10.76,65,6.04,1088,101.1,1807,1927,3964,1927,770,3964,64,0,0,,,"single driver, wider envs; collector code unchanged at 4079610"
-bl_64_16,a8e38b8,1,cuda,1,64,64,64,9.16,cold+steady,11.08,64,5.78,1152,104.0,1928,2036,4280,2036,467,4280,128,0,0,,,"single driver, tuned accumulation (min_batch=16); collector code unchanged at 4079610"
-multi2x16,4079610,1,cuda,2,16,32,,,cold+steady,14.56,64,4.4,1136,78.0,,,,,,,,0,0,,,2 driver processes (multi_driver added at 4079610)
-multi4x16,4079610,1,cuda,4,16,64,,,cold+steady,24.22,134,5.53,2224,91.8,,,,,,,,0,0,,,4 driver processes (multi_driver added at 4079610)
+run_id,git_sha,mode,worker_count,envs_per_worker,total_envs,setup_s,warmup_s,steady_s,matches,matches_per_s,steady_matches,steady_matches_per_s,env_transitions,env_transitions_per_s,forward_batch_max,forward_batch_mean,transitions_stored,transitions_dropped,duplicate_matches,operational_errors,cross_worker_forwards,max_worker_ids_per_forward
+bl_16_1,e524942,single,1,16,16,1.97,1.89,3.72,33,4.1,33,8.88,576,71.5,29,5.81,576,320,0,0,,
+bl_32_1,e524942,single,1,32,32,1.68,2.47,2.87,35,4.66,33,11.51,640,85.3,61,7.07,640,384,0,0,,
+bl_64_16,e524942,single,1,64,64,1.68,4.08,2.59,32,3.62,30,11.59,896,101.5,64,8.28,896,640,0,0,,
+multi2x16,e524942,central,2,16,32,,2,,64,1.22,64,1.54,1120,21.3,62,,1120,608,0,0,212,2
+multi4x16,e524942,central,4,16,64,,2,,130,1.02,130,1.2,2176,17.1,63,,2176,1152,0,0,177,4

@@ -271,6 +271,14 @@ class AccountingUnitTest(unittest.TestCase):
         self.assertEqual(rep.natural_matches, 0)
         self.assertEqual(rep.revisions, 1)
 
+    def test_revised_rows_are_excluded_from_behaviour_records(self):
+        from pa4.collector.transitions import accepted_records
+
+        records = [{"row": 0, "seat": 0}, {"row": 1, "seat": 0}, {"row": 1, "seat": 1}]
+        kept = accepted_records(records, {0})
+        self.assertEqual([(r["row"], r["seat"]) for r in kept], [(1, 0), (1, 1)])
+        self.assertEqual(len(accepted_records(records, set())), 3)
+
     def test_next_episode_same_slot_is_a_new_match(self):
         rep, seen = self._rep(), set()
         account_step(self._out(completed=True),

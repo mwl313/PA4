@@ -52,6 +52,16 @@ class BoundedTransitionStore:
                 "dropped": self.dropped, "retained": len(self._q)}
 
 
+def accepted_records(records: list[dict], revised_rows) -> list[dict]:
+    """Behaviour records only for rows whose step was actually accepted.
+
+    A revised step (`accepted=False`) did not apply the tentative choices, so
+    those seats must not be emitted or counted as on-policy behaviour rows.
+    """
+    revised = set(revised_rows)
+    return [r for r in records if r.get("row") not in revised]
+
+
 def _clone(t):
     return t.detach().to("cpu").clone()
 

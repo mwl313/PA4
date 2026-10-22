@@ -17,7 +17,8 @@ import torch
 from pa4.collector.batched_core import (
     OBS_LEAVES, POLICY_KINDS, BatchedConfig, BatchedReport, StagedInference, _ensure_paths,
 )
-from pa4.collector.transitions import BoundedTransitionStore, seat_record, transition
+from pa4.collector.transitions import (BoundedTransitionStore, accepted_records,
+                                       seat_record, transition)
 
 STAGES = ("request_info", "views", "encode", "step_levels", "packet",
           "env_step", "accounting", "reset")
@@ -221,7 +222,7 @@ def run_batched(cfg: BatchedConfig, clients=None, store: BoundedTransitionStore 
             # ---- 6. accounting (exactly-once, truncations excluded) ----
             t = time.perf_counter()
             revised_rows = {r for r in range(n) if bool(out["next", "request_revised"][r])}
-            accepted = [s for s in seat_records if s["row"] not in revised_rows]
+            accepted = accepted_records(seat_records, revised_rows)
             rep.revised_seat_records += len(seat_records) - len(accepted)
             rep.seat_records += len(accepted)
             rep.actor_active_rows += sum(1 for s in accepted if s["actor_active"])
@@ -384,18 +385,4 @@ def _request_info_all(env):
         k = (int(info[2 * r][0]), int(info[2 * r + 1][0]))
         nb = (len(bytes(info[2 * r][1])), len(bytes(info[2 * r + 1][1])))
         out.append((k, nb))
-    return out
-
-
-def _observe_all(env, pairs):
-    """Decode every requesting (row, seat) in ONE native call."""
-    handles = [(env._slots[r].slot, env._slots[r].generation) for r, _ in pairs]
-    sides = [seat for _, seat in pairs]
-    fixed, ragged = env.engine.observe_fixed_batch(handles, sides)
-    payload = env.module.parse_batch(fixed, ragged, len(pairs))
-    if env._decoder is not None and env._decoder.verified:
-        return env._decoder.decode_batch(payload, len(pairs))
-    out = []
-    for i in range(len(pairs)):
-        out.append({k: torch.as_tensor(payload[k][i]) for k in OBS_LEAVES})
     return out
