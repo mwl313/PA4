@@ -181,6 +181,17 @@ class SliceDecoder:
                     n = int((a != b).sum())
                     raise RuntimeError(
                         f"fast decode value mismatch {k}: {n} differing elements")
+            if fast["_observation_representation"] != full["_observation_representation"]:
+                raise RuntimeError("fast decode representation id mismatch")
+            ra, rb = fast["_ragged_row"], full["_ragged_row"]
+            if sorted(ra) != sorted(rb):
+                raise RuntimeError("fast decode ragged key-set mismatch")
+            for k in ra:
+                a, b = ra[k], rb[k]
+                if a.shape != b.shape or a.dtype != b.dtype:
+                    raise RuntimeError(f"fast decode ragged {k} shape/dtype mismatch")
+                if not torch.equal(a, b):
+                    raise RuntimeError(f"fast decode ragged {k} value mismatch")
         self._verified = True
 
     @property

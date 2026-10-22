@@ -14,6 +14,11 @@ import unittest
 import numpy as np
 import torch
 
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
 from pa4.env import ragged_transport as rt
 from pa4.env.native_env import PA4EnvBase
 
@@ -228,6 +233,20 @@ class NegativeControlTest(unittest.TestCase):
         with self.assertRaises(rt.RaggedOverflow):
             rt.transport_to_ragged(trans, 0)
 
+    def test_decode_rejects_wrong_values_dtype(self):
+        trans = rt.payload_to_transport(self.payload, 1)
+        key = "ragged.base_moves_values"
+        trans[key] = trans[key].to(torch.float64)
+        with self.assertRaises(rt.ObservationContractMismatch):
+            rt.transport_to_ragged(trans, 0)
+
+    def test_decode_rejects_wrong_counts_dtype(self):
+        trans = rt.payload_to_transport(self.payload, 1)
+        key = "ragged.base_moves_counts"
+        trans[key] = trans[key].to(torch.int32)
+        with self.assertRaises(rt.ObservationContractMismatch):
+            rt.transport_to_ragged(trans, 0)
+
 
 class TransitionRetentionTest(unittest.TestCase):
     def test_seat_record_retains_ragged(self):
@@ -259,9 +278,6 @@ class TransitionRetentionTest(unittest.TestCase):
         mutated["_ragged_row"] = row
         self.assertNotEqual(observation_digest(mutated), base)
 
-
-if __name__ == "__main__":
-    unittest.main()
 
 
 class CollectorGateTest(unittest.TestCase):
@@ -352,6 +368,20 @@ class NextObservationTest(unittest.TestCase):
         with self.assertRaises(rt.ObservationContractMismatch):
             next_observation(0, view, True)
 
+    def test_next_observation_invalid_retains_stale_ragged(self):
+        """Wait/Finished keeps the previous leaves; the flag must mark them invalid."""
+        from pa4.collector.transitions import next_observation
+
+        env = PA4EnvBase(batch_size=1, seed=20261006)
+        env.reset()
+        view = env._observe_one(env._slots[0], 0)
+        nxt = next_observation(0, view, False)
+        self.assertFalse(nxt["observation_valid"])
+        self.assertEqual(nxt["observation_representation"],
+                         rt.OBSERVATION_REPRESENTATION)
+        self.assertEqual(set(nxt["observation_ragged"]),
+                         set(view["_ragged_row"]))
+
 
 class ServerDecodeContractTest(unittest.TestCase):
     def test_obs_batch_rejects_missing_ragged(self):
@@ -388,3 +418,22 @@ class ServerDecodeContractTest(unittest.TestCase):
             stacked[overflow_key] = base[overflow_key].unsqueeze(1).repeat(1, 2)
         with self.assertRaises(rt.ObservationContractMismatch):
             _ragged_from_td(stacked, [0], "cpu")
+
+    def test_ragged_from_td_rejects_wrong_counts_dtype(self):
+        from pa4.actions.batched_scorer import _ragged_from_td
+
+        env = PA4EnvBase(batch_size=1, seed=20261006)
+        env.reset()
+        st = env._slots[0]
+        fixed, ragged = env._engine.observe_fixed_batch(
+            [(st.slot, st.generation)], [0])
+        payload = env._mod.parse_batch(fixed, ragged, 1)
+        trans = rt.payload_to_transport(payload, 1)
+        trans["ragged.base_moves_counts"] = trans[
+            "ragged.base_moves_counts"].to(torch.int32)
+        with self.assertRaises(rt.ObservationContractMismatch):
+            _ragged_from_td(trans, [0], "cpu")
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -234,6 +234,12 @@ def _ragged_from_td(td, rows, device):
             raise _rt.ObservationContractMismatch(
                 f"ragged.{family}_values selected shape "
                 f"{tuple(values_sel.shape)} != {(len(idx), _rt.TOKENS, cap, width)}")
+        if counts_sel.dtype != torch.long:
+            raise _rt.ObservationContractMismatch(
+                f"ragged.{family}_counts dtype {counts_sel.dtype} != torch.long")
+        if values_sel.dtype != torch.float32:
+            raise _rt.ObservationContractMismatch(
+                f"ragged.{family}_values dtype {values_sel.dtype} != torch.float32")
         if bool((counts_sel < 0).any()):
             raise _rt.ObservationContractMismatch(f"negative ragged count for {family}")
         if int(counts_sel.max().item()) > cap:
@@ -248,12 +254,18 @@ def _ragged_from_td(td, rows, device):
             raise _rt.ObservationContractMismatch(
                 f"ragged.{family}_lengths selected shape "
                 f"{tuple(lengths_sel.shape)} != {(len(idx),)}")
-        if not torch.equal(lengths_sel.to(torch.long), expected_lengths.to(torch.long)):
+        if lengths_sel.dtype != torch.long:
+            raise _rt.ObservationContractMismatch(
+                f"ragged.{family}_lengths dtype {lengths_sel.dtype} != torch.long")
+        if not torch.equal(lengths_sel, expected_lengths.to(torch.long)):
             raise _rt.ObservationContractMismatch(
                 f"ragged.{family}_lengths disagree with counts")
         overflow_sel = overflow[idx] if overflow.dim() > 0 else overflow
         if overflow.dim() == 0:
             overflow_sel = overflow.unsqueeze(0)
+        if overflow_sel.dtype != torch.bool:
+            raise _rt.ObservationContractMismatch(
+                f"ragged.{family}_overflow dtype {overflow_sel.dtype} != torch.bool")
         if bool(overflow_sel.any()):
             raise _rt.RaggedOverflow(
                 f"ragged family {family!r} carries an overflow flag; "

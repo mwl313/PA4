@@ -237,6 +237,12 @@ class StagedInference:
 
 
 def _view_to_obs(view):
+    """Build the nine-leaf observation used only for layout/active-to-roster.
+
+    P3.5/ADR-009: this is NOT the encoder input. The server rebuilds the full
+    `ObservationBatch` including ragged from the wire request; this object's
+    `ob` is only used for `layout` and `active_to_roster()` on the actor side.
+    """
     from agent.types.observation import ObservationBatch
 
     return ObservationBatch(

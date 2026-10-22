@@ -331,14 +331,23 @@ def validate_transport_row(row, where: str = "view") -> None:
                 f"{where}: ragged.{family}_values must be float32"
                 f"[{TOKENS}, {cap}, {width}], got "
                 f"{tuple(values.shape) if torch.is_tensor(values) else type(values).__name__}")
+        if values.dtype != torch.float32:
+            raise ObservationContractMismatch(
+                f"{where}: ragged.{family}_values dtype {values.dtype} != torch.float32")
+        if not torch.is_tensor(lengths) or lengths.dtype != torch.long:
+            raise ObservationContractMismatch(
+                f"{where}: ragged.{family}_lengths must be torch.long")
         expected = int(counts.sum().item())
-        got = int(lengths.item()) if torch.is_tensor(lengths) and lengths.numel() == 1 else -1
+        got = int(lengths.item()) if lengths.numel() == 1 else -1
         if got != expected:
             raise ObservationContractMismatch(
                 f"{where}: ragged.{family}_lengths {got} != sum(counts) {expected}")
         if not torch.is_tensor(overflow) or overflow.numel() != 1:
             raise ObservationContractMismatch(
                 f"{where}: ragged.{family}_overflow must be a scalar bool")
+        if overflow.dtype != torch.bool:
+            raise ObservationContractMismatch(
+                f"{where}: ragged.{family}_overflow dtype {overflow.dtype} != torch.bool")
         if bool(overflow.item()):
             raise RaggedOverflow(
                 f"{where}: ragged family {family!r} carries an overflow flag; "

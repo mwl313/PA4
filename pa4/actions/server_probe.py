@@ -15,6 +15,11 @@ Rust engine returned. The server only scores and masks them.
 
 `ProcessSlotTransport` requires the request/response *slot* spec to be a single
 unbatched row; the server stacks rows across slots into a leading batch dim.
+
+P3.5/ADR-009: this is the legacy P1 CPU-only reference service. It builds
+nine-leaf `ObservationBatch` objects and does **not** carry the five ragged
+families. Do not use it for P3.5/P4 policy inference; the production actor path
+is `BatchedConditionalScorer` (pa4/actions/batched_scorer.py).
 """
 
 from __future__ import annotations
