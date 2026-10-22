@@ -1,0 +1,24 @@
+cohorts: {1: 8, 2: 8, 3: 8, 4: 9}
+control (same update twice): max abs 1.192e-07  max rel 1.358e+01
+branch A complete
+branch B resumed from disk
+{
+ "control_max_abs_delta": 1.1920928955078125e-07,
+ "control_max_rel_delta": 13.584648132324219,
+ "resume_max_abs_weight_delta": 1.1920928955078125e-07,
+ "resume_worst_excess_over_bound": -9.993474122893531e-06,
+ "resume_tensors_passing": "142/142",
+ "resume_max_abs_adam_delta": 4.307366907596588e-09,
+ "counters_match": true,
+ "rng_match": true,
+ "committed_matches": [
+  33,
+  33
+ ],
+ "ledger_equal": true,
+ "predeclared_atol": 1e-05,
+ "predeclared_rtol": 0.0001
+}
+
+criterion: CUDA FP32 predeclared atol=1e-5, rtol=1e-4 (bitwise not required)
+RESULT: PASS

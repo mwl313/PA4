@@ -19,46 +19,110 @@ from pa4.learner.parity import build_observation, _multi_level_table
 def evaluate_stored_batch(model, rows, device="cpu"):
     """Differentiable joint logprob, entropy and reverse-KL for stored rows.
 
-    Returns a dict of tensors aligned with `rows`:
-        joint_logprob [n]
-        entropy       [n]   (normalized per request; 0 when K<2)
-        uniform_kl    [n]   (KL(U||pi) normalized; 0 when K<2)
-        values        [n]   (observation-only critic, differentiable)
+    Returns {joint_logprob, entropy, uniform_kl, values}, each [n], aligned with
+    `rows`. The critic sees only the pre-action observation.
 
-    The critic sees only the pre-action observation.
+    The encoder runs ONCE for all rows (it is batch-capable), while each row
+    keeps its own multi-level prefix table and saved index. Semantics are
+    identical to scoring rows one at a time; only the encoder call is batched.
     """
     model.train()
-    joints, ents, kls, values = [], [], [], []
+    if not rows:
+        z = torch.zeros(0)
+        return {"joint_logprob": z, "entropy": z, "uniform_kl": z, "values": z}
 
-    for row in rows:
-        obs = build_observation(row, device=device)
-        a2r = obs.active_to_roster()
+    from agent.types.observation import ObservationBatch
+
+    obs_list = [build_observation(row, device=device) for row in rows]
+    batched = _stack_observations(obs_list, device)
+
+    a2rs = [o.active_to_roster() for o in obs_list]
+
+    encoded_all = model.encode(batched)
+    values = model.value(encoded_all)
+
+    joints, ents, kls = [], [], []
+    for i, row in enumerate(rows):
+        single = _slice_encoded(encoded_all, i)
+        a2r = _table_roster(a2rs[i])
         table = _multi_level_table_plain(row, a2r).to(device)
         selected = torch.tensor(
             [[int(b["selected_index"]) for b in row.branches]],
             dtype=torch.long, device=device,
         )
-
-        encoded = model.encode(obs)
-        evaluation = model.evaluate_encoded(encoded, table, selected=selected)
-
-        joint = evaluation.logprob_selected[0, :len(row.branches)].sum()
-        joints.append(joint)
-        values.append(model.value(encoded).reshape(()))
-
-        # Regularizers: PA3 exposes normalized entropy and reverse uniform KL
-        # per branch; a request-level value is the mean over real branches.
-        ent = evaluation.entropy_normalized[0, :len(row.branches)]
-        kl = evaluation.uniform_kl_normalized[0, :len(row.branches)]
-        ents.append(ent.mean())
-        kls.append(kl.mean())
+        evaluation = model.evaluate_encoded(single, table, selected=selected)
+        n = len(row.branches)
+        joints.append(evaluation.logprob_selected[0, :n].sum())
+        ents.append(evaluation.entropy_normalized[0, :n].mean())
+        kls.append(evaluation.uniform_kl_normalized[0, :n].mean())
 
     return {
         "joint_logprob": torch.stack(joints),
         "entropy": torch.stack(ents),
         "uniform_kl": torch.stack(kls),
-        "values": torch.stack(values),
+        "values": values,
     }
+
+
+def _table_roster(a2r):
+    """Roster map for ONE row.
+
+    `active_to_roster()` returns a [2] pair per row. `build_branch_table` indexes
+    it by row, so wrap this single row as a length-1 list rather than unwrapping
+    it to a 2-vector (which PA3 reads as two rows and rejects).
+    """
+    if a2r is None:
+        return None
+    return [a2r[0]]
+
+
+def _stack_observations(obs_list, device):
+    """Concatenate several single-row ObservationBatch objects along batch."""
+    from agent.types.observation import ObservationBatch
+    from agent.types.ragged import FIELDS, RaggedBatch
+
+    if len(obs_list) == 1:
+        return obs_list[0]
+
+    first = obs_list[0]
+    ragged = {}
+    for family in FIELDS:
+        counts = torch.cat([o.ragged[family].counts for o in obs_list], dim=0)
+        values_np = []
+        for o in obs_list:
+            values_np.append(o.ragged[family].values.cpu().numpy())
+        import numpy as np
+
+        vals = np.concatenate(values_np, axis=0)
+        host = np.concatenate([o.ragged[family].host_counts for o in obs_list], axis=0)
+        ragged[family] = RaggedBatch(
+            torch.as_tensor(vals), counts, host,
+        ).to(device)
+
+    return ObservationBatch(
+        token_mask=torch.cat([o.token_mask for o in obs_list], dim=0),
+        categories=torch.cat([o.categories for o in obs_list], dim=0),
+        category_known=torch.cat([o.category_known for o in obs_list], dim=0),
+        floats=torch.cat([o.floats for o in obs_list], dim=0),
+        float_known=torch.cat([o.float_known for o in obs_list], dim=0),
+        flags=torch.cat([o.flags for o in obs_list], dim=0),
+        flag_known=torch.cat([o.flag_known for o in obs_list], dim=0),
+        role_ids=torch.cat([o.role_ids for o in obs_list], dim=0),
+        side_ids=torch.cat([o.side_ids for o in obs_list], dim=0),
+        ragged=ragged,
+    )
+
+
+def _slice_encoded(encoded, i):
+    """One row of a batched EncodedState."""
+    from agent.model.pa3_model import EncodedState
+
+    return EncodedState(
+        tokens=encoded.tokens[i:i + 1],
+        global_repr=encoded.global_repr[i:i + 1],
+        token_mask=encoded.token_mask[i:i + 1],
+        layout=encoded.layout,
+    )
 
 
 def _multi_level_table_plain(row, a2r):
