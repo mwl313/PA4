@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-10-22
 **Current phase:** P4 — Synchronous On-Policy PPO-2 (**closed, fresh-process recovery verified**)
-**Current verdict:** **P4 PASS** (G4-A..G4-E; two audit rounds closed; G4-D proven across a process restart)
+**Current verdict:** **P4 PASS** (G4-A..G4-E; 5 audit rounds closed; G4-D proven across a process restart)
 **Last closed phase:** P4 **PASS** (prior receipts preserved unchanged)
 **Next phase:** C1 — not started (requires separate authorization; nothing provisioned)
 
@@ -93,7 +93,7 @@ fresh context, so this is a process control, not independent-model proof.
   `next_observation`, per-level legal mask/token refs, observation digest and
   per-seat policy provenance.
 
-## P3.5 — Observation Contract Repair (correction package applied; re-audit pending)
+## P3.5 — Observation Contract Repair (closed)
 
 **Status: PASS (9/9). Closed; superseded by P4.** Historical note — the
 round-8 fresh-context auditor read the real repo and returned `FINDINGS`; the
@@ -162,7 +162,7 @@ identity, real Adam updates and atomic checkpoints.
 - **Falsifiable:** dropping Adam restoration moves weights by `9.384e-05`;
   dropping the RNG blob is caught by a measured stream mismatch; dropping the
   step counter is caught by `10` vs `19`.
-- **Four audit rounds** are recorded in `docs/phases/P4/RECEIPT.json`. Round 1
+- **5 audit rounds** are recorded in `docs/phases/P4/RECEIPT.json`. Round 1
   found four MAJOR training-loop defects; round 2 found that the closure
   documentation cited values absent from the artifacts. Both were fixed rather
   than argued.

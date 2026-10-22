@@ -166,14 +166,15 @@ exercise "terminate and relaunch a new process". That gap is now closed by
 
 | Field | Value |
 |---|---|
-| Parent PID → child PID | `27` → `186` (`distinct_processes: true`) |
+| Parent PID → child PID | `19` → `178` (`distinct_processes: true`) |
 | Child device | `NVIDIA GeForce RTX 4060 Ti` (fresh CUDA context) |
 | Model tensors within bound | **142/142** |
-| Model max abs delta | `5.960e-08` |
+| Model max abs delta | `1.192e-07` |
+| Worst excess over the declared bound | `-9.992e-06` (inside) |
 | Adam state ids match | **true** |
 | Adam params with non-zero `exp_avg` | **139 / 142** |
-| Adam max abs delta | `5.355e-09` |
-| Optimizer steps | **19 = 19** |
+| Adam max abs delta | `5.331e-09` |
+| Optimizer steps | **23 = 23** |
 | LR | identical |
 | Committed matches | **33 = 33** |
 | Match ledger | identical |
@@ -187,11 +188,11 @@ ablation child replays the resume four ways against the **same** checkpoint:
 | Ablation | Detection | Magnitude |
 |---|---|---|
 | baseline (full restore) | delta vs itself | `0.000e+00` |
-| **Adam moments dropped** | **detected** | max weight delta **`9.384e-05`** (~9x the `1e-5` bound) |
-| **RNG blob dropped** | **detected** | measured stream mismatch (`rng_restored: false`); weights alone move only `5.960e-08` |
-| **step counter dropped** | **detected** | counter `10` vs `19` |
+| **Adam moments dropped** | **detected** | max weight delta **`1.059e-04`** |
+| **RNG blob dropped** | **detected** | measured stream mismatch (`rng_restored: false`); weights alone move only `7.451e-09` |
+| **step counter dropped** | **detected** | counter `9 vs 23` |
 
-Dropping Adam restoration moves the weights by `9.384e-05`, far outside
+Dropping Adam restoration moves the weights by `1.059e-04`, far outside
 the predeclared FP32 tolerance, so the recovery gate genuinely fails without it.
 RNG loss does not show up in the weights at that magnitude, so it is detected by
 observing that the restored stream does not reproduce the checkpointed

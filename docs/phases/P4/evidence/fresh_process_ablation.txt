@@ -1,28 +1,28 @@
 {
  "full": {
   "model_max_abs_delta_vs_full": 0.0,
-  "steps": 19,
+  "steps": 23,
   "rng_restored": true,
   "committed": 33,
   "ledger_len": 33
  },
  "no_adam": {
-  "model_max_abs_delta_vs_full": 9.384372970089316e-05,
-  "steps": 16,
+  "model_max_abs_delta_vs_full": 0.00010587833821773529,
+  "steps": 23,
   "rng_restored": true,
   "committed": 33,
   "ledger_len": 33
  },
  "no_rng": {
-  "model_max_abs_delta_vs_full": 5.960464477539063e-08,
-  "steps": 19,
+  "model_max_abs_delta_vs_full": 7.450580596923828e-09,
+  "steps": 23,
   "rng_restored": false,
   "committed": 33,
   "ledger_len": 33
  },
  "no_steps": {
-  "model_max_abs_delta_vs_full": 1.4901161193847656e-08,
-  "steps": 10,
+  "model_max_abs_delta_vs_full": 5.960464477539063e-08,
+  "steps": 9,
   "rng_restored": true,
   "committed": 33,
   "ledger_len": 33
@@ -30,9 +30,9 @@
 }
 
 baseline vs itself      : 0.000e+00
-no_adam  model delta    : 9.384e-05   <- must exceed tolerance
-no_rng   model delta    : 5.960e-08   (weights alone cannot see RNG)
+no_adam  model delta    : 1.059e-04   <- must exceed tolerance
+no_rng   model delta    : 7.451e-09   (weights alone cannot see RNG)
 no_rng   flag detected  : True
-no_steps counter gap    : True (10 vs 19)
+no_steps counter gap    : True (9 vs 23)
 
 RESULT: PASS (test is falsifiable)

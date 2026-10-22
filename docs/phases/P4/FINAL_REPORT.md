@@ -15,7 +15,7 @@
 | **G4-B** Numerical golden | **PASS** | Stored-action replay max joint delta **4.77e-07** (gate 1e-5); independent golden module imports neither GAE nor loss |
 | **G4-C** Live CUDA PPO-2 | **PASS** | **20/20** iterations, **265** optimizer steps, **20 distinct policy versions**, fingerprint chain intact, 0 NaN/Inf |
 | **G4-D** Durable restore | **PASS** | **fresh process** 27→186: 142/142 tensors, Adam delta `5.355e-09`, steps 19=19; Adam/RNG/step ablations all detected |
-| **G4-E** Full stack + audit | **PASS** | 272 tests green, P0 smoke, four real-source audit rounds, full-stack baseline recorded |
+| **G4-E** Full stack + audit | **PASS** | 272 tests green, P0 smoke, 5 real-source audit rounds, full-stack baseline recorded |
 
 ---
 
@@ -86,20 +86,20 @@ interpreter and CUDA context resume iterations 3–4 from disk.
 
 | Metric | Value |
 |---|---|
-| Processes | `27` → `186` (distinct) |
+| Processes | `19` → `178` (distinct) |
 | Model tensors within `atol + rtol·|b|` | **142/142** |
-| Max abs weight delta | `5.960e-08` |
+| Max abs weight delta | `1.192e-07` |
 | Adam params with non-zero moments | `139/142` |
-| Max Adam delta | `5.355e-09` |
-| Optimizer steps | `19 = 19` |
+| Max Adam delta | `5.331e-09` |
+| Optimizer steps | `23 = 23` |
 | Committed matches | `33 = 33` |
 | Ledger | identical |
-| Worst excess over `atol + rtol*|b|` | `-9.993e-06` (inside the bound) |
+| Worst excess over `atol + rtol*|b|` | `-9.992e-06` (inside the bound) |
 | RNG restored | `true` |
 
-**Falsifiable:** dropping Adam restoration moves weights by `9.384e-05`
+**Falsifiable:** dropping Adam restoration moves weights by `1.059e-04`
 (detected); dropping the RNG blob is caught by the measured stream mismatch;
-dropping the step counter is caught by `10` vs `19`.
+dropping the step counter is caught by `9 vs 23`.
 
 The earlier in-process comparison (`evidence/resume_parity.txt`) is retained as a
 **superseded** artifact and is not the basis for G4-D.

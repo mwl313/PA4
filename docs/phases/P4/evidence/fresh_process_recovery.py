@@ -151,13 +151,18 @@ def main():
     # ---- comparison -------------------------------------------------
     a_sd = state_a["model"].state_dict()
     abs_max, passed, total = 0.0, 0, 0
+    # Worst excess over the predeclared bound, for THIS comparison. Reporting the
+    # superseded run's figure here would misattribute a measurement.
+    worst_excess = float("-inf")
     for k in a_sd:
         da = a_sd[k].detach().to("cpu").float()
         db = child_model[k].detach().to("cpu").float()
         d = (da - db).abs()
         abs_max = max(abs_max, float(d.max()))
+        bound = ATOL + RTOL * da.abs()
+        worst_excess = max(worst_excess, float((d - bound).max()))
         total += 1
-        if bool((d <= ATOL + RTOL * da.abs()).all()):
+        if bool((d <= bound).all()):
             passed += 1
 
     sa = state_a["optimizer"]["state"]
@@ -190,6 +195,7 @@ def main():
         "child_adam_nonzero": child["adam_nonzero"],
         "model_tensors_passing": f"{passed}/{total}",
         "model_max_abs_delta": abs_max,
+        "worst_excess_over_bound": worst_excess,
         "adam_state_ids_match": adam_ids_match,
         "adam_max_abs_delta": adam_max,
         "steps": [state_a["steps"], final_b_state["steps"]],

@@ -45,8 +45,9 @@ def main():
                     ("model_max_abs_delta", "adam_max_abs_delta", "steps"))
     ab = block_with(E / "fresh_process_ablation.txt",
                     ("no_adam", "no_rng", "no_steps", "full"))
-    rp = block_with(E / "resume_parity.txt",
-                    ("resume_worst_excess_over_bound",))
+    # NOTE: the bound excess must come from the FRESH-PROCESS artifact. Taking
+    # it from resume_parity.txt (the superseded in-process run) is exactly the
+    # misattribution audit round 5 caught.
 
     doc = (D / "CHECKPOINT_RECOVERY.md").read_text(encoding="utf-8")
     fin = (D / "FINAL_REPORT.md").read_text(encoding="utf-8")
@@ -61,9 +62,9 @@ def main():
         "steps": f"{fr['steps'][0]} = {fr['steps'][1]}",
         "committed_matches": f"{fr['committed_matches'][0]} = {fr['committed_matches'][1]}",
         "adam_ablation": f"{ab['no_adam']['model_max_abs_delta_vs_full']:.3e}",
-        "step_ablation": str(ab["no_steps"]["steps"]),
+        "step_ablation": f"{ab['no_steps']['steps']} vs {ab['full']['steps']}",
         "pids": f"{fr['parent_pid']}` → `{fr['child_pid']}",
-        "bound_excess": f"{abs(rp['resume_worst_excess_over_bound']):.3e}",
+        "bound_excess": f"{fr['worst_excess_over_bound']:.3e}",
     }
 
     print("value                  in_recovery  in_report")
@@ -83,12 +84,17 @@ def main():
     if receipt["gate_evidence"]["G4_E"]["p4_tests"] != 79:
         failures.append("receipt G4_E.p4_tests != 79")
 
-    if "before P35_I can be set PASS" in status:
-        failures.append("PROJECT_STATUS still implies P35_I is unset")
-    if "Do not start P4" in status:
-        failures.append("PROJECT_STATUS still says 'Do not start P4'")
-    if "parity) is not started" in status:
-        failures.append("PROJECT_STATUS still says P4 is not started")
+    stale_markers = [
+        "before P35_I can be set PASS",
+        "Do not start P4",
+        "parity) is not started",
+        "re-audit pending",
+        "P35_I remains BLOCKED",
+        "P35_I BLOCKED",
+    ]
+    for marker in stale_markers:
+        if marker in status:
+            failures.append(f"PROJECT_STATUS still contains stale marker: {marker!r}")
     if "closed, fresh-process recovery verified" not in status:
         failures.append("PROJECT_STATUS does not mark P4 closed")
 

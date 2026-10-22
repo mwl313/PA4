@@ -55,18 +55,18 @@
     },
     "G4_D": {
       "method": "fresh process: parent runs 4 continuous iterations; interrupted branch stops after iteration 2, commits a checkpoint, then a NEW interpreter and CUDA context resume iterations 3-4 from disk",
-      "parent_pid": 27,
-      "child_pid": 186,
+      "parent_pid": 19,
+      "child_pid": 178,
       "distinct_processes": true,
       "child_device": "NVIDIA GeForce RTX 4060 Ti",
       "model_tensors_passing": "142/142",
-      "model_max_abs_delta": 5.960464477539063e-08,
+      "model_max_abs_delta": 1.1920928955078125e-07,
       "adam_state_ids_match": true,
       "adam_params_nonzero": 139,
-      "adam_max_abs_delta": 5.3551048040390015e-09,
+      "adam_max_abs_delta": 5.331457941792905e-09,
       "optimizer_steps": [
-        19,
-        19
+        23,
+        23
       ],
       "committed_matches": [
         33,
@@ -75,17 +75,18 @@
       "ledger_match": true,
       "rng_restored": true,
       "falsifiability": {
-        "adam_ablation_model_delta": 9.384372970089316e-05,
+        "adam_ablation_model_delta": 0.00010587833821773529,
         "rng_ablation_detected_by_stream": true,
-        "rng_ablation_model_delta": 5.960464477539063e-08,
+        "rng_ablation_model_delta": 7.450580596923828e-09,
         "step_ablation_counter": [
-          10,
-          19
+          9,
+          23
         ],
         "all_detected": true
       },
       "criterion": "|a-b| <= atol + rtol*|b| with atol=1e-5, rtol=1e-4, predeclared in the design before measurement",
-      "superseded_artifact": "evidence/resume_parity.txt (in-process reload; retained as history, NOT the basis for this gate)"
+      "superseded_artifact": "evidence/resume_parity.txt (in-process reload; retained as history, NOT the basis for this gate)",
+      "worst_excess_over_bound": -9.991740625991952e-06
     },
     "G4_E": {
       "accepted_training_matches_per_sec": 0.4439,
@@ -145,8 +146,27 @@
         ],
         "closed": true,
         "note": "second round audited the acceptance-gap closure, not the training-loop code, and confirmed the fresh-process test is real"
+      },
+      {
+        "round": "3",
+        "verdict": "FINDINGS",
+        "closed": true,
+        "summary": "stale claims contradicted by artifacts: receipt 75/268, final report still described the in-process resume, PROJECT_STATUS said P4 not started"
+      },
+      {
+        "round": "4",
+        "verdict": "FINDINGS",
+        "closed": true,
+        "summary": "surviving PROJECT_STATUS 'Immediate next task' block telling readers to re-audit P3.5 before P4; weak cross-check"
+      },
+      {
+        "round": "5",
+        "verdict": "FINDINGS",
+        "closed": true,
+        "summary": "fresh-process table cited the superseded run's bound excess; audit-round count inconsistent; P3.5 heading still said re-audit pending"
       }
-    ]
+    ],
+    "round_count": 5
   },
   "tests": {
     "p1_action_distribution": 39,
