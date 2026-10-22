@@ -54,21 +54,21 @@ second reading of real files, **not** independent-model verification.
 (not missing access). They are now implemented and measured; the re-audit of the
 tested commit is in progress. No PASS is claimed yet.
 
-- Tested code: `62c2b2fe1b18f33ec3e6c284a0b4265ca276fb14`
-- **151 tests green:** P1 39 + P2 51 + P3 61.
+- Tested code: `68d1edf773af5f4e50107b806350e68401bf0f57`
+- **152 tests green:** P1 39 + P2 51 + P3 62.
 - Real CUDA batching, both topologies:
   - per driver: one forward covering 4 independent rows, `cuda:0`, bmax 64;
   - **central**: one parent-owned `InferenceServer` (`transport="distributed"`)
-    serves 2 and 4 spawned drivers; 258/190 forwards mixed 2/4 worker
+    serves 2 and 4 spawned drivers; 242/179 forwards mixed 2/4 worker
     processes.
 - P3-C **bounded `PA4ActorTransitionV1` retention** implemented: pre-action
   observations, ordered candidates, selected indices, FP32 logprobs, the real
   packet, native outcome, match id, policy version and sha256 weight
   fingerprint; drops are counted.
-- Measured throughput (steady / wall): single driver 8.5–12.1 / 3.8–4.0
-  matches/s; 2 drivers central 1.53 / 1.21, per-driver 11.16 / 5.40; 4 drivers
-  central 1.12 / 0.97, per-driver 8.11 / 5.48.
-- **Finding:** central cross-process inference is correct but ~4.5–5.6× slower
+- Measured throughput (steady / wall): single driver 9.2–13.7 / 4.1–4.4
+  matches/s; 2 drivers central 1.67 / 1.32, per-driver 11.84 / 5.61; 4 drivers
+  central 1.17 / 1.00, per-driver 12.79 / 7.41.
+- **Finding:** central cross-process inference is correct but ~4.3–7.4× slower
   than per-driver servers on this host (gloo/TCP per client). A transport
   selection input for P6/P7.
 - Key earlier finding retained: `ProcessInferenceServer.client()` caches one

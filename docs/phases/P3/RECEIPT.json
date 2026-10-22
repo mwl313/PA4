@@ -5,7 +5,7 @@
   "verdict_scope": "The P3-C transition store, cross-process central batching, weight fingerprints, batch/identity validation, lost-completion guard, revision filtering and cold/steady + stage timing are now implemented and measured. G3-A..G3-D are PASS; G3-E is PENDING the re-audit of this commit. The verdict becomes PASS only if that review is clean.",
   "design_source_sha256": "f73c556794bb406c1bd322a093fe7c05f0f330b32b3763d69c492266e313563e",
   "pa4_base_sha": "4d8f349b247bb929914db5b9ebe2c5ce84c18288",
-  "pa4_tested_code_sha": "62c2b2fe1b18f33ec3e6c284a0b4265ca276fb14",
+  "pa4_tested_code_sha": "68d1edf773af5f4e50107b806350e68401bf0f57",
   "pa4_final_head_sha": "RECORDED_IN_METADATA_COMMIT",
   "pa3_reference_sha": "65bc980abd8e0bbec14158b9ddc2884bb1726a4e",
   "pa3_worktree_dirty_files": 0,
@@ -25,17 +25,17 @@
   "cross_worker_batching": {
     "server": "one parent-owned InferenceServer, transport=distributed",
     "drivers": 4,
-    "cross_worker_forwards_2_drivers": 258,
-    "cross_worker_forwards_4_drivers": 190,
+    "cross_worker_forwards_2_drivers": 242,
+    "cross_worker_forwards_4_drivers": 179,
     "max_worker_ids_per_forward": 4,
     "evidence": "docs/phases/P3/evidence/baseline_multi4x16_central.json"
   },
   "forward_batch_by_run": {
-    "bl_16_1": {"forwards": 358, "bmax": 29, "bmean": 5.85},
-    "bl_32_1": {"forwards": 355, "bmax": 61, "bmean": 6.97},
-    "bl_64_16": {"forwards": 395, "bmax": 64, "bmean": 8.45},
-    "multi2x16_central": {"forwards": 896, "bmax": 62, "bmean": 4.54},
-    "multi4x16_central": {"forwards": 4944, "bmax": 63, "bmean": 1.71}
+    "bl_16_1": {"forwards": 343, "bmax": 29, "bmean": 5.64},
+    "bl_32_1": {"forwards": 356, "bmax": 61, "bmean": 7.0},
+    "bl_64_16": {"forwards": 387, "bmax": 64, "bmean": 7.98},
+    "multi2x16_central": {"forwards": 1065, "bmax": 62, "bmean": 3.81},
+    "multi4x16_central": {"forwards": 5195, "bmax": 64, "bmean": 1.59}
   },
   "policy_weight_fingerprint": "37b1a3a3bc11f59848d13f79909299489d472d173ca9708176a929584084a76c",
   "observation_contract_hash": "dd723dc687a60b0568302fa0b09cfb110cbe67eac2c7022f2b4ffe4dff373e35",
@@ -50,24 +50,24 @@
   },
   "gpu_peak_allocation_gib": null,
   "natural_completed_matches_by_run": {
-    "bl_16_1": 34, "bl_32_1": 32, "bl_64_16": 36,
-    "multi2x16_central": 64, "multi2x16_perdrv": 65,
-    "multi4x16_central": 130, "multi4x16_perdrv": 130
+    "bl_16_1": 32, "bl_32_1": 34, "bl_64_16": 34,
+    "multi2x16_central": 67, "multi2x16_perdrv": 64,
+    "multi4x16_central": 129, "multi4x16_perdrv": 128
   },
   "duplicate_match_ids": 0,
   "invalid_actions": 0,
   "operational_errors": 0,
   "revisions_observed": 0,
   "truncations_observed": 0,
-  "raw_actor_natural_matches_per_sec": 4.02,
-  "best_env_transitions_per_sec": 94.1,
-  "steady_matches_per_sec_best": 12.13,
+  "raw_actor_natural_matches_per_sec": 4.36,
+  "best_env_transitions_per_sec": 120.4,
+  "steady_matches_per_sec_best": 13.7,
   "accepted_training_matches_per_sec": null,
   "accepted_training_matches_note": "no PPO learner exists in P3; always null",
   "p1_regression_test_count": 39,
   "p2_regression_test_count": 51,
-  "p3_test_count": 61,
-  "total_tests": 151,
+  "p3_test_count": 62,
+  "total_tests": 152,
   "check_env_specs": "passed on the P3-modified PA4EnvBase (fast/batched observation path added in P3)",
   "auditor_read_actual_wsl_repo": true,
   "auditor_access_proof": "pa4-auditor returned ACCESS_OK and quoted lines 1-6 of pa4/collector/batched_core.py and pa4/actions/batched_scorer.py verbatim, plus the literal docs/phases/P3 listing.",
@@ -96,7 +96,7 @@
         "model_forward_count == 1 with forward_batch_sizes == [4] for four independent rows",
         "model_device == cuda:0",
         "one server serves 2 and 4 spawned driver processes via transport=distributed",
-        "258 / 190 forwards contained requests from 2 / 4 distinct driver run_ids",
+        "242 / 179 forwards contained requests from 2 / 4 distinct driver run_ids",
         "each row's branch_k, request_key and selected index checked against its own request"
       ]
     },
@@ -136,7 +136,7 @@
         "docs/phases/P3/TENSORDICT_TRANSITION_V1.md"
       ],
       "facts": [
-        "P1 39 + P2 51 + P3 61 = 151 tests green",
+        "P1 39 + P2 51 + P3 62 = 152 tests green",
         "frozen uv.lock unchanged",
         "PA3 reference unmodified",
         "auditor read the actual WSL repository files",
@@ -145,16 +145,16 @@
     }
   },
   "performance": [
-    {"config": "16 envs, 1 driver", "mode": "single", "matches_per_s": 4.02, "steady_matches_per_s": 8.46, "transitions_per_s": 68.1, "bmax": 29, "bmean": 5.85, "measured_at_commit": "62c2b2f"},
-    {"config": "32 envs, 1 driver", "mode": "single", "matches_per_s": 3.79, "steady_matches_per_s": 9.17, "transitions_per_s": 79.7, "bmax": 61, "bmean": 6.97, "measured_at_commit": "62c2b2f"},
-    {"config": "64 envs, 1 driver", "mode": "single", "matches_per_s": 3.78, "steady_matches_per_s": 12.13, "transitions_per_s": 94.1, "bmax": 64, "bmean": 8.45, "measured_at_commit": "62c2b2f"},
-    {"config": "2 drivers x 16 envs", "mode": "central", "matches_per_s": 1.21, "steady_matches_per_s": 1.53, "transitions_per_s": 21.1, "bmax": 62, "bmean": 4.54, "cross_worker_forwards": 258, "max_worker_ids_per_forward": 2, "measured_at_commit": "62c2b2f"},
-    {"config": "2 drivers x 16 envs", "mode": "per_driver", "matches_per_s": 5.4, "steady_matches_per_s": 11.16, "transitions_per_s": 93.1, "bmax": null, "bmean": null, "measured_at_commit": "62c2b2f"},
-    {"config": "4 drivers x 16 envs", "mode": "central", "matches_per_s": 0.97, "steady_matches_per_s": 1.12, "transitions_per_s": 17.3, "bmax": 63, "bmean": 1.71, "cross_worker_forwards": 190, "max_worker_ids_per_forward": 4, "measured_at_commit": "62c2b2f"},
-    {"config": "4 drivers x 16 envs", "mode": "per_driver", "matches_per_s": 5.48, "steady_matches_per_s": 8.11, "transitions_per_s": 98.4, "bmax": null, "bmean": null, "measured_at_commit": "62c2b2f"}
+    {"config": "16 envs, 1 driver", "mode": "single", "matches_per_s": 4.25, "steady_matches_per_s": 9.22, "transitions_per_s": 70.2, "bmax": 29, "bmean": 5.64, "measured_at_commit": "68d1edf"},
+    {"config": "32 envs, 1 driver", "mode": "single", "matches_per_s": 4.36, "steady_matches_per_s": 10.23, "transitions_per_s": 86.2, "bmax": 61, "bmean": 7.0, "measured_at_commit": "68d1edf"},
+    {"config": "64 envs, 1 driver", "mode": "single", "matches_per_s": 4.07, "steady_matches_per_s": 13.7, "transitions_per_s": 99.6, "bmax": 64, "bmean": 7.98, "measured_at_commit": "68d1edf"},
+    {"config": "2 drivers x 16 envs", "mode": "central", "matches_per_s": 1.32, "steady_matches_per_s": 1.67, "transitions_per_s": 22.0, "bmax": 62, "bmean": 3.81, "cross_worker_forwards": 242, "max_worker_ids_per_forward": 2, "measured_at_commit": "68d1edf"},
+    {"config": "2 drivers x 16 envs", "mode": "per_driver", "matches_per_s": 5.61, "steady_matches_per_s": 11.84, "transitions_per_s": 101.0, "bmax": null, "bmean": null, "measured_at_commit": "68d1edf"},
+    {"config": "4 drivers x 16 envs", "mode": "central", "matches_per_s": 1.0, "steady_matches_per_s": 1.17, "transitions_per_s": 17.8, "bmax": 64, "bmean": 1.59, "cross_worker_forwards": 179, "max_worker_ids_per_forward": 4, "measured_at_commit": "68d1edf"},
+    {"config": "4 drivers x 16 envs", "mode": "per_driver", "matches_per_s": 7.41, "steady_matches_per_s": 12.79, "transitions_per_s": 120.4, "bmax": null, "bmean": null, "measured_at_commit": "68d1edf"}
   ],
-  "performance_finding": "Cross-process central batching is correct and observable but ~4.5-5.6x slower than per-driver servers on this host: the distributed transport opens a gloo/TCP pair per client, while ProcessSlotTransport (faster) cannot serve two processes. Reported for P6/P7 transport selection, not as a model-compute conclusion.",
-  "provenance_note": "All performance rows were measured at commit 62c2b2f by docs/phases/P3/evidence/run_baseline.py; each run's full report, including stage timings, is retained as evidence/baseline_<run_id>.json.",
+  "performance_finding": "Cross-process central batching is correct and observable but ~4.3-7.4x slower than per-driver servers on this host: the distributed transport opens a gloo/TCP pair per client, while ProcessSlotTransport (faster) cannot serve two processes. Reported for P6/P7 transport selection, not as a model-compute conclusion.",
+  "provenance_note": "All performance rows were measured at commit 68d1edf by docs/phases/P3/evidence/run_baseline.py; each run's full report, including stage timings, is retained as evidence/baseline_<run_id>.json.",
   "optimisations": [
     "batched decode: one observe_fixed_batch for all requesting seats instead of 2*N calls",
     "collector reuses the env's already-decoded observations instead of decoding twice",
@@ -183,7 +183,7 @@
   ],
   "limitations": [
     "AsyncBatchedCollector is not used; G3-A is a scoped PASS under ADR-008",
-    "central cross-process inference is ~4.5-5.6x slower than per-driver servers on this host (gloo/TCP per client)",
+    "central cross-process inference is ~4.3-7.4x slower than per-driver servers on this host (gloo/TCP per client)",
     "throughput ~5.5 matches/s, far below the 1,000/s stretch goal which the design forbids proving on this GPU",
     "single-driver and central baseline runs use one seed per configuration; run-to-run variance is not characterised",
     "GPU encode/step are nearly flat in batch size; wider batches do not by themselves increase throughput",
@@ -202,7 +202,7 @@
   "test_results": {
     "action_distribution": "Ran 39 tests, OK",
     "environment": "Ran 51 tests, OK",
-    "collector": "Ran 61 tests, OK"
+    "collector": "Ran 62 tests, OK"
   },
   "notes": [
     "One env step remains one native advance attempt; one match is counted once on a unique terminated natural completion.",
