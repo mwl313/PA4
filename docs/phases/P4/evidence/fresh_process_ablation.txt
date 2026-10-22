@@ -1,0 +1,38 @@
+{
+ "full": {
+  "model_max_abs_delta_vs_full": 0.0,
+  "steps": 22,
+  "rng_restored": true,
+  "committed": 32,
+  "ledger_len": 32
+ },
+ "no_adam": {
+  "model_max_abs_delta_vs_full": 9.739083179738373e-05,
+  "steps": 19,
+  "rng_restored": true,
+  "committed": 32,
+  "ledger_len": 32
+ },
+ "no_rng": {
+  "model_max_abs_delta_vs_full": 1.1920928955078125e-07,
+  "steps": 22,
+  "rng_restored": false,
+  "committed": 32,
+  "ledger_len": 32
+ },
+ "no_steps": {
+  "model_max_abs_delta_vs_full": 1.1920928955078125e-07,
+  "steps": 10,
+  "rng_restored": true,
+  "committed": 32,
+  "ledger_len": 32
+ }
+}
+
+baseline vs itself      : 0.000e+00
+no_adam  model delta    : 9.739e-05   <- must exceed tolerance
+no_rng   model delta    : 1.192e-07   <- must be nonzero
+no_rng   flag detected  : True
+no_steps counter gap    : True (10 vs 22)
+
+RESULT: PASS (test is falsifiable)

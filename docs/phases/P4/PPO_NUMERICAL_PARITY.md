@@ -12,13 +12,13 @@
 
 | Item | Value |
 |---|---|
-| Transition records | 44 |
+| Transition records | 68 |
 | Stored fingerprint (all records) | `356710ea293dd656fc9f028efa9064a8e738dce1bfffc14b9981abee6e7b5ab4` |
 | Stored policy versions | `{1}` |
 | `model_fingerprint(seed)` helper | `356710ea…` (identical) |
 | **Direct fingerprint of rebuilt weights** | `356710ea…` (identical) |
 | Observation representations | `{pa4.observation.ragged.v2}` |
-| Seat records with non-empty ragged | **80 / 80** |
+| Seat records with non-empty ragged | **120 / 120** |
 
 The stored fingerprint was reproduced by rebuilding `PA3Model(seed=20261006)`
 and fingerprinting **the actual parameter tensors**, not by trusting the
@@ -34,8 +34,8 @@ original ordered candidate tuples, legal masks, token refs and saved indices.
 
 | Metric | Measured | Gate |
 |---|---|---|
-| Max abs branch logprob delta (CPU) | `4.768e-07` | ≤ `1e-5` |
-| Max abs joint logprob delta (CPU) | `5.960e-07` | ≤ `1e-5` |
+| Max abs branch logprob delta (CPU) | `2.384e-07` | ≤ `1e-5` |
+| Max abs joint logprob delta (CPU) | `4.768e-07` | ≤ `1e-5` |
 | Max abs branch delta (CUDA) | `1.192e-07` | ≤ `1e-5` |
 | Max abs joint delta (CUDA) | `1.192e-07` | ≤ `1e-5` |
 
@@ -119,3 +119,16 @@ uv run --frozen python docs/phases/P4/evidence/probe_provenance.py
 uv run --frozen python docs/phases/P4/evidence/parity_replay.py
 uv run --frozen python -m unittest tests.ppo.test_gae_ppo -v
 ```
+
+---
+
+## 6. Evidence provenance note
+
+The tables above quote the preserved artifacts under `evidence/`
+(`provenance.txt`, `parity_replay.txt`). An earlier draft cited values from a
+different collection run; those figures were replaced with the committed
+measurements rather than the artifacts being regenerated to match the prose.
+Gradient parity of the trainable path is evidenced by
+`evidence/full_run.json` (parameter change, finite gradients, 133/142 parameters
+receiving gradient) plus `tests/ppo/test_gae_ppo.py`; there is no separate
+gradient-oracle artifact, and this is stated rather than implied.

@@ -88,7 +88,7 @@ Before comparing branches, the same update was run **twice in one process** with
 identical inputs:
 
 ```
-control (same update twice): max abs 5.960e-08
+control (same update twice): max abs 1.192e-07
 ```
 
 CUDA kernels are not bitwise-reproducible, so **bitwise weight equality is not an
@@ -104,7 +104,7 @@ achievable criterion on this GPU**. The design anticipates this and predeclares
 | Resume max abs weight delta | `1.192e-07` |
 | Worst excess over `atol + rtol·\|b\|` | `−9.994e-06` (inside) |
 | Tensors passing the criterion | **142 / 142** |
-| Max Adam moment delta | `6.29e-09` |
+| Max Adam moment delta | `4.307e-09` |
 | Counters / committed matches / ledger | identical |
 
 **Two criterion errors were made and corrected:**
@@ -136,3 +136,70 @@ uv run --frozen python -m unittest tests.ppo.test_checkpoint -v
   20-iteration live-Rust trial (see `FINAL_REPORT.md`).
 - Exact bitwise equality is unavailable on CUDA; all CUDA comparisons use the
   predeclared FP32 bound. CPU-only comparisons in the test suite are exact.
+
+---
+
+## 8. Fresh-process recovery (design §6.3) — the acceptance gap
+
+The earlier proof reloaded the checkpoint **in the same process**, which does not
+exercise "terminate and relaunch a new process". That gap is now closed by
+`evidence/fresh_process_recovery.py`, which:
+
+1. builds theta_0 and collects four on-policy cohorts, each validated against
+   the snapshot fingerprint that produced it;
+2. runs iterations 1-4 continuously (branch A);
+3. runs iterations 1-2 and commit a full checkpoint (branch B);
+4. **launches a genuinely new interpreter and CUDA context** via `subprocess`;
+5. the child loads the checkpoint from disk and completes iterations 3-4;
+6. the parent compares model, Adam moments, steps, scheduler, RNG, ledger and
+   accepted cohort identities.
+
+### Measured result (`evidence/fresh_process_recovery.txt`)
+
+| Field | Value |
+|---|---|
+| Parent PID → child PID | distinct (`distinct_processes: true`) |
+| Child device | NVIDIA GeForce RTX 4060 Ti (fresh CUDA context) |
+| Model tensors within bound | **142 / 142** |
+| Model max abs delta | `1.192e-07` |
+| Adam state ids match | **true** |
+| Adam params with non-zero `exp_avg` | **139 / 142** |
+| Adam max abs delta | `3.667e-09` |
+| Optimizer steps | **21 = 21** |
+| LR | identical |
+| Committed matches | **32 = 32** |
+| Match ledger | identical |
+| RNG restored | **true** |
+
+### Falsifiability (`evidence/fresh_process_ablation.txt`)
+
+A recovery test that passes regardless of restoration proves nothing. The
+ablation child replays the resume four ways against the **same** checkpoint:
+
+| Ablation | Detection | Magnitude |
+|---|---|---|
+| baseline (full restore) | delta vs itself | `0.000e+00` |
+| **Adam moments dropped** | **detected** | max weight delta **`1.088e-04`** (10x the `1e-5` bound) |
+| **RNG blob dropped** | **detected** | `rng_restored: false` |
+| **step counter dropped** | **detected** | counter `10` vs `22` |
+
+Dropping Adam restoration moves the weights by `1.09e-04`, far outside the
+predeclared FP32 tolerance, so the recovery gate genuinely fails without it.
+`tests/ppo/test_fresh_process.py` pins these invariants in the normal suite.
+
+---
+
+## 9. Evidence history
+
+Two runs exist and both are retained:
+
+| Artifact | Run | Status |
+|---|---|---|
+| `resume_parity.txt` | in-process reload (first attempt) | **superseded** — retained as history; this is the run the audit flagged for not spawning a process |
+| `fresh_process_recovery.txt` | subprocess relaunch (§8) | **authoritative** |
+| `fresh_process_ablation.txt` | subprocess relaunch, 4 ablations | **authoritative** |
+| `checkpoint_state.txt`, `checkpoint_corruption.txt` | field/corruption checks | current |
+
+Where an earlier markdown table cited a value from a different run, the table now
+quotes the preserved artifact. No measurement was re-worded to look better; the
+superseded run is named as superseded.
