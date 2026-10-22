@@ -6,7 +6,7 @@
   "design_source_sha256": "f73c556794bb406c1bd322a093fe7c05f0f330b32b3763d69c492266e313563e",
   "pa4_base_sha": "4d8f349b247bb929914db5b9ebe2c5ce84c18288",
   "pa4_tested_code_sha": "13395df0e731cdc93996d63306c74703257c1dd6",
-  "pa4_final_head_sha": "RECORDED_IN_FINAL_METADATA_COMMIT",
+  "pa4_final_head_sha": "0cde22c0f9d6b64b2124a88f8beee49a5c75b4e1",
   "pa3_reference_sha": "65bc980abd8e0bbec14158b9ddc2884bb1726a4e",
   "pa3_worktree_dirty_files": 0,
   "dependency_lock_sha256": "8f414f526aad676f6466099da9bf96240f739abae9b9376a5c32fe845340d96e",
@@ -482,7 +482,8 @@
     "The P3 execution prompt file named in the task does not exist on this machine; PA4-P3-DESIGN-v1.0 was used as the authority.",
     "No P4/PPO/optimizer/cloud work was performed.",
     "No secrets committed; no push without authorization.",
-    "The 158 tests were re-run on the final tree (03b7834/5c9096a); the only later changes are evidence and documentation."
+    "The 158 tests were re-run on the final tree (03b7834/5c9096a); the only later changes are evidence and documentation.",
+    "pa4_final_head_sha names the commit carrying the final phase artifacts (0cde22c); metadata commits after it only record that sha and this note in the receipt."
   ],
   "generated_at": "2026-10-22",
   "pa4_measurement_commit": "5c9096a35f9b01775a458d2ac4aea9c3ad6eedaf",
