@@ -129,6 +129,7 @@ def main():
 
     def _norm(text):
         """Collapse whitespace/backticks so 27 -> 186 and 27->186 both match."""
+        text = text.replace("\u2192", "->").replace("\u2014", "-")
         return _re.sub(r"[\s`]+", "", text)
 
     receipt_text = (D / "RECEIPT.json").read_text(encoding="utf-8")
@@ -136,12 +137,55 @@ def main():
             ("CHECKPOINT_RECOVERY.md", doc),
             ("FINAL_REPORT.md", fin),
             ("PROJECT_STATUS.md", status),
-            ("RECEIPT.json", receipt_text)):
+            ):
         norm = _norm(doc_text)
         for token, label in superseded_tokens.items():
             if _norm(token) in norm:
                 failures.append(
                     f"{doc_name} still cites {label}: {token!r}")
+    # --- structural RECEIPT check -------------------------------------
+    # String scanning cannot see "parent_pid": 27 vs `27` -> `186`, nor a
+    # full-precision float vs its 3-digit spelling, so a revert of G4_D would
+    # slip through. Compare the parsed fields against the live artifact instead.
+    g4d = receipt["gate_evidence"]["G4_D"]
+    expect = {
+        "parent_pid": fr["parent_pid"],
+        "child_pid": fr["child_pid"],
+        "model_tensors_passing": fr["model_tensors_passing"],
+        "model_max_abs_delta": fr["model_max_abs_delta"],
+        "adam_max_abs_delta": fr["adam_max_abs_delta"],
+        "optimizer_steps": fr["steps"],
+        "committed_matches": fr["committed_matches"],
+        "worst_excess_over_bound": fr["worst_excess_over_bound"],
+        "adam_params_nonzero": fr["child_adam_nonzero"],
+        "ledger_match": fr["ledger_match"],
+        "rng_restored": fr["child_rng_restored"],
+    }
+    for key, want in expect.items():
+        got = g4d.get(key)
+        same = (got == want) or (
+            isinstance(got, float) and isinstance(want, float)
+            and abs(got - want) <= 1e-15)
+        if not same:
+            failures.append(
+                f"RECEIPT.json gate_evidence.G4_D.{key} = {got!r} but the "
+                f"artifact says {want!r} (stale receipt)")
+
+    fals = g4d.get("falsifiability") or {}
+    fals_expect = {
+        "adam_ablation_model_delta": ab["no_adam"]["model_max_abs_delta_vs_full"],
+        "step_ablation_counter": [ab["no_steps"]["steps"], ab["full"]["steps"]],
+    }
+    for key, want in fals_expect.items():
+        got = fals.get(key)
+        same = (got == want) or (
+            isinstance(got, float) and isinstance(want, float)
+            and abs(got - want) <= 1e-15)
+        if not same:
+            failures.append(
+                f"RECEIPT.json falsifiability.{key} = {got!r} but the artifact "
+                f"says {want!r} (stale receipt)")
+
     for name in ("resume_parity.txt", "_resume_helpers.py", "proof_resume_core.py"):
         if not (E / name).exists():
             failures.append(f"superseded artifact deleted: {name}")
