@@ -27,7 +27,8 @@ FIELDS = [
     "checkpoint_path", "checkpoint_sha256",
     "generated_matches", "accepted_matches", "incomplete_episodes",
     "dropped", "duplicates", "transition_records",
-    "actor_rows", "value_rows", "optimizer_steps", "epochs_run", "early_stopped",
+    "actor_rows", "value_rows", "optimizer_steps",
+    "cumulative_optimizer_steps", "epochs_run", "early_stopped",
     "lr", "approx_kl", "clip_fraction", "grad_norm",
     "loss_policy", "loss_value", "entropy", "uniform_kl",
     "committed_matches", "params_changed", "max_param_delta", "nan_inf",
@@ -67,6 +68,7 @@ def main():
     total_generated = sum(r.generated_matches for r in records)
     total_actor = sum(r.actor_rows for r in records)
     total_steps = sum(r.optimizer_steps for r in records)
+    final_cumulative = records[-1].cumulative_optimizer_steps if records else 0
     total_row_passes = sum(r.actor_rows * max(1, r.epochs_run) for r in records)
 
     summary = {
@@ -76,7 +78,8 @@ def main():
         "generated_natural_matches": total_generated,
         "accepted_unique_matches": total_accepted,
         "policy_rows": total_actor,
-        "optimizer_steps": total_steps,
+        "optimizer_steps_per_iteration_sum": total_steps,
+        "optimizer_steps_cumulative_final": final_cumulative,
         "peak_vram_mib": round(peak_vram, 1),
         "raw_completed_matches_per_sec": round(total_generated / total_wall, 4),
         "accepted_training_matches_per_sec": round(total_accepted / total_wall, 4),

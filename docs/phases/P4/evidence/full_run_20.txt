@@ -1,30 +1,31 @@
-run_dir=/home/pa4/p4_run_20
+run_dir=/home/pa4/p4_run_final
 iterations=20 matches_per_iteration=16
 
 {
  "iterations": 20,
  "matches_per_iteration_target": 16,
- "total_wall_seconds": 632.705,
- "generated_natural_matches": 322,
- "accepted_unique_matches": 322,
- "policy_rows": 7270,
- "optimizer_steps": 266,
- "peak_vram_mib": 1303.0,
- "raw_completed_matches_per_sec": 0.5089,
- "accepted_training_matches_per_sec": 0.5089,
- "policy_rows_per_sec": 11.49,
- "learner_row_passes_per_sec": 22.981,
- "optimizer_steps_per_sec": 0.4204,
+ "total_wall_seconds": 720.948,
+ "generated_natural_matches": 320,
+ "accepted_unique_matches": 320,
+ "policy_rows": 7625,
+ "optimizer_steps_per_iteration_sum": 265,
+ "optimizer_steps_cumulative_final": 265,
+ "peak_vram_mib": 574.6,
+ "raw_completed_matches_per_sec": 0.4439,
+ "accepted_training_matches_per_sec": 0.4439,
+ "policy_rows_per_sec": 10.576,
+ "learner_row_passes_per_sec": 20.63,
+ "optimizer_steps_per_sec": 0.3676,
  "dropped_total": 0,
  "duplicates_total": 0,
- "incomplete_total": 56,
+ "incomplete_total": 58,
  "nan_inf_total": 0,
  "iterations_with_zero_steps": 0,
  "iterations_without_param_change": 0,
- "early_stopped_iterations": 1,
+ "early_stopped_iterations": 15,
  "fingerprint_chain_ok": true,
  "distinct_policy_versions": 20,
- "run_dir": "/home/pa4/p4_run_20"
+ "run_dir": "/home/pa4/p4_run_final"
 }
 
 RESULT: PASS

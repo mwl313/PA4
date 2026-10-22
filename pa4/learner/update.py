@@ -143,66 +143,83 @@ class PpoUpdater:
             total_actor = int(batch["actor_mask"].sum())
             total_value = int(batch["value_mask"].sum())
 
-            for start in range(0, n, mini):
-                idx = perm[start:start + mini]
+            for start_idx in range(0, n, mini):
+                idx = perm[start_idx:start_idx + mini]
                 self.optimizer.zero_grad(set_to_none=True)
 
-                # Fresh graph for exactly this minibatch.
-                sub_rows = [rows[int(i)] for i in idx]
-                got = evaluator(sub_rows)
+                mini_actor = int(batch["actor_mask"][idx].sum())
+                mini_value = int(batch["value_mask"][idx].sum())
 
-                a_mask = batch["actor_mask"][idx]
-                v_mask = batch["value_mask"][idx]
-                n_a = int(a_mask.sum())
-                n_v = int(v_mask.sum())
+                # Split THIS effective minibatch into microbatches and
+                # accumulate their gradients before a single optimizer step.
+                loss_finite = True
+                for m0 in range(0, len(idx), micro):
+                    sub_idx = idx[m0:m0 + micro]
+                    sub_rows = [rows[int(i)] for i in sub_idx]
+                    got = evaluator(sub_rows)
 
-                # Scale each term by its share of the FULL minibatch.
-                aw = n_a / max(1, total_actor)
-                vw = n_v / max(1, total_value)
+                    a_mask = batch["actor_mask"][sub_idx]
+                    v_mask = batch["value_mask"][sub_idx]
+                    n_a = int(a_mask.sum())
+                    n_v = int(v_mask.sum())
 
-                terms = ppo_loss.ppo_terms(
-                    got["joint_logprob"], batch["old_lp"][idx],
-                    batch["adv"][idx], batch["ret"][idx], got["values"],
-                    actor_mask=a_mask, value_mask=v_mask,
-                    entropy=got["entropy"], kl=got["uniform_kl"],
-                    clip=self.cfg.clip_epsilon,
-                    value_coef=self.cfg.value_coefficient,
-                    entropy_coef=self.cfg.entropy_coefficient,
-                    kl_coef=self.cfg.uniform_kl_coefficient,
-                    actor_weight=aw, value_weight=vw,
-                )
-                actor_rows += terms.actor_rows
-                value_rows += terms.value_rows
+                    # Each micro contributes its share of the FULL minibatch,
+                    # so the accumulated gradient equals the full-minibatch one.
+                    aw = n_a / max(1, mini_actor)
+                    vw = n_v / max(1, mini_value)
+                    if aw == 0.0 and vw == 0.0:
+                        continue
 
-                if not torch.isfinite(terms.total):
+                    terms = ppo_loss.ppo_terms(
+                        got["joint_logprob"], batch["old_lp"][sub_idx],
+                        batch["adv"][sub_idx], batch["ret"][sub_idx],
+                        got["values"],
+                        actor_mask=a_mask, value_mask=v_mask,
+                        entropy=got["entropy"], kl=got["uniform_kl"],
+                        clip=self.cfg.clip_epsilon,
+                        value_coef=self.cfg.value_coefficient,
+                        entropy_coef=self.cfg.entropy_coefficient,
+                        kl_coef=self.cfg.uniform_kl_coefficient,
+                        actor_weight=aw, value_weight=vw,
+                    )
+                    if not torch.isfinite(terms.total):
+                        loss_finite = False
+                        break
+
+                    terms.total.backward()          # accumulate into .grad
+                    actor_rows += terms.actor_rows
+                    value_rows += terms.value_rows
+                    epoch_stats["policy"] += float(terms.policy.detach()) * aw
+                    epoch_stats["value"] += float(terms.value.detach()) * vw
+                    epoch_stats["entropy"] += float(terms.entropy.detach()) * aw
+                    epoch_stats["kl"] += float(terms.kl.detach()) * aw
+                    if terms.actor_rows:
+                        share = terms.actor_rows / max(1, mini_actor)
+                        epoch_stats["approx_kl"] += terms.approx_kl * share
+                        epoch_stats["clip_fraction"] += terms.clip_fraction * share
+
+                if not loss_finite:
                     res.finite = False
+                    self.optimizer.zero_grad(set_to_none=True)
                     break
-                if terms.actor_rows == 0 and terms.value_rows == 0:
+
+                if mini_actor == 0 and mini_value == 0:
+                    self.optimizer.zero_grad(set_to_none=True)
                     continue
 
-                terms.total.backward()
                 grad_norm = torch.nn.utils.clip_grad_norm_(
                     self.model.parameters(), self.cfg.max_grad_norm)
-
                 grads = [p.grad for p in self.model.parameters() if p.grad is not None]
                 if not grads or not all(torch.isfinite(g).all() for g in grads):
                     res.finite = False
+                    self.optimizer.zero_grad(set_to_none=True)
                     continue
 
                 self.optimizer.step()
                 self.optimizer_steps += 1
                 epoch_steps += 1
-
-                epoch_stats["policy"] += float(terms.policy.detach()) * aw
-                epoch_stats["value"] += float(terms.value.detach()) * vw
-                epoch_stats["entropy"] += float(terms.entropy.detach()) * aw
-                epoch_stats["kl"] += float(terms.kl.detach()) * aw
-                if terms.actor_rows:
-                    share = terms.actor_rows / max(1, total_actor)
-                    epoch_stats["approx_kl"] += terms.approx_kl * share
-                    epoch_stats["clip_fraction"] += terms.clip_fraction * share
-                epoch_stats["grad_norm"] = float(grad_norm)
                 n_minis += 1
+                epoch_stats["grad_norm"] = float(grad_norm)
 
             denom = max(1, n_minis)
             rec = EpochRecord(

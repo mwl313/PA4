@@ -1,0 +1,11 @@
+iteration | steps | restored_from | adam entries
+  1       |     6 | iteration 2            | 142
+  2       |     8 | iteration 2            | 142
+  3       |    14 | iteration 2            | 142
+
+final optimizer_steps : 28
+sum of per-iter steps : 28
+restored on last iter : iteration 2
+parameters with non-zero exp_avg: 139/142
+
+RESULT: PASS

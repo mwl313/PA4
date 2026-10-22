@@ -36,6 +36,21 @@ from pa4.learner.update import PpoUpdater, UpdateConfig
 DEFAULT_SEED = 20261006
 
 
+class CollectionFailed(RuntimeError):
+    """The collector errored or did not reach the required natural-match target.
+
+    Raised BEFORE training, so no optimizer state or committed counter advances.
+    """
+
+
+class NonFiniteUpdate(RuntimeError):
+    """The update produced non-finite loss, gradients or parameters.
+
+    Raised BEFORE the checkpoint is written, so the previous committed state
+    remains authoritative (design 4.4: fail closed, no persisted update).
+    """
+
+
 @dataclass
 class TrainConfig:
     num_envs: int = 4
@@ -71,6 +86,7 @@ class IterationRecord:
     actor_rows: int = 0
     value_rows: int = 0
     optimizer_steps: int = 0
+    cumulative_optimizer_steps: int = 0
     epochs_run: int = 0
     early_stopped: bool = False
     lr: float = 0.0
@@ -130,6 +146,60 @@ class SynchronousTrainer:
         self.cumulative_optimizer_steps = 0
         self.match_ledger: list = []
         self.iteration = 0
+        # M1: ONE persistent learner + optimizer for the whole run. Moments must
+        # survive iterations; a fresh Adam per iteration silently discards them.
+        self._learner = None
+        self._updater = None
+        self._restored_from: str | None = None
+
+    # -- learner / optimizer residency (M1) ----------------------------
+    def _learner_and_updater(self, state_k):
+        """Return the persistent learner, first restoring committed state.
+
+        On the first call the learner is built and loaded from theta_0. On every
+        later call the committed checkpoint (whose model state IS theta_k) is
+        restored in full, including Adam moments, so optimisation continues
+        rather than restarting.
+        """
+        cfg = self.cfg
+        if self._learner is None:
+            self._learner = _build_model(cfg.seed).to(cfg.device)
+            self._updater = PpoUpdater(self._learner, UpdateConfig(
+                ppo_epochs=cfg.ppo_epochs,
+                effective_minibatch_rows=cfg.effective_minibatch_rows,
+                microbatch_rows=cfg.microbatch_rows,
+            ), lr=cfg.lr_start)
+
+        # Always bind the learner to the committed theta_k bytes.
+        self._learner.load_state_dict(state_k, strict=True)
+
+        # Restore optimizer moments when a committed checkpoint exists.
+        ckpt_dir = self.run_dir
+        try:
+            from pa4.learner.checkpoint import load_checkpoint
+
+            committed = load_checkpoint(ckpt_dir)
+        except Exception:  # noqa: BLE001 - first iteration has none
+            committed = None
+
+        if committed is not None:
+            if committed.optimizer_state:
+                self._updater.optimizer.load_state_dict(committed.optimizer_state)
+                self._updater.optimizer_steps = int(committed.optimizer_steps)
+                self._restored_from = f"iteration {committed.iteration}"
+            # The checkpoint's model state is the same theta_k we just loaded;
+            # assert it rather than assuming.
+            for k, v in self._learner.state_dict().items():
+                if k in committed.model_state:
+                    if not torch.equal(v.cpu(), committed.model_state[k].cpu()):
+                        raise RuntimeError(
+                            f"committed checkpoint model state differs from the "
+                            f"served snapshot at tensor {k}")
+        return self._learner, self._updater
+
+    def restored_from(self) -> str | None:
+        """Provenance of the restored optimizer state (None on a cold start)."""
+        return self._restored_from
 
     # -- snapshot helpers ---------------------------------------------
     def _publish(self, state_dict, *, matches: int) -> str:
@@ -176,10 +246,24 @@ class SynchronousTrainer:
 
         verify_lossless(sink)
         records = sink.records()
+        rep_dict = rep.as_dict()
         rec.dropped = sink.accounting.dropped
         rec.duplicates = sink.accounting.duplicates
         rec.transition_records = len(records)
-        rec.generated_matches = rep.as_dict()["natural_matches"]
+        rec.generated_matches = rep_dict["natural_matches"]
+
+        # M3: a collector error or an under-target collection must fail the
+        # iteration BEFORE anything is trained or committed. Design 2.1 step 3.
+        errors = list(getattr(rep, "errors", []) or [])
+        if errors:
+            raise CollectionFailed(
+                f"iteration {rec.iteration}: collector reported {len(errors)} "
+                f"error(s), first: {errors[0]}")
+        if rec.generated_matches < cfg.matches_per_iteration:
+            raise CollectionFailed(
+                f"iteration {rec.iteration}: only {rec.generated_matches} natural "
+                f"matches reached the target {cfg.matches_per_iteration} "
+                "(max_steps or exclusions); refusing to train on a partial cohort")
 
         cohort = build_cohort(records,
                               expected_fingerprint=snap_k.fingerprint,
@@ -211,8 +295,7 @@ class SynchronousTrainer:
         adv_norm = gae.normalize_advantages(adv, actor_mask)
 
         # ---- 3. learner ----------------------------------------------
-        learner = _build_model(cfg.seed).to(cfg.device)
-        learner.load_state_dict(state_k, strict=True)
+        learner, updater = self._learner_and_updater(state_k)
         before = {k: v.detach().clone() for k, v in learner.state_dict().items()}
 
         lr = ppo_loss.learning_rate(
@@ -238,15 +321,33 @@ class SynchronousTrainer:
             """Re-run the trainable forward for this minibatch only."""
             return evaluate_stored_batch(learner, sub_rows, device=cfg.device)
 
-        updater = PpoUpdater(learner, UpdateConfig(
-            ppo_epochs=cfg.ppo_epochs,
-            effective_minibatch_rows=cfg.effective_minibatch_rows,
-            microbatch_rows=cfg.microbatch_rows,
-        ), lr=lr)
+        updater.set_lr(lr)
         result = updater.run(batch, evaluator)
         rec.update_seconds = time.perf_counter() - t_update
 
-        rec.optimizer_steps = result.optimizer_steps
+        # M2: a non-finite update is never committed or published.
+        if not result.finite:
+            raise NonFiniteUpdate(
+                f"iteration {rec.iteration}: non-finite loss or gradient; "
+                "refusing to persist an optimizer update")
+        nonfinite_tensors = sum(
+            1 for t in learner.state_dict().values()
+            if not torch.isfinite(t.float()).all())
+        if nonfinite_tensors:
+            raise NonFiniteUpdate(
+                f"iteration {rec.iteration}: {nonfinite_tensors} non-finite "
+                "parameter tensor(s) after the update")
+        rec.nan_inf = nonfinite_tensors
+        if not result.epochs or all(e.optimizer_steps == 0 for e in result.epochs):
+            raise NonFiniteUpdate(
+                f"iteration {rec.iteration}: no successful optimizer step")
+
+        # `result.optimizer_steps` is the updater's CUMULATIVE count (the
+        # optimizer persists across iterations). Record this iteration's own
+        # steps, and keep the cumulative total separately.
+        epoch_steps = sum(e.optimizer_steps for e in result.epochs)
+        rec.optimizer_steps = epoch_steps
+        rec.cumulative_optimizer_steps = result.optimizer_steps
         rec.epochs_run = len(result.epochs)
         rec.early_stopped = result.early_stopped
         if result.epochs:
@@ -272,7 +373,7 @@ class SynchronousTrainer:
         # authoritative: no clock advance, no new policy version.
         t_ck = time.perf_counter()
         next_matches = self.committed_matches + rec.accepted_matches
-        next_steps = self.cumulative_optimizer_steps + rec.optimizer_steps
+        next_steps = result.optimizer_steps
         next_version = self.policy_version + 1
         next_ledger = list(self.match_ledger) + [
             str(t.match_id) for t in cohort.trajectories]

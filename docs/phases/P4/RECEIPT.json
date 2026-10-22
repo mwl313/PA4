@@ -1,0 +1,134 @@
+{
+  "phase": "P4",
+  "design_id": "PA4-P4-DESIGN-v1.0",
+  "design_sha256": "5d54553d0f5993416985e049486184f21258ac7539ebae478675b12e9d8d0616",
+  "verdict": "PASS",
+  "entry_head_sha": "ec0d7e2",
+  "pa4_tested_code_sha": "AWAITING_COMMIT",
+  "pa3_reference_sha": "65bc980abd8e0bbec14158b9ddc2884bb1726a4e",
+  "pa3_reference_dirty_files": 0,
+  "dependency_lock_sha256": "8f414f526aad676f6466099da9bf96240f739abae9b9376a5c32fe845340d96e",
+  "dependency_lock_changed": false,
+  "rust_engine_modified": false,
+
+  "gates": {
+    "G4_A_lossless_rollouts": "PASS",
+    "G4_B_numerical_golden": "PASS",
+    "G4_C_live_cuda_ppo2": "PASS",
+    "G4_D_durable_restore": "PASS",
+    "G4_E_full_stack_audit": "PASS"
+  },
+
+  "gate_evidence": {
+    "G4_A": {
+      "accepted_transition_drops": 0,
+      "duplicate_matches": 0,
+      "sink": "pa4/learner/sink.py (blocking put, failing offer, no eviction)",
+      "p3_ring_preserved": true,
+      "negative_controls": 17,
+      "note": "produced == acknowledged by construction; ingest rejects fixed9.v1, duplicate request identity, duplicate match_id, illegal selected index, missing seat decisions, truncated episodes"
+    },
+    "G4_B": {
+      "old_branch_logprob_max_abs_delta": 2.384e-07,
+      "old_joint_logprob_max_abs_delta": 4.768e-07,
+      "stored_action_replay_views": 960,
+      "independent_golden_module": "pa4/learner/golden.py (imports neither gae nor ppo_loss)",
+      "declared_atol": 1e-5,
+      "declared_rtol": 1e-4,
+      "gradient_path_parameters_receiving_grad": "133/142",
+      "fixed9_records_refused_at_learner": true,
+      "bug_found_and_fixed": "per-level scoring reset the GRU prefix; drift 0 -> 7e-3 -> 9.9e-3 -> 2.5e-2. One multi-level table with real prefix carry gives 1e-7."
+    },
+    "G4_C": {
+      "iterations_completed": 20,
+      "optimizer_steps_cumulative": 265,
+      "distinct_policy_versions": 20,
+      "fingerprint_chain_ok": true,
+      "ppo_epochs_scheduled": 2,
+      "early_stopped_iterations": 15,
+      "nan_inf": 0,
+      "nan_inf_is_measured": true,
+      "iterations_with_zero_steps": 0,
+      "iterations_without_param_change": 0,
+      "microbatch_rows": 8,
+      "effective_minibatch_rows": 64,
+      "microbatch_accumulation_verified_equal_single_forward": true,
+      "peak_vram_mib": 574.6
+    },
+    "G4_D": {
+      "resume_tensors_passing_combined_bound": "142/142",
+      "resume_max_abs_weight_delta": 1.192e-07,
+      "resume_worst_excess_over_bound": -9.994e-06,
+      "resume_max_abs_adam_delta": 4.307e-09,
+      "nondeterminism_control_same_update_twice": 1.192e-07,
+      "counters_match": true,
+      "ledger_equal": true,
+      "corruption_modes_rejected": [
+        "tampered weights",
+        "truncated file",
+        "bad pointer sha",
+        "model-only save",
+        "foreign schema"
+      ],
+      "adam_persisted_across_iterations": true,
+      "criterion": "|a-b| <= atol + rtol*|b|, predeclared in the design before measurement"
+    },
+    "G4_E": {
+      "accepted_training_matches_per_sec": 0.4439,
+      "raw_completed_matches_per_sec": 0.4439,
+      "policy_rows_per_sec": 10.576,
+      "learner_row_passes_per_sec": 20.63,
+      "optimizer_steps_per_sec": 0.3676,
+      "total_wall_seconds": 720.948,
+      "inherited_tests": 193,
+      "p4_tests": 75,
+      "total_tests": 268,
+      "p0_smoke": "PASS",
+      "audit_read_real_repo": true,
+      "audit_access_method": "docs/AUDIT_FROM_WINDOWS.md export of 6027932"
+    }
+  },
+
+  "audit": {
+    "round": "P4 round 1",
+    "tree": "6027932",
+    "verdict": "FINDINGS (4 MAJOR, 6 MINOR)",
+    "majors_found": [
+      "M1 Adam moments never restored; resume proof compared fresh optimizers",
+      "M2 UpdateResult.finite unread; nan_inf was a hardcoded zero",
+      "M3 collector errors and under-target cohorts silently admitted",
+      "M4 microbatch accumulation helper had no callers; profile claims false"
+    ],
+    "majors_closed": true,
+    "minors_addressed": [
+      "checkpoint parity gate now uses the elementwise combined bound and includes Adam/RNG",
+      "optimizer step metric no longer double-counts the cumulative counter",
+      "microbatch evidence strengthened so the naive-average control is discriminable",
+      "P4 regression tests added for all four majors"
+    ],
+    "minors_deferred": [
+      "resume proof reloads the checkpoint from disk in the same process rather than spawning a fresh interpreter",
+      "some markdown tables cite an earlier run than the preserved artifact"
+    ]
+  },
+
+  "tests": {
+    "p1_action_distribution": 39,
+    "p2_environment": 51,
+    "p3_collector": 103,
+    "p4_ppo": 75,
+    "total": 268,
+    "all_ok": true,
+    "baseline_note": "the original P4 prompt stated 158 inherited tests; the actual inherited baseline is 193 because the approved P3.5 phase added 35. No inherited test was removed or weakened."
+  },
+
+  "limitations": [
+    "P4 proves a correct, restartable on-policy PPO-2 loop. It does not prove learned playing strength or convergence.",
+    "The 20-iteration smoke is a correctness trial, not a throughput or cost-efficiency result.",
+    "CUDA kernels are not bitwise-reproducible; all CUDA comparisons use the predeclared FP32 bound.",
+    "The resume parity comparison reuses pre-recorded cohorts, permitted by the design for this narrow check only.",
+    "Actor-only P3 throughput (matches/s) is historical context and is NOT comparable to the P4 full-stack rate, which includes learner and checkpoint cost."
+  ],
+
+  "not_started": ["C1", "Runpod", "P5", "P6", "P7", "P9"]
+}
