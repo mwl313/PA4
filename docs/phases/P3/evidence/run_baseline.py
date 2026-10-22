@@ -1,8 +1,9 @@
 """P3-D: regenerate the measured baseline with windows and stage timing.
 
-Writes one JSON per configuration under docs/phases/P3/evidence/ and rewrites
-PERFORMANCE_BASELINE.csv from the measured values. Every row records the commit
-that produced it; there is no projection or extrapolation.
+Writes one JSON per configuration under docs/phases/P3/evidence/, rewrites
+PERFORMANCE_BASELINE.csv and BASELINE_STAGE_TIMING.csv from the measured values.
+Every row records the commit that produced it and each retained JSON records the
+run configuration that produced it; there is no projection or extrapolation.
 
 Usage:
     cd /home/pa4/projects/PokeAgent4.0
@@ -19,6 +20,15 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 P3 = os.path.dirname(HERE)
+
+# One seed and one frozen policy per configuration; runs are measured once.
+SEED = 1
+SINGLES = [(16, "bl_16_1", 64), (32, "bl_32_1", 64), (64, "bl_64_16", 64)]
+MULTI = [(2, "multi2x16"), (4, "multi4x16")]
+MULTI_SEED = 1
+MULTI_ENVS = 16
+MULTI_TARGET = 32
+MULTI_WARMUP = 2
 
 
 def _repo_root(start):
@@ -48,6 +58,51 @@ def _save(name, payload):
     return path
 
 
+def _single_config(cfg):
+    return {
+        "num_envs": cfg.num_envs,
+        "target_matches": cfg.target_matches,
+        "max_steps": cfg.max_steps,
+        "seed": cfg.seed,
+        "policy_seed": cfg.policy_seed,
+        "policy_version": cfg.policy_version,
+        "device": cfg.device,
+        "max_batch_size": cfg.max_batch_size,
+        "min_batch_size": cfg.min_batch_size,
+        "server_timeout": cfg.server_timeout,
+        "result_timeout": cfg.result_timeout,
+        "use_fast_obs": cfg.use_fast_obs,
+        "warmup_steps": cfg.warmup_steps,
+        "transition_capacity": cfg.transition_capacity,
+        "workers": 1,
+        "topology": "single_driver",
+    }
+
+
+def _multi_config(num_drivers, central):
+    return {
+        "num_envs_per_driver": MULTI_ENVS,
+        "target_matches_per_driver": MULTI_TARGET,
+        "seed": MULTI_SEED,
+        "workers": num_drivers,
+        "topology": "central" if central else "per_driver",
+        "warmup_steps": MULTI_WARMUP,
+        "server_min_batch": 2,
+        "server_timeout": 0.02,
+        "driver_min_batch": 2,
+        "driver_timeout": 0.02,
+    }
+
+
+def _batch_stats(service_stats):
+    sizes = (service_stats or {}).get("step_forward_batch_sizes") or []
+    return {
+        "forward_batch_max": max(sizes) if sizes else None,
+        "forward_batch_mean": round(sum(sizes) / len(sizes), 2) if sizes else None,
+        "step_forwards": len(sizes),
+    }
+
+
 def main():
     sys.path.insert(0, "/home/pa4/projects/_pa3_ref")
     sys.path.insert(0, REPO)
@@ -57,23 +112,28 @@ def main():
 
     sha = _sha()
     rows = []
+    stage_rows = []
 
-    singles = [(16, "bl_16_1", 32), (32, "bl_32_1", 32), (64, "bl_64_16", 32)]
-    for num_envs, run_id, target in singles:
+    for num_envs, run_id, target in SINGLES:
         cfg = BatchedConfig(
             num_envs=num_envs, target_matches=target, max_steps=20000,
-            seed=1, run_id=run_id, min_batch_size=16, server_timeout=0.002,
+            seed=SEED, run_id=run_id, min_batch_size=16, server_timeout=0.002,
             warmup_steps=8, transition_capacity=256,
         )
         rep = run_batched(cfg)
         d = rep.as_dict()
+        d["run_config"] = _single_config(cfg)
         _save(f"baseline_{run_id}", d)
+        stats = _batch_stats(d.get("service_stats"))
         rows.append({
             "run_id": run_id, "git_sha": sha, "mode": "single",
             "worker_count": 1, "envs_per_worker": num_envs,
             "total_envs": num_envs, "setup_s": round(d["setup_seconds"], 2),
             "warmup_s": round(d["warmup_seconds"], 2),
             "steady_s": round(d["steady_seconds"], 2),
+            "steady_s_max": round(d["steady_seconds"], 2),
+            "steady_steps": d["steady_env_steps"],
+            "window_note": "single-driver: measured post-warmup steps",
             "matches": d["natural_matches"],
             "matches_per_s": round(d["raw_natural_matches_per_sec"] or 0, 2),
             "steady_matches": d["steady_matches"],
@@ -81,61 +141,77 @@ def main():
                                      if d["steady_matches_per_sec"] else None),
             "env_transitions": d["env_transitions"],
             "env_transitions_per_s": round(d["env_transitions_per_sec"] or 0, 1),
-            "forward_batch_max": max((d["service_stats"].get("step_forward_batch_sizes") or [0])
-                                     or [0]),
-            "forward_batch_mean": (round(sum(d["service_stats"]["step_forward_batch_sizes"])
-                                         / len(d["service_stats"]["step_forward_batch_sizes"]), 2)
-                                   if d["service_stats"].get("step_forward_batch_sizes") else None),
+            "forward_batch_max": stats["forward_batch_max"],
+            "forward_batch_mean": stats["forward_batch_mean"],
             "transitions_stored": d["transitions_stored"],
             "transitions_dropped": d["transitions_dropped"],
             "duplicate_matches": d["duplicate_match_ids"],
             "operational_errors": len(d["errors"]),
-            "stage_seconds": d["stage_seconds"],
         })
+        for stage, seconds in sorted(d["stage_seconds"].items()):
+            stage_rows.append({
+                "run_id": run_id, "git_sha": sha, "mode": "single",
+                "worker_count": 1, "driver": 0, "stage": stage,
+                "seconds": round(seconds, 4),
+            })
 
-    multi = [(2, "multi2x16"), (4, "multi4x16")]
-    for num_drivers, base_id in multi:
-      for central in (True, False):
-        run_id = base_id + ("_central" if central else "_perdrv")
-        out = run_multi(num_drivers=num_drivers, num_envs=16, target=32, seed=1,
-                        central=central, warmup=2)
-        _save(f"baseline_{run_id}", out)
-        rows.append({
-            "run_id": run_id, "git_sha": sha,
-            "mode": "central" if central else "per_driver",
-            "worker_count": num_drivers, "envs_per_worker": 16,
-            "total_envs": num_drivers * 16,
-            # Drivers run concurrently: summed windows are not wall windows, so
-            # only the longest per-driver window is reported here. Full
-            # per-driver windows are retained in the JSON.
-            "setup_s": None,
-            "warmup_s": None,
-            "steady_s": None,
-            "steady_s_max": round(out["steady_seconds_max"], 2),
-            "window_note": out["steady_definition"],
-            "matches": out["matches"],
-            "matches_per_s": out["matches_per_s"],
-            "steady_matches": out["steady_matches"],
-            "steady_matches_per_s": out["steady_matches_per_s"],
-            "env_transitions": out["transitions"],
-            "env_transitions_per_s": out["transitions_per_s"],
-            "forward_batch_max": (max((out["service_stats"].get("step_forward_batch_sizes") or [0])
-                                      or [0]) if out.get("service_stats") else None),
-            "forward_batch_mean": (round(sum(out["service_stats"]["step_forward_batch_sizes"])
-                                         / len(out["service_stats"]["step_forward_batch_sizes"]), 2)
-                                   if out.get("service_stats", {}).get("step_forward_batch_sizes")
-                                   else None),
-            "transitions_stored": out["transitions_stored"],
-            "transitions_dropped": out["transitions_dropped"],
-            "duplicate_matches": out["dupes"],
-            "operational_errors": len(out["errors"]),
-            "cross_worker_forwards": out["cross_worker_forwards"],
-            "max_worker_ids_per_forward": out["max_worker_ids_per_forward"],
-        })
+    for num_drivers, base_id in MULTI:
+        for central in (True, False):
+            run_id = base_id + ("_central" if central else "_perdrv")
+            out = run_multi(num_drivers=num_drivers, num_envs=MULTI_ENVS,
+                            target=MULTI_TARGET, seed=MULTI_SEED,
+                            central=central, warmup=MULTI_WARMUP)
+            out["run_config"] = _multi_config(num_drivers, central)
+            _save(f"baseline_{run_id}", out)
+            stats = _batch_stats(out.get("service_stats"))
+            rows.append({
+                "run_id": run_id, "git_sha": sha,
+                "mode": "central" if central else "per_driver",
+                "worker_count": num_drivers, "envs_per_worker": MULTI_ENVS,
+                "total_envs": num_drivers * MULTI_ENVS,
+                # Drivers run concurrently: summed windows are not wall windows, so
+                # only the longest per-driver window is reported here. Full
+                # per-driver windows are retained in the JSON.
+                "setup_s": None,
+                "warmup_s": None,
+                "steady_s": None,
+                "steady_s_max": round(out["steady_seconds_max"], 2),
+                "steady_steps": None,
+                "window_note": out["steady_definition"],
+                "matches": out["matches"],
+                "matches_per_s": out["matches_per_s"],
+                "steady_matches": out["steady_matches"],
+                "steady_matches_per_s": out["steady_matches_per_s"],
+                "env_transitions": out["transitions"],
+                "env_transitions_per_s": out["transitions_per_s"],
+                "forward_batch_max": stats["forward_batch_max"],
+                "forward_batch_mean": stats["forward_batch_mean"],
+                "transitions_stored": out["transitions_stored"],
+                "transitions_dropped": out["transitions_dropped"],
+                "duplicate_matches": out["dupes"],
+                "operational_errors": len(out["errors"]),
+                "cross_worker_forwards": out["cross_worker_forwards"],
+                "max_worker_ids_per_forward": out["max_worker_ids_per_forward"],
+            })
+            for stage, seconds in sorted(out["stage_seconds"].items()):
+                stage_rows.append({
+                    "run_id": run_id, "git_sha": sha,
+                    "mode": "central" if central else "per_driver",
+                    "worker_count": num_drivers, "driver": "aggregate",
+                    "stage": stage, "seconds": round(seconds, 4),
+                })
+            for pd in out.get("per_driver", []):
+                for stage, seconds in sorted(pd.get("stage_seconds", {}).items()):
+                    stage_rows.append({
+                        "run_id": run_id, "git_sha": sha,
+                        "mode": "central" if central else "per_driver",
+                        "worker_count": num_drivers, "driver": pd["worker"],
+                        "stage": stage, "seconds": round(seconds, 4),
+                    })
 
     fields = ["run_id", "git_sha", "mode", "worker_count", "envs_per_worker",
               "total_envs", "setup_s", "warmup_s", "steady_s", "steady_s_max",
-              "window_note", "matches",
+              "steady_steps", "window_note", "matches",
               "matches_per_s", "steady_matches", "steady_matches_per_s",
               "env_transitions", "env_transitions_per_s", "forward_batch_max",
               "forward_batch_mean", "transitions_stored", "transitions_dropped",
@@ -147,6 +223,15 @@ def main():
         w.writeheader()
         for r in rows:
             w.writerow(r)
+
+    stage_fields = ["run_id", "git_sha", "mode", "worker_count", "driver",
+                    "stage", "seconds"]
+    with open(os.path.join(P3, "BASELINE_STAGE_TIMING.csv"), "w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=stage_fields, lineterminator="\n")
+        w.writeheader()
+        for r in stage_rows:
+            w.writerow(r)
+
     print(json.dumps(rows, indent=1, default=str))
 
 
