@@ -199,6 +199,10 @@ class StagedInference:
             self._release(slot)
             if err:
                 raise RuntimeError(f"STEP err {err} at level {level}")
+            if int(r["policy_fingerprint"]) != self.fingerprint_id:
+                raise RuntimeError(
+                    "STEP response weight fingerprint "
+                    f"{int(r['policy_fingerprint'])} != expected {self.fingerprint_id}")
             out.append((ident, int(r["selected_index"]), int(r["branch_k"]),
                         float(r["branch_logprob"]),
                         table.mask[0, 0].tolist(),

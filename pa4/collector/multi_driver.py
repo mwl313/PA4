@@ -116,7 +116,7 @@ def run_multi(num_drivers=4, num_envs=16, target=32, seed=1, device="cuda",
             errors.append(f"timeout: {exc!r}")
             break
         if kind == "ok":
-            results.append(payload)
+            results.append((idx, payload))
         else:
             errors.append(f"driver{idx}: {payload}")
 
@@ -143,18 +143,18 @@ def run_multi(num_drivers=4, num_envs=16, target=32, seed=1, device="cuda",
             pass
 
     wall = time.perf_counter() - t0
-    matches = sum(r["natural_matches"] for r in results)
-    trans = sum(r["env_transitions"] for r in results)
+    matches = sum(r["natural_matches"] for _, r in results)
+    trans = sum(r["env_transitions"] for _, r in results)
     run_sets = service_stats.get("forward_run_ids", []) or []
     cross = [s for s in run_sets if len(set(s)) > 1]
 
-    # Per-driver windows/stages are retained individually; the aggregate steady
-    # rate is the duration-weighted mean of the per-driver steady rates, and is
-    # labelled as such. The max-window figure is a lower bound on wall rate.
+    # Per-driver windows/stages are retained individually. The aggregate steady
+    # rate is the unweighted mean of the per-driver steady rates (drivers run
+    # concurrently, so summing their windows is not a wall window).
     per_driver = []
-    for i, r in enumerate(results):
+    for idx, r in results:
         per_driver.append({
-            "worker": i,
+            "worker": idx,
             "setup_seconds": r.get("setup_seconds", 0.0),
             "warmup_seconds": r.get("warmup_seconds", 0.0),
             "steady_seconds": r.get("steady_seconds", 0.0),
@@ -217,12 +217,12 @@ def run_multi(num_drivers=4, num_envs=16, target=32, seed=1, device="cuda",
                               "concurrently, so the wall rate is the aggregate"),
         "stage_seconds": stage_sum,
         "per_driver": per_driver,
-        "dupes": sum(r["duplicate_match_ids"] for r in results),
-        "errors": errors + [e for r in results for e in r["errors"]],
+        "dupes": sum(r["duplicate_match_ids"] for _, r in results),
+        "errors": errors + [e for _, r in results for e in r["errors"]],
         "per_driver_mps": [round(r["natural_matches"] / max(r["wall_seconds"], 1e-9), 2)
-                           for r in results],
-        "transitions_stored": sum(r.get("transitions_stored", 0) for r in results),
-        "transitions_dropped": sum(r.get("transitions_dropped", 0) for r in results),
+                           for _, r in results],
+        "transitions_stored": sum(r.get("transitions_stored", 0) for _, r in results),
+        "transitions_dropped": sum(r.get("transitions_dropped", 0) for _, r in results),
         "cross_worker_forwards": len(cross),
         "max_worker_ids_per_forward": max((len(set(s)) for s in run_sets), default=0),
         "server_stats": server_stats,

@@ -84,13 +84,16 @@ def observation_digest(view: dict) -> str:
 
 def seat_record(seat: int, request_id: int, view: dict, branches: list[dict],
                 actor_active: bool, joint_logprob_fp32: float,
-                policy_version: int, policy_weight_fingerprint: str) -> dict:
+                policy_version: int, policy_weight_fingerprint: str,
+                request_kind: int, precision_profile: str = "fp32") -> dict:
     """One seat's accepted decision, including its pre-action observation."""
     return {
         "seat": int(seat),
         "request_id": int(request_id),
         "observation": {k: _clone(view[k]) for k in OBS_LEAVES},
         "observation_digest": observation_digest(view),
+        "request_kind": int(request_kind),
+        "precision_profile": precision_profile,
         "actor_active": bool(actor_active),
         "joint_logprob_fp32": float(joint_logprob_fp32),
         "policy_version": int(policy_version),

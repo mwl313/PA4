@@ -1,1 +1,0 @@
-{"model_forward_count": 1, "forward_batch_sizes": [2], "step_rows": 2, "encode_calls": 2, "reset_calls": 0, "cache_size_now": 2, "cache_high_water": 2, "model_device": "cuda:0", "policy_version": 1}

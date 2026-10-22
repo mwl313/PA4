@@ -303,6 +303,14 @@ class BatchedForwardTest(unittest.TestCase):
         self.assertEqual(int(out["policy_fingerprint"][0]), svc.fingerprint_id)
         self.assertEqual(svc.fingerprint_id, default_fingerprint())
 
+    def test_reset_with_foreign_version_rejected(self):
+        svc = BatchedConditionalScorer(device="cuda")
+        e, st, obs = self.envs[0]
+        svc(torch.stack([make_row(e, st, obs, w=0)]))
+        out = svc(torch.stack([make_row(e, st, obs, w=0, op=2, pv=2)]))
+        self.assertEqual(int(out["error_code"][0]), ERR_STALE_IDENTITY)
+        self.assertEqual(svc.cache_size(), 1, "a rejected RESET must not evict the live entry")
+
     def test_reset_evicts_only_the_addressed_entry(self):
         svc = BatchedConditionalScorer(device="cuda")
         rows = [make_row(e, st, obs, w=w) for w, (e, st, obs) in enumerate(self.envs[:2])]

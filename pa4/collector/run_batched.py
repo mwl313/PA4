@@ -207,6 +207,7 @@ def run_batched(cfg: BatchedConfig, clients=None, store: BoundedTransitionStore 
                     joint_logprob_fp32=sum(x["branch_logprob_fp32"] for x in s),
                     policy_version=cfg.policy_version,
                     policy_weight_fingerprint=rep.policy_weight_fingerprint,
+                    request_kind=int(kinds_and_branches[r][0][seat]),
                 ))
                 seat_records[-1]["row"] = r
 

@@ -20,13 +20,13 @@ def run(n, target, seed=1):
     w = time.perf_counter() - t0
     d = rep.as_dict()
     svc = d.get("service_stats") or {}
-    sizes = svc.get("forward_batch_sizes") or []
+    sizes = svc.get("step_forward_batch_sizes") or []
     return {
         "n": n, "matches": d["natural_matches"], "wall_s": round(w, 2),
         "matches_per_s": round(d["natural_matches"] / w, 2) if w else None,
         "transitions": d["env_transitions"],
         "transitions_per_s": round(d["env_transitions"] / w, 1) if w else None,
-        "fwd": svc.get("model_forward_count"),
+        "fwd": svc.get("step_forward_count"),
         "bmean": round(sum(sizes) / len(sizes), 2) if sizes else None,
         "bmax": max(sizes) if sizes else None,
         "errors": len(d["errors"]), "dupes": d["duplicate_match_ids"],
