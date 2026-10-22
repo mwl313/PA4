@@ -75,12 +75,14 @@ class TransportGoldenTest(unittest.TestCase):
                 self.assertTrue(np.array_equal(gc, mc), f"view{index} {fam} counts")
                 self.assertTrue(np.array_equal(gv, mv), f"view{index} {fam} values")
 
-    def test_all_five_families_present_and_nonempty(self):
+    def test_all_five_families_present_and_guaranteed_nonempty(self):
         payload = self._payload([0])
-        counts = payload["base_move_counts"]
-        self.assertGreater(int(np.asarray(counts).sum()), 0)
         for fam, key in rt.RAGGED_COUNT_KEYS.items():
             self.assertIn(key, payload, f"{fam} counts missing from payload")
+        # These families are structurally/always populated; effects and
+        # repertoire can legitimately be empty in a preview view.
+        for key in ("type_counts", "base_move_counts", "move_effect_counts"):
+            self.assertGreater(int(np.asarray(payload[key]).sum()), 0, key)
 
     def test_overflow_fails_closed(self):
         payload = self._payload([0])
@@ -244,6 +246,19 @@ class NegativeControlTest(unittest.TestCase):
         trans = rt.payload_to_transport(self.payload, 1)
         key = "ragged.base_moves_counts"
         trans[key] = trans[key].to(torch.int32)
+        with self.assertRaises(rt.ObservationContractMismatch):
+            rt.transport_to_ragged(trans, 0)
+    def test_decode_rejects_wrong_lengths_dtype(self):
+        trans = rt.payload_to_transport(self.payload, 1)
+        key = "ragged.base_moves_lengths"
+        trans[key] = trans[key].to(torch.int32)
+        with self.assertRaises(rt.ObservationContractMismatch):
+            rt.transport_to_ragged(trans, 0)
+
+    def test_decode_rejects_wrong_overflow_dtype(self):
+        trans = rt.payload_to_transport(self.payload, 1)
+        key = "ragged.base_moves_overflow"
+        trans[key] = trans[key].to(torch.int8)
         with self.assertRaises(rt.ObservationContractMismatch):
             rt.transport_to_ragged(trans, 0)
 
@@ -431,6 +446,35 @@ class ServerDecodeContractTest(unittest.TestCase):
         trans = rt.payload_to_transport(payload, 1)
         trans["ragged.base_moves_counts"] = trans[
             "ragged.base_moves_counts"].to(torch.int32)
+        with self.assertRaises(rt.ObservationContractMismatch):
+            _ragged_from_td(trans, [0], "cpu")
+    def test_ragged_from_td_rejects_wrong_lengths_dtype(self):
+        from pa4.actions.batched_scorer import _ragged_from_td
+
+        env = PA4EnvBase(batch_size=1, seed=20261006)
+        env.reset()
+        st = env._slots[0]
+        fixed, ragged = env._engine.observe_fixed_batch(
+            [(st.slot, st.generation)], [0])
+        payload = env._mod.parse_batch(fixed, ragged, 1)
+        trans = rt.payload_to_transport(payload, 1)
+        trans["ragged.base_moves_lengths"] = trans[
+            "ragged.base_moves_lengths"].to(torch.int32)
+        with self.assertRaises(rt.ObservationContractMismatch):
+            _ragged_from_td(trans, [0], "cpu")
+
+    def test_ragged_from_td_rejects_wrong_overflow_dtype(self):
+        from pa4.actions.batched_scorer import _ragged_from_td
+
+        env = PA4EnvBase(batch_size=1, seed=20261006)
+        env.reset()
+        st = env._slots[0]
+        fixed, ragged = env._engine.observe_fixed_batch(
+            [(st.slot, st.generation)], [0])
+        payload = env._mod.parse_batch(fixed, ragged, 1)
+        trans = rt.payload_to_transport(payload, 1)
+        trans["ragged.base_moves_overflow"] = trans[
+            "ragged.base_moves_overflow"].to(torch.int8)
         with self.assertRaises(rt.ObservationContractMismatch):
             _ragged_from_td(trans, [0], "cpu")
 

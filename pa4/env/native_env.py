@@ -455,15 +455,9 @@ class PA4EnvBase(EnvBase):
                 sides = [h[2] for h in fetch]
                 fixed, ragged = self._engine.observe_fixed_batch(handles, sides)
                 payload = self._mod.parse_batch(fixed, ragged, len(fetch))
+                # `decode_batch` attaches the P3.5 ragged transport row for each
+                # view. Do not convert the same payload a second time here.
                 views = self._decoder.decode_batch(payload, len(fetch))
-                # P3.5/ADR-009: the canonical decoder has always received the
-                # ragged blob; before this repair it was discarded here. Attach
-                # the P3.5 transport tensors so every seat view carries all five
-                # families through the TensorDict instead of silently zeroing them.
-                transport = _ragged.payload_to_transport(payload, len(fetch))
-                for i in range(len(fetch)):
-                    views[i] = dict(views[i])
-                    views[i]["_ragged_row"] = _ragged.transport_rows(transport, i)
             else:
                 # Authoritative path: PA3's full adapter supplies the
                 # layout-derived role/side ids that the raw payload omits.
