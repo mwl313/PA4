@@ -1,15 +1,17 @@
 # PA4 Project Status
 
 **Last updated:** 2026-10-22
-**Current phase:** P2 — Rust ↔ TorchRL Environment Adapter (**complete**)
-**Current verdict:** **P2 PASS** (5/5 gates)
-**Next phase:** P3 — not started, awaiting explicit authorisation
+**Current phase:** P3 — Batched Collector and Central Inference (**open**)
+**Current verdict:** **P3 PARTIAL** (G3-A–G3-D scoped PASS, G3-E not passed; audit findings open)
+**Last closed phase:** P2 **PASS** (5/5)
+**Next phase:** P4 — not started
 
 | Phase | Verdict | Evidence |
 |---|---|---|
 | **P0** Discovery / environment freeze | **PASS** (4/4) | `docs/phases/P0/{ENVIRONMENT.md,COMPATIBILITY.md,SOURCE_FREEZE.md}` |
 | **P1** Conditional action feasibility | **PASS** (G1-D CPU-scoped) | `docs/phases/P1/RECEIPT.json` |
 | **P2** Rust ↔ TorchRL environment adapter | **PASS** (5/5) | `docs/phases/P2/{FINAL_REPORT.md,RECEIPT.json}` |
+| **P3** Batched collector / central inference | **PARTIAL** (open) | `docs/phases/P3/{FINAL_REPORT.md,RECEIPT.json}` |
 
 PASS establishes the phase contracts only. It does not prove Collector
 scalability, PPO stability, agent strength or throughput.
@@ -46,23 +48,45 @@ The auditor is the **same model** as the Lead. This is a process control and a
 second reading of real files, **not** independent-model verification.
 
 
-## P3 — Batched Collector and Central Inference
+## P3 — Batched Collector and Central Inference (open)
 
-**Status: PARTIAL** (G3-A..G3-D PASS, G3-E PARTIAL)
-- Tested code: `407961026410d349b3b1c689864e6868e9988086`
-- Real CUDA batching proven: one model forward covering 4 independent requests,
-  observed `bmax = 64`, tuned `bmean = 15.5`, device `cuda:0`
-- Measured: 5.1-6.0 natural matches/s, 79-104 env-transitions/s (single driver);
-  2 and 4 driver processes measured at 4.4 and 5.5 matches/s
-- 128 tests green: P1 39 + P2 51 + P3 38
-- Key finding: batching was blocked because `ProcessInferenceServer.client()`
-  caches one client, so all "clients" aliased slot 0 and every forward was B=1.
-  `srv.clients(n)` returns distinct slots.
-- Residual bottleneck is TorchRL transport round-trip overhead (~40 ms/forward),
-  not GPU compute (encode 4.8-11.5 ms, step 2.4-2.6 ms, nearly flat in batch).
-- **G3-E unmet**: the auditor available to this Lead session could not read the
-  WSL repo (`permission.rejected: external_directory`). Re-audit from a
-  WSL-launched session to close it.
+**Status: PARTIAL.** G3-A–G3-D are supported in the scoped sense; G3-E did **not**
+pass. The earlier PARTIAL reason (auditor could not read WSL) is resolved — the
+auditor now reads the repo — and the review it produced found **unmet design
+deliverables**, not just missing access.
+
+- Tested code: `297cf8b7048c6ec1f1841fb00b443a868963520b`
+- Real CUDA batching **per driver** is proven: one model forward covering 4
+  independent requests, `cuda:0`; real runs reached `bmax` 63/64. The receipt
+  reports per-run means 3.78/5.15/9.16.
+- Measured: 5.1–6.0 natural matches/s single driver; 2/4 drivers 4.4/5.5
+  matches/s. The multi-driver comparison is not controlled (startup is inside
+  the multi-driver wall clock, outside the single-driver one).
+- 136 tests green: P1 39 + P2 51 + P3 46.
+- Key finding: `ProcessInferenceServer.client()` caches one client, so
+  `[srv.client() …]` aliased slot 0 and every forward was B=1; `srv.clients(n)`
+  returns distinct slots.
+
+**Unmet or unproven (auditor FINDINGS, `docs/phases/P3/RECEIPT.json`):**
+1. **P3-C transition retention is absent.** `PA4ActorTransitionV1` pre-action
+   observations, ordered candidate tables, weight fingerprints and a bounded
+   queue are documented but never retained on the tested path; seat records are
+   built and discarded after counting.
+2. **"Central" inference is per-driver.** Each driver owns its own
+   `InferenceServer`; no forward ever carries requests from two worker
+   processes, contrary to P3-B's "different workers" wording.
+3. **No weight fingerprint / observation-contract hash** on P3 exchanges.
+4. **Validation gaps:** duplicate identity within one transport batch overwrites
+   silently; a foreign `policy_version` is accepted on ENCODE.
+5. **No independent lost-completion guard** (`env.completed_matches` is never
+   compared with the ledger).
+6. **Revisions are counted as behaviour rows.**
+7. **P3-D timing gaps:** no cold/steady split, no retained stage breakdown,
+   several headline numbers have no artifact, and the "~40 ms" residual is an
+   unmeasured inference.
+8. `run_collector.py` still uses the aliasing `srv.client()` pattern and is
+   untested.
+9. `INTEGRATION_DECISION.md` still records ADR-008 as proposed/blocked.
 
 ## Open limitations (carried forward, not blocking)
 
@@ -78,9 +102,10 @@ second reading of real files, **not** independent-model verification.
 
 ## Immediate next task
 
-**Do not start P3 automatically.** P3 (batched Collector + InferenceServer) and
-P4 (PPO) require explicit user authorisation. Read the P2 handoff in
-`docs/phases/P2/FINAL_REPORT.md` §6 first.
+**Do not start P4.** P3 remains open: either implement the unmet P3-C/P3-D
+deliverables listed above, or record an explicit scope amendment. Both require
+user authorisation. The P3 audit findings, in severity order, are in
+`docs/phases/P3/RECEIPT.json` under `audit_findings`.
 
 ## Artifacts
 

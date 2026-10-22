@@ -120,7 +120,9 @@ structural reason, so the fallback ADR is raised instead of continuing.
 
 ## 3. ADR: P3-F conditional fallback (requires user approval)
 
-**Status: PROPOSED, not approved. Not implemented.**
+**Status: APPROVED by the user (option B, 2026-10-22) and implemented in
+`pa4/collector/`, with the gaps recorded in `RECEIPT.json` (`audit_findings`).**
+The text below is the original proposal, kept verbatim for history.
 
 **Decision requested.** Approve a narrow, TorchRL-compatible actor loop that
 owns the staged acting protocol, uses the real `InferenceServer` +
@@ -142,11 +144,12 @@ by §1.3 and §6.2.2) or moving legality into Python (forbidden by invariant 1).
 ## 4. Where P3 stands
 
 - **P3-0 preflight:** complete, all values above measured.
-- **P3-A:** blocked by the API incompatibility in §2; ADR raised.
-- **P3-B / P3-C / P3-D:** not started. They depend on an approved acting path,
-  and building them against an unapproved fallback would pre-empt the user's
-  decision.
+- **P3-A:** ADR-008 was **approved** (option B) and the actor-aware adapter is
+  implemented; G3-A is a scoped PASS.
+- **P3-B / P3-C / P3-D:** implemented in part. Batching is proven per driver;
+  cross-worker central batching, bounded transition retention, weight
+  fingerprints and the cold/steady breakdown are **not** implemented. See
+  `RECEIPT.json` under `audit_findings`.
 
-**P3 verdict: BLOCKED** pending the §3 decision. This is the design's specified
-outcome for a fundamental compatibility failure, and it is not a statement that
-the underlying P1/P2 work is wrong.
+**P3 verdict: PARTIAL** (audited). The earlier "BLOCKED pending the §3 decision"
+was superseded when the user approved ADR-008.

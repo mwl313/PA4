@@ -54,12 +54,13 @@ Result: **PASS**. One model forward, four independent requests, four correct
 per-row selections.
 
 Additional measured evidence from the instrumented service during real
-collection (`/tmp/pa4_p3_svc_*.json`):
+collection. `run_batched.py` writes `/tmp/pa4_p3_batched_<run_id>.json`; the
+retained copy of the 32-env run is `evidence/service_stats_bl32.json`.
 
 | Metric | Observed |
 |---|---|
 | `model_device` | `cuda:0` |
-| `forward_batch_sizes` | max **64** (retained raw artifact: `evidence/service_stats_bl32.json`, max 63) |
+| `forward_batch_sizes` | max **63** in the retained 32-env artifact; **64** observed in the 64-env run, whose raw stats file was not retained |
 | mean batch, 16/32/64-env baselines | **3.78 / 5.15 / 9.16** (`PERFORMANCE_BASELINE.csv`) |
 | mean batch, accumulation sweep (min_batch=256) | **15.5**, throughput **4.42** matches/s (see §3) |
 | `cache_high_water` | scales with live requests, not matches |
@@ -86,6 +87,13 @@ Batch accumulation was tuned directly:
 
 Forward count fell **2.7x** while throughput stayed flat. **The GPU is not the
 bottleneck.** Direct measurement confirms it:
+
+> **Provenance caveat (added after audit):** this sweep's raw stats file was not
+> retained, and the committed `evidence/tune_test.py` runs a different
+> configuration (16 envs; min_batch 8/4/2/1) from the table below (64 envs;
+> min_batch 1/16/64/128/256). The numbers below are reported measurements, but
+> they are not reproducible from the committed tree. The same applies to the
+> batch-latency table that follows (no retained output).
 
 | Operation | B=1 | B=8 | B=16 | B=32 |
 |---|---|---|---|---|
