@@ -205,22 +205,49 @@ class FailClosedTest(unittest.TestCase):
         self.assertNotIn(truncated_key, {t.episode_key for t in cohort.trajectories})
 
     def test_duplicate_match_id_rejected(self):
+        """Two DIFFERENT episodes claiming the same natural match id.
+
+        Must be refused by the exactly-once match-accounting guard specifically,
+        so this asserts the error message, not merely that something raised.
+        """
         records = real_records()
-        # Copy one episode's records onto another episode's identity.
         by_key = {}
         for r in records:
             by_key.setdefault(ingest.episode_key(r), []).append(r)
-        keys = sorted(by_key)
-        if len(keys) < 2:
-            self.skipTest("needs two episodes")
-        src, dst = by_key[keys[0]], by_key[keys[1]]
-        for a, b in zip(src, dst):
-            if a.get("match_completed"):
-                b["match_completed"] = True
-                b["terminated"] = True
-                b["truncated"] = False
-                b["match_id"] = a["match_id"]
-                b["winner"] = a["winner"]
+
+        completed_keys = [k for k, recs in by_key.items()
+                          if any(r["match_completed"] for r in recs)]
+        self.assertGreaterEqual(len(completed_keys), 2, "needs two completed episodes")
+
+        first, second = sorted(completed_keys)[0], sorted(completed_keys)[1]
+        src = next(r for r in by_key[first] if r["match_completed"])
+        # Give the second episode the FIRST episode's match id, leaving its own
+        # single completion event intact so only the duplicate-id guard can fire.
+        for r in by_key[second]:
+            if r["match_completed"]:
+                r["match_id"] = src["match_id"]
+
+        with self.assertRaises(CohortRejected) as ctx:
+            build_cohort(records)
+        self.assertIn("duplicate match_id", str(ctx.exception).lower(),
+                      f"refused for the wrong reason: {ctx.exception}")
+
+    def test_double_completion_in_one_episode_rejected(self):
+        """A single episode reporting two completions is invalid."""
+        records = real_records()
+        by_key = {}
+        for r in records:
+            by_key.setdefault(ingest.episode_key(r), []).append(r)
+
+        completed_keys = [k for k, recs in by_key.items()
+                          if any(r["match_completed"] for r in recs)]
+        self.assertGreaterEqual(len(completed_keys), 1)
+        key = sorted(completed_keys)[0]
+        donor = sorted(completed_keys)[1] if len(completed_keys) > 1 else key
+        src = next(r for r in by_key[donor] if r["match_completed"])
+        target = next(r for r in by_key[key] if r["match_completed"])
+        target["match_id"] = src["match_id"]
+
         with self.assertRaises(CohortRejected):
             build_cohort(records)
 

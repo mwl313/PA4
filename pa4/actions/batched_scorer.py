@@ -289,13 +289,17 @@ def _ragged_from_td(td, rows, device):
 class BatchedConditionalScorer(nn.Module):
     """Server model: full-row dispatch + real batched scoring on CUDA."""
 
-    def __init__(self, seed: int = 20261006, device: str = "cpu", policy_version: int = 1):
+    def __init__(self, seed: int = 20261006, device: str = "cpu", policy_version: int = 1,
+                 snapshot_path: str | None = None):
         super().__init__()
         self.device = torch.device(device)
         self.policy_version = int(policy_version)
         self._cache: dict[tuple, CacheEntry] = {}
         self._model = None
         self._seed = seed
+        # P4-C: when set, weights come from this immutable snapshot and the
+        # fingerprint is derived from the LOADED tensors, never from the seed.
+        self._snapshot_path = snapshot_path
         # instrumentation (G3-B evidence)
         self.encode_calls = 0
         self.step_rows = 0
@@ -320,12 +324,44 @@ class BatchedConditionalScorer(nn.Module):
 
             torch.manual_seed(self._seed)
             model = PA3Model(PA3Config(initialization="random", seed=self._seed))
+
+            if self._snapshot_path:
+                # P4-C: load the published snapshot and verify it is the exact
+                # published policy BEFORE serving anything.
+                from pa4.learner.snapshot import SnapshotError, load_snapshot
+
+                state, snap = load_snapshot(self._snapshot_path)
+                try:
+                    model.load_state_dict(state, strict=True)
+                except Exception as exc:  # noqa: BLE001
+                    raise SnapshotError(
+                        f"snapshot does not fit the model architecture: {exc}") from exc
+                expected_version = self.policy_version
+                if int(snap.policy_version) != int(expected_version):
+                    raise SnapshotError(
+                        f"snapshot version {snap.policy_version} != configured "
+                        f"policy_version {expected_version}")
+                self._snapshot = snap
+
             self._model = model.to(self.device).eval()
+
             from pa4.actions.conditional_policy import weight_fingerprint
 
+            # Derived from the live served weights, so a seed change cannot
+            # masquerade as a policy change (or vice versa).
             self.fingerprint = weight_fingerprint(self._model)
+            if self._snapshot_path and self.fingerprint != self._snapshot.fingerprint:
+                from pa4.learner.snapshot import SnapshotError
+
+                raise SnapshotError(
+                    "served weights do not match the published snapshot fingerprint "
+                    f"({self.fingerprint[:16]} != {self._snapshot.fingerprint[:16]})")
             self.fingerprint_id = fingerprint_id(self.fingerprint)
         return self._model
+
+    @property
+    def snapshot(self):
+        return getattr(self, "_snapshot", None)
 
     def _ensure_fingerprint(self) -> None:
         if not self.fingerprint_id:

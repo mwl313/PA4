@@ -57,6 +57,8 @@ class BatchedConfig:
     worker_index: int = 0
     teams: list | None = None
     policy_seed: int = 20261006
+    #: P4-C: immutable policy snapshot to serve. None keeps the P3 seed path.
+    snapshot_path: str | None = None
     warmup_steps: int = 0
     transition_capacity: int = 256
 

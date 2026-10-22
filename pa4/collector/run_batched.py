@@ -62,6 +62,15 @@ def run_batched(cfg: BatchedConfig, clients=None, store: BoundedTransitionStore 
 
         from pa4.actions.batched_factory_instrumented import build_instrumented_service
 
+        # P4-C: the server is a spawned process, so the snapshot and the policy
+        # version must travel through the environment. This is what makes the
+        # served weights the committed ones rather than the seed's.
+        if getattr(cfg, "snapshot_path", None):
+            os.environ["PA4_POLICY_SNAPSHOT"] = str(cfg.snapshot_path)
+            os.environ["PA4_POLICY_VERSION"] = str(int(cfg.policy_version))
+        else:
+            os.environ.pop("PA4_POLICY_SNAPSHOT", None)
+
         n_clients = max(cfg.num_envs * 2, 2)
         srv = InferenceServer(
             model=None, policy_factory=build_instrumented_service,
@@ -75,7 +84,18 @@ def run_batched(cfg: BatchedConfig, clients=None, store: BoundedTransitionStore 
         srv.start()
         clients = srv.clients(n_clients)
 
-    expected_fp = fingerprint_id(model_fingerprint(cfg.policy_seed))
+    # P4-C: P4 training derives the expected identity from the PUBLISHED
+    # SNAPSHOT (actual weights). Only the legacy P3 benchmark path falls back to
+    # the seed-derived helper, which is why it is gated on snapshot_path.
+    if getattr(cfg, "snapshot_path", None):
+        from pa4.learner.snapshot import read_metadata
+
+        _meta = read_metadata(cfg.snapshot_path)
+        expected_fp = fingerprint_id(_meta["fingerprint"])
+        expected_fingerprint = _meta["fingerprint"]
+    else:
+        expected_fp = fingerprint_id(model_fingerprint(cfg.policy_seed))
+        expected_fingerprint = model_fingerprint(cfg.policy_seed)
     inf = StagedInference(clients, request_spec(), cfg.policy_version,
                           run_id_int=cfg.worker_index, fingerprint_id=expected_fp,
                           result_timeout=cfg.result_timeout)
@@ -83,7 +103,7 @@ def run_batched(cfg: BatchedConfig, clients=None, store: BoundedTransitionStore 
     contract_hash = str(getattr(env.module, "CONTRACT_HASH", ""))
 
     rep = BatchedReport(run_id=cfg.run_id, num_envs=cfg.num_envs)
-    rep.policy_weight_fingerprint = model_fingerprint(cfg.policy_seed)
+    rep.policy_weight_fingerprint = expected_fingerprint
     rep.observation_contract_hash = contract_hash
     rep.setup_seconds = time.perf_counter() - t_start
     seen = set()
