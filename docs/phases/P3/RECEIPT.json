@@ -1,13 +1,13 @@
 {
   "phase": "P3",
   "design_id": "PA4-P3-DESIGN-v1.0",
-  "verdict": "PARTIAL",
-  "verdict_scope": "G3-A..G3-D are PASS on executed tests and measured numbers. G3-E is PARTIAL: its required conjunct is a read-only auditor that can read the ACTUAL WSL repository, and the auditor available to this Lead session was denied external_directory access to /home/pa4. Per PA4-P3-DESIGN-v1.0 the G3-E row explicitly disqualifies a text-only audit that cannot access the repo. A re-audit from a WSL-launched session is required to close it.",
-  "design_source_path": "C:/Users/임민우/Desktop/PA4/PA4_P3_DETAILED_DESIGN_v1.0_2026-10-22.md",
+  "verdict": "PENDING_FINAL_AUDIT",
+  "verdict_scope": "G3-A..G3-D are PASS on executed tests and measured numbers. G3-E's auditor conjunct is a read-only review of the actual WSL repository; access is demonstrated (ACCESS_OK, literal file reads) and the re-audit of this commit is in progress. The verdict becomes PASS only if that review is clean. This file is written before the audit returns so the auditor reads real numbers rather than a summary.",
+  "design_source_path": "PA4_P3_DETAILED_DESIGN_v1.0_2026-10-22.md (Windows-side original)",
   "design_source_sha256": "f73c556794bb406c1bd322a093fe7c05f0f330b32b3763d69c492266e313563e",
   "design_wsl_copy_sha256": "f73c556794bb406c1bd322a093fe7c05f0f330b32b3763d69c492266e313563e",
   "pa4_base_sha": "4d8f349b247bb929914db5b9ebe2c5ce84c18288",
-  "pa4_tested_code_sha": "407961026410d349b3b1c689864e6868e9988086",
+  "pa4_tested_code_sha": "297cf8b7048c6ec1f1841fb00b443a868963520b",
   "pa4_final_head_sha": "RECORDED_IN_METADATA_COMMIT",
   "pa3_reference_sha": "65bc980abd8e0bbec14158b9ddc2884bb1726a4e",
   "pa3_worktree_dirty_files": 0,
@@ -24,10 +24,14 @@
   "adr": "docs/phases/P3/ADR_008.md (user approved option B)",
   "central_model_forward_batch_gt1_observed": true,
   "max_actual_forward_batch": 64,
-  "mean_forward_batch_tuned": 15.5,
+  "forward_batch_evidence": "Unit test: one forward with forward_batch_sizes [4] for four independent requests. Real runs: bl32 retained stats max 63; bl64 baseline max 64; evidence/batch_stats_observed.json records [2].",
+  "mean_forward_batch_by_run": {"16_envs": 3.78, "32_envs": 5.15, "64_envs_min_batch_16": 9.16},
+  "accumulation_sweep": {"min_batch": 256, "mean_forward_batch": 15.5, "matches_per_s": 4.42, "raw_stats_retained": false},
+  "performance_pairing_note": "The 15.5 mean belongs to the accumulation sweep at 4.42 matches/s, not to the 5.78 matches/s / 104.0 transitions/s baseline run (mean 9.16). An earlier revision paired them incorrectly; corrected in this commit.",
   "model_forward_count_for_4_independent_requests": 1,
   "gpu_peak_allocation_gib": 0.09,
   "natural_completed_matches": 65,
+  "natural_completed_matches_note": "65 is the 32-env baseline; 33/64/64 in the other single-driver baselines, 64 and 134 in the 2- and 4-driver runs",
   "duplicate_match_ids": 0,
   "invalid_actions": 0,
   "operational_errors": 0,
@@ -39,16 +43,18 @@
   "accepted_training_matches_note": "no PPO learner exists in P3; always null",
   "p1_regression_test_count": 39,
   "p2_regression_test_count": 51,
-  "p3_test_count": 38,
-  "total_tests": 128,
+  "p3_test_count": 46,
+  "total_tests": 136,
   "check_env_specs": "passed (P2 env, unchanged in P3)",
-  "auditor_read_actual_wsl_repo": false,
+  "auditor_read_actual_wsl_repo": true,
+  "auditor_access_proof": "pa4-auditor returned ACCESS_OK and quoted lines 1-6 of pa4/collector/batched_core.py and pa4/actions/batched_scorer.py verbatim, plus the literal docs/phases/P3 listing.",
+  "auditor_verdict": "PENDING",
   "gates": {
     "G3_A": "PASS_SCOPED_ADR_008",
     "G3_B": "PASS",
     "G3_C": "PASS",
     "G3_D": "PASS",
-    "G3_E": "PARTIAL"
+    "G3_E": "PENDING"
   },
   "gate_evidence": {
     "G3_A": {
@@ -61,48 +67,52 @@
       ]
     },
     "G3_B": {
-      "test": "tests/collector/test_batching.py (10 tests)",
+      "test": "tests/collector/test_batching.py (12 tests)",
       "facts": [
         "model_forward_count == 1 with forward_batch_sizes == [4] for four independent requests",
         "model_device == cuda:0",
-        "each row's selection verified inside its own candidate set",
+        "each row's branch_k, request_key and selected index checked against its own request",
         "cache isolation: 4 requests => 4 cache entries",
-        "observed bmax 64 during collection; tuned bmean 15.5"
+        "observed bmax 64 during collection; per-run means 3.78/5.15/9.16"
       ]
     },
     "G3_C": {
-      "test": "tests/collector/test_matches.py (9 tests)",
+      "test": "tests/collector/test_matches.py (15 tests)",
       "facts": [
-        ">= 16 natural completions measured (33-65 per run)",
+        ">= 16 natural completions measured per run (33-65 across baselines)",
         "2 independent driver processes verified",
-        "0 duplicate match ids; ids fully qualified (run, worker, slot, gen, episode)",
-        "truncations and revisions tracked separately, never counted as matches",
-        "match count never exceeds transition count"
+        "0 duplicate match ids; ids carry run/worker/slot/generation/episode",
+        "exactly-once accounting unit-tested: completion once, duplicate not a second match, truncation and revision never a match",
+        "match count never exceeds transition count",
+        "both seats assert nonzero decision records"
       ]
     },
     "G3_D": {
-      "test": "tests/collector/test_transport.py (9 tests)",
+      "test": "tests/collector/test_transport.py (9 tests) + test_batching.py negative controls",
       "facts": [
         "4 concurrent clients each receive their own response",
         "the cached-client defect is regression-tested (clients have distinct slots)",
         "one-in-flight enforced by the transport",
         "clean shutdown after use and with an unread in-flight request",
         "repeated start/stop cycles without leaks",
-        "overflow 65, count/mask mismatch, stale generation, unknown key, wrong level all fail closed",
+        "overflow 65, count/mask mismatch, stale generation, unknown key, wrong level, duplicate encode all fail closed",
+        "cross-worker aliasing rejected: same local id under two workers owns two entries",
+        "mixed policy version rejected without corrupting the live entry",
         "a rejected step evicts only the addressed cache entry"
       ]
     },
     "G3_E": {
       "artifacts": [
-        "docs/phases/P3/PERFORMANCE_BASELINE.csv (5 measured configurations)",
+        "docs/phases/P3/PERFORMANCE_BASELINE.csv (5 measured configurations, per-row commit provenance)",
         "docs/phases/P3/BATCHING_EVIDENCE.md",
         "docs/phases/P3/TENSORDICT_TRANSITION_V1.md"
       ],
       "facts": [
-        "P1 39 + P2 51 + P3 38 = 128 tests green",
+        "P1 39 + P2 51 + P3 46 = 136 tests green",
         "frozen uv.lock unchanged",
         "PA3 reference unmodified",
-        "auditor read the actual WSL repository files"
+        "auditor read the actual WSL repository files",
+        "auditor verdict: PENDING"
       ]
     }
   },
@@ -112,33 +122,54 @@
       "matches_per_s": 5.12,
       "transitions_per_s": 79.4,
       "bmax": 31,
-      "bmean": 3.78
+      "bmean": 3.78,
+      "measured_at_commit": "a8e38b8"
     },
     {
       "config": "32 envs, 1 driver",
       "matches_per_s": 6.04,
       "transitions_per_s": 101.1,
       "bmax": 63,
-      "bmean": 5.15
+      "bmean": 5.15,
+      "measured_at_commit": "a8e38b8",
+      "raw_stats_artifact": "docs/phases/P3/evidence/service_stats_bl32.json"
     },
     {
-      "config": "64 envs, 1 driver, tuned",
+      "config": "64 envs, 1 driver, min_batch=16",
       "matches_per_s": 5.78,
       "transitions_per_s": 104.0,
       "bmax": 64,
-      "bmean": 15.5
+      "bmean": 9.16,
+      "measured_at_commit": "a8e38b8"
+    },
+    {
+      "config": "64 envs, 1 driver, accumulation sweep min_batch=256",
+      "matches_per_s": 4.42,
+      "transitions_per_s": null,
+      "bmax": null,
+      "bmean": 15.5,
+      "measured_at_commit": "a8e38b8",
+      "raw_stats_artifact": null,
+      "note": "documented in BATCHING_EVIDENCE.md section 3; raw stats file not retained"
     },
     {
       "config": "2 drivers x 16 envs",
       "matches_per_s": 4.4,
-      "transitions_per_s": 78.0
+      "transitions_per_s": 78.0,
+      "bmax": null,
+      "bmean": null,
+      "measured_at_commit": "4079610"
     },
     {
       "config": "4 drivers x 16 envs",
       "matches_per_s": 5.53,
-      "transitions_per_s": 91.8
+      "transitions_per_s": 91.8,
+      "bmax": null,
+      "bmean": null,
+      "measured_at_commit": "4079610"
     }
   ],
+  "provenance_note": "The single-driver baselines were measured at a8e38b8. run_batched.py, batched_core.py and batched_scorer.py are byte-identical between a8e38b8 and the tested commit; only multi_driver.py, tests and docs were added. Multi-driver rows are measured at 4079610, where multi_driver.py first exists. Each CSV row records its own commit.",
   "optimisations": [
     "batched decode: one observe_fixed_batch for all requesting seats instead of 2*N calls",
     "decode_batch() proven byte-identical to per-seat decode",
@@ -154,13 +185,21 @@
     "batched decode initially mishandled layout-derived role/side ids",
     "the fallback decode path lacked role_ids/side_ids entirely",
     "env.batch typo for _batch",
-    "mp daemonic processes cannot spawn an inference server; drivers must be non-daemonic"
+    "mp daemonic processes cannot spawn an inference server; drivers must be non-daemonic",
+    "G3-C's truncation-exclusion test compared an expression with itself and could never fail; accounting extracted into account_step() and unit-tested (completion once, duplicate, truncation, revision, new episode, both-flags error)",
+    "match ids carried a hardcoded worker 0 while claiming to be fully qualified; the driver index is now carried",
+    "the two-seat claim only asserted a nonzero total; decisions are now counted per seat and both must be nonzero",
+    "G3-D lacked the design's cross-worker and mixed-version controls; both added",
+    "PERFORMANCE_BASELINE.csv labelled multi-driver rows with a commit where multi_driver.py did not exist; corrected to 4079610",
+    "the receipt paired the accumulation sweep's mean batch (15.5) with a different run's throughput (5.78 matches/s, 104.0 transitions/s); corrected and separated"
   ],
   "limitations": [
     "AsyncBatchedCollector is not used; G3-A is a scoped PASS under ADR-008",
     "throughput ~6 matches/s, far below the 1,000/s stretch goal which the design forbids proving on this GPU",
     "the residual bottleneck is TorchRL ProcessSlotTransport round-trip overhead (~40 ms/forward), measured but not resolved; it is outside P3 scope",
     "GPU encode/step are nearly flat in batch size, so wider batches alone do not increase throughput",
+    "single-driver baselines were measured at a8e38b8, not at the tested commit; the collector code is identical but the numbers were not re-measured",
+    "the accumulation-sweep raw stats file was not retained, so its 15.5 mean is documented but not re-derivable from an artifact",
     "random PA3 weights (seed 20261006); no strength or weight-parity claim",
     "path B (staged prefix) only; path A would remove sequential level round-trips but is out of scope",
     "transitions are in-memory only; no replay database",
@@ -175,16 +214,14 @@
   "test_results": {
     "action_distribution": "Ran 39 tests, OK",
     "environment": "Ran 51 tests, OK",
-    "collector": "Ran 38 tests, OK"
+    "collector": "Ran 46 tests, OK"
   },
   "notes": [
     "One env step remains one native advance attempt; one match is counted once on a unique terminated natural completion.",
+    "account_step() is the single accounting rule used by the collector and is unit-tested directly.",
     "The P3 execution prompt file named in the task does not exist on this machine; PA4-P3-DESIGN-v1.0 was used as the authority.",
     "No P4/PPO/optimizer/cloud work was performed.",
     "No secrets committed; no push without authorization."
   ],
-  "generated_at": "2026-10-22",
-  "auditor_access_error": "permission.rejected: Permission denied: external_directory",
-  "auditor_verdict": "INSUFFICIENT_EVIDENCE (could not read repo; read zero files)",
-  "auditor_note": "The auditor confirmed the repo was unreadable (all five access attempts denied, no shell tool for git) and correctly refused to grade. It also correctly flagged that a G3-E PASS resting on such a session would be unsupported, which is why this receipt records G3_E as PARTIAL and auditor_read_actual_wsl_repo as false."
+  "generated_at": "2026-10-22"
 }

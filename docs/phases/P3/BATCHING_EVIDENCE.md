@@ -59,9 +59,16 @@ collection (`/tmp/pa4_p3_svc_*.json`):
 | Metric | Observed |
 |---|---|
 | `model_device` | `cuda:0` |
-| `forward_batch_sizes` | max **64** |
-| mean batch (n=64, tuned) | **15.5** |
+| `forward_batch_sizes` | max **64** (retained raw artifact: `evidence/service_stats_bl32.json`, max 63) |
+| mean batch, 16/32/64-env baselines | **3.78 / 5.15 / 9.16** (`PERFORMANCE_BASELINE.csv`) |
+| mean batch, accumulation sweep (min_batch=256) | **15.5**, throughput **4.42** matches/s (see §3) |
 | `cache_high_water` | scales with live requests, not matches |
+
+**Do not mix the two rows.** The 15.5 mean comes from the accumulation sweep,
+whose throughput was 4.42 matches/s; the 9.16 mean belongs to the 5.78 matches/s
+baseline run. An earlier revision of the receipt paired 15.5 with 5.78/104.0,
+which was a transcription error across two different runs. The sweep's raw stats
+file was not retained, so its numbers are reported only in §3 below.
 
 ---
 
