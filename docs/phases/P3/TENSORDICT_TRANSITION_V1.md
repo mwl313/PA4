@@ -33,7 +33,7 @@ retained record.
 | `policy_version` | frozen policy version (never changes during P3) |
 | `policy_weight_fingerprint` | sha256 over the exact weights served |
 | `observation_contract_hash` | pinned PA3 observation contract |
-| `next_observation` | per-seat post-action nine-leaf view plus `observation_valid`; padding is explicit, never claimed as real data |
+| `next_observation` | per-seat post-action nine-leaf view plus `observation_valid`. For a non-valid seat the leaves are the previous step's values, so they MUST be masked; they are not zero padding and are never claimed as real data |
 | `real_p2_action_packet` | the exact six-key packet submitted to `env.step` |
 | `reward[2]`, `done`, `terminated`, `truncated` | native outcome, unchanged |
 | `match_completed`, `winner`, `request_revised` | exactly-once accounting |

@@ -54,25 +54,26 @@ second reading of real files, **not** independent-model verification.
 (not missing access). They are now implemented and measured; the re-audit of the
 tested commit is in progress. No PASS is claimed yet.
 
-- Tested code: `b3fc81eba6c607d33d4d1278628471ae74f53280`
-- **157 tests green:** P1 39 + P2 51 + P3 67.
+- Tested code: `13395df0e731cdc93996d63306c74703257c1dd6`
+- **158 tests green:** P1 39 + P2 51 + P3 68.
 - Real CUDA batching, both topologies:
   - per driver: one forward covering 4 independent rows, `cuda:0`, bmax 64;
   - **central**: one parent-owned `InferenceServer` (`transport="distributed"`)
-    serves 2 and 4 spawned drivers; 220/187 forwards mixed 2/4 worker
+    serves 2 and 4 spawned drivers; 235/180 forwards mixed 2/4 worker
     processes.
 - P3-C **bounded `PA4ActorTransitionV1` retention** implemented: pre-action
   observations, ordered candidates, selected indices, FP32 logprobs, the real
   packet, native outcome, match id, policy version and sha256 weight
   fingerprint; drops are counted.
-- Measured throughput (steady / wall): single driver 7.6–12.5 / 3.8–4.2
-  matches/s; 2 drivers central 0.78 / 1.22, per-driver 5.52 / 5.43; 4 drivers
-  central 0.30 / 1.00, per-driver 3.04 / 6.95. For multi-driver runs the steady
+- Measured throughput (steady / wall): single driver 7.8–11.2 / 5.1–5.5
+  matches/s; 2 drivers central 0.82 / 1.25, per-driver 5.60 / 5.24; 4 drivers
+  central 0.29 / 0.98, per-driver 3.39 / 7.47. For multi-driver runs the steady
   figure is the mean of per-driver steady rates (drivers run concurrently).
-- **Finding:** central cross-process inference is correct but ~4.5–7× slower
-  than per-driver servers on this host (gloo/TCP per client), with both
-  topologies using the same server batching policy. A transport selection input
-  for P6/P7.
+- **Finding:** central cross-process inference is correct but ~4.2–7.6× slower
+  than per-driver servers on this host, with both topologies using the same
+  server batching policy. Queue time and forward time both rise; the split
+  between transport and service/CPU contention is not isolated. A transport
+  selection input for P6/P7.
 - Key earlier finding retained: `ProcessInferenceServer.client()` caches one
   client; `srv.clients(n)` returns distinct slots.
 - Addressed from the audit: transition retention, central cross-worker batching,
@@ -97,10 +98,9 @@ tested commit is in progress. No PASS is claimed yet.
 
 ## Immediate next task
 
-**Do not start P4.** P3 remains open: either implement the unmet P3-C/P3-D
-deliverables listed above, or record an explicit scope amendment. Both require
-user authorisation. The P3 audit findings, in severity order, are in
-`docs/phases/P3/RECEIPT.json` under `audit_findings` and `review_history`.
+**Do not start P4.** P3 remains open pending the final audit verdict. The audit
+history is in `docs/phases/P3/RECEIPT.json` under `audit_findings` and
+`review_history`.
 
 ## Artifacts
 

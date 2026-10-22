@@ -66,7 +66,7 @@ max_worker_ids_per_forward >= 2
 cross_worker_forwards >= 1
 ```
 
-The retained 4-driver baseline reaches `max_worker_ids_per_forward = 4` and 187
+The retained 4-driver baseline reaches `max_worker_ids_per_forward = 4` and 180
 mixed forwards (see `evidence/baseline_multi4x16_central.json`).
 
 ### 2.3 Forward-batch histograms
@@ -77,11 +77,11 @@ JSON (`encode_forward_count`).
 
 | config | forwards | bmax | mean batch |
 |---|---|---|---|
-| 16 envs, 1 driver | 370 | 29 | 5.61 |
-| 32 envs, 1 driver | 343 | 61 | 7.19 |
-| 64 envs, 1 driver | 374 | 64 | 8.27 |
-| 2 drivers, central | 1211 | 62 | 3.37 |
-| 4 drivers, central | 4868 | 64 | 1.74 |
+| 16 envs, 1 driver | 631 | 29 | 5.86 |
+| 32 envs, 1 driver | 582 | 61 | 6.92 |
+| 64 envs, 1 driver | 579 | 64 | 8.15 |
+| 2 drivers, central | 1013 | 62 | 4.02 |
+| 4 drivers, central | 4801 | 64 | 1.71 |
 
 `model_device` is `cuda:0` in every run; the service stamps a sha256 weight
 fingerprint and the client rejects a mismatch.
@@ -90,21 +90,21 @@ fingerprint and the client rejects a mismatch.
 
 ## 3. Throughput and its transport cost (measured, both topologies)
 
-`PERFORMANCE_BASELINE.csv` (commit `b3fc81e`):
+`PERFORMANCE_BASELINE.csv` (commit `13395df`):
 
 | config | matches/s (wall) | steady matches/s | transitions/s |
 |---|---|---|---|
-| 16 envs, 1 driver | 3.83 | 7.61 | 68.9 |
-| 32 envs, 1 driver | 4.18 | 9.61 | 85.1 |
-| 64 envs, 1 driver | 3.82 | 12.52 | 93.4 |
-| 2 drivers × 16 envs, **central** | 1.22 | 0.78 | 21.3 |
-| 2 drivers × 16 envs, **per-driver servers** | 5.43 | 5.52 | 96.2 |
-| 4 drivers × 16 envs, **central** | 1.00 | 0.30 | 18.0 |
-| 4 drivers × 16 envs, **per-driver servers** | 6.95 | 3.04 | 121.3 |
+| 16 envs, 1 driver | 5.12 | 7.77 | 80.6 |
+| 32 envs, 1 driver | 5.53 | 9.23 | 95.3 |
+| 64 envs, 1 driver | 5.48 | 11.17 | 106.3 |
+| 2 drivers × 16 envs, **central** | 1.25 | 0.82 | 21.5 |
+| 2 drivers × 16 envs, **per-driver servers** | 5.24 | 5.60 | 97.0 |
+| 4 drivers × 16 envs, **central** | 0.98 | 0.29 | 17.3 |
+| 4 drivers × 16 envs, **per-driver servers** | 7.47 | 3.39 | 125.8 |
 
 **Finding.** Cross-process central batching is correct and observable, but on
-this host it is ~4.5–7× slower than one server per driver (5.43/1.22 and
-6.95/1.00). Both topologies use the same server batching policy
+this host it is ~4.2–7.6× slower than one server per driver (5.24/1.25 and
+7.47/0.98). Both topologies use the same server batching policy
 (`min_batch=2`, `timeout=0.02`), so the difference is the transport: the
 distributed transport opens a gloo/TCP pair per client, while
 `ProcessSlotTransport` uses one shared-memory slot per client and cannot serve
@@ -123,14 +123,14 @@ windows are retained in each run's JSON. The wall rate is the aggregate figure.
 
 | stage | seconds |
 |---|---|
-| request_info (native kinds+branches, one call) | 0.002 |
-| views (reuse env-decoded observations) | 0.064 |
-| encode (server round-trip + CUDA encode) | 1.502 |
-| step_levels (all staged STEP phases) | 4.484 |
-| packet assembly | 0.203 |
-| `env.step` (native advance) | 0.211 |
-| accounting + transition emission | 0.258 |
-| reset | 0.106 |
+| request_info (native kinds+branches, one call) | 0.003 |
+| views (reuse env-decoded observations) | 0.100 |
+| encode (server round-trip + CUDA encode) | 2.008 |
+| step_levels (all staged STEP phases) | 6.866 |
+| packet assembly | 0.305 |
+| `env.step` (native advance) | 0.320 |
+| accounting + transition emission | 0.249 |
+| reset | 0.185 |
 
 The server round-trip dominates; native stepping is a small fraction.
 

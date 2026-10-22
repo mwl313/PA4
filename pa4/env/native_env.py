@@ -286,8 +286,10 @@ class PA4EnvBase(EnvBase):
         """Return preallocated player buffers, zeroed only where cheap.
 
         Allocating ~2 MB of tensors per step dominated profiling at N=16, so the
-        buffers are created once and rewritten in place. Seats without a valid
-        observation are zeroed individually (they are the minority after reset).
+        buffers are created once and rewritten in place. Only the valid seats are
+        rewritten; a seat without a valid observation keeps the previous step's
+        leaves and MUST be treated as invalid via `observation_valid`. The leaves
+        are not zero padding (zeroing ~2 MB per step was what this buffer avoids).
         """
         n = self._batch
         shape_key = (n,)

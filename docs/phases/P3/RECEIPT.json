@@ -5,7 +5,7 @@
   "verdict_scope": "The P3-C transition store, cross-process central batching, weight fingerprints, batch/identity validation, lost-completion guard, revision filtering and cold/steady + stage timing are now implemented and measured. G3-A..G3-D are PASS; G3-E is PENDING the re-audit of this commit. The verdict becomes PASS only if that review is clean.",
   "design_source_sha256": "f73c556794bb406c1bd322a093fe7c05f0f330b32b3763d69c492266e313563e",
   "pa4_base_sha": "4d8f349b247bb929914db5b9ebe2c5ce84c18288",
-  "pa4_tested_code_sha": "b3fc81eba6c607d33d4d1278628471ae74f53280",
+  "pa4_tested_code_sha": "13395df0e731cdc93996d63306c74703257c1dd6",
   "pa4_final_head_sha": "RECORDED_IN_METADATA_COMMIT",
   "pa3_reference_sha": "65bc980abd8e0bbec14158b9ddc2884bb1726a4e",
   "pa3_worktree_dirty_files": 0,
@@ -25,17 +25,37 @@
   "cross_worker_batching": {
     "server": "one parent-owned InferenceServer, transport=distributed",
     "drivers": 4,
-    "cross_worker_forwards_2_drivers": 220,
-    "cross_worker_forwards_4_drivers": 187,
+    "cross_worker_forwards_2_drivers": 235,
+    "cross_worker_forwards_4_drivers": 180,
     "max_worker_ids_per_forward": 4,
     "evidence": "docs/phases/P3/evidence/baseline_multi4x16_central.json"
   },
   "step_forward_batch_by_run": {
-    "bl_16_1": {"forwards": 370, "bmax": 29, "bmean": 5.61},
-    "bl_32_1": {"forwards": 343, "bmax": 61, "bmean": 7.19},
-    "bl_64_16": {"forwards": 374, "bmax": 64, "bmean": 8.27},
-    "multi2x16_central": {"forwards": 1211, "bmax": 62, "bmean": 3.37},
-    "multi4x16_central": {"forwards": 4868, "bmax": 64, "bmean": 1.74}
+    "bl_16_1": {
+      "forwards": 631,
+      "bmax": 29,
+      "bmean": 5.86
+    },
+    "bl_32_1": {
+      "forwards": 582,
+      "bmax": 61,
+      "bmean": 6.92
+    },
+    "bl_64_16": {
+      "forwards": 579,
+      "bmax": 64,
+      "bmean": 8.15
+    },
+    "multi2x16_central": {
+      "forwards": 1013,
+      "bmax": 62,
+      "bmean": 4.02
+    },
+    "multi4x16_central": {
+      "forwards": 4801,
+      "bmax": 64,
+      "bmean": 1.71
+    }
   },
   "policy_weight_fingerprint": "356710ea293dd656fc9f028efa9064a8e738dce1bfffc14b9981abee6e7b5ab4",
   "observation_contract_hash": "dd723dc687a60b0568302fa0b09cfb110cbe67eac2c7022f2b4ffe4dff373e35",
@@ -43,52 +63,183 @@
     "capacity_default": 256,
     "bounded": true,
     "copy_on_store": true,
-    "fields": ["schema_version", "run_id", "worker_id", "native_slot", "native_generation", "episode_id", "step_index", "request_ids", "policy_version", "policy_weight_fingerprint", "observation_contract_hash", "next_observation", "real_p2_action_packet", "reward", "done", "terminated", "truncated", "match_completed", "winner", "request_revised", "match_id", "seat_records"],
-    "seat_record_fields": ["seat", "request_id", "observation (9 leaves by value)", "observation_digest", "actor_active", "joint_logprob_fp32", "policy_version", "policy_weight_fingerprint", "branches (ordered candidates, legal_mask, entity_token, move_token, selected_index, branch_k, logprob)"],
+    "fields": [
+      "schema_version",
+      "run_id",
+      "worker_id",
+      "native_slot",
+      "native_generation",
+      "episode_id",
+      "step_index",
+      "request_ids",
+      "policy_version",
+      "policy_weight_fingerprint",
+      "observation_contract_hash",
+      "next_observation",
+      "real_p2_action_packet",
+      "reward",
+      "done",
+      "terminated",
+      "truncated",
+      "match_completed",
+      "winner",
+      "request_revised",
+      "match_id",
+      "seat_records"
+    ],
+    "seat_record_fields": [
+      "seat",
+      "request_id",
+      "observation (9 leaves by value)",
+      "observation_digest",
+      "actor_active",
+      "joint_logprob_fp32",
+      "policy_version",
+      "policy_weight_fingerprint",
+      "branches (ordered candidates, legal_mask, entity_token, move_token, selected_index, branch_k, logprob)"
+    ],
     "revisions_excluded": true,
     "drops_counted": true
   },
   "gpu_peak_allocation_gib": null,
+  "gpu_peak_allocation_gib_note": "P3-D asks for an approximate per-process memory high-water; it was not instrumented. Reported as null rather than guessed.",
   "natural_completed_matches_by_run": {
-    "bl_16_1": 32, "bl_32_1": 33, "bl_64_16": 34,
-    "multi2x16_central": 64, "multi2x16_perdrv": 65,
-    "multi4x16_central": 131, "multi4x16_perdrv": 131
+    "bl_16_1": 65,
+    "bl_32_1": 65,
+    "bl_64_16": 66,
+    "multi2x16_central": 65,
+    "multi2x16_perdrv": 64,
+    "multi4x16_central": 128,
+    "multi4x16_perdrv": 133
   },
   "duplicate_match_ids": 0,
   "invalid_actions": 0,
   "operational_errors": 0,
   "revisions_observed": 0,
   "truncations_observed": 0,
-  "raw_actor_natural_matches_per_sec": 4.18,
-  "best_env_transitions_per_sec": 121.3,
-  "steady_matches_per_sec_best": 12.52,
+  "raw_actor_natural_matches_per_sec": 5.53,
+  "best_env_transitions_per_sec": 125.8,
+  "steady_matches_per_sec_best": 11.17,
   "accepted_training_matches_per_sec": null,
   "accepted_training_matches_note": "no PPO learner exists in P3; always null",
   "p1_regression_test_count": 39,
   "p2_regression_test_count": 51,
-  "p3_test_count": 67,
-  "total_tests": 157,
+  "p3_test_count": 68,
+  "total_tests": 158,
   "check_env_specs": "passed on the P3-modified PA4EnvBase (fast/batched observation path added in P3)",
   "auditor_read_actual_wsl_repo": true,
   "auditor_access_proof": "pa4-auditor returned ACCESS_OK and quoted lines 1-6 of pa4/collector/batched_core.py and pa4/actions/batched_scorer.py verbatim, plus the literal docs/phases/P3 listing.",
   "auditor_verdict": "PENDING_REAUDIT",
   "audit_findings": [
-    {"id": "A1", "finding": "PA4ActorTransitionV1 was narrower than DESIGN 3.2: no schema_version/next_observation, no legal mask/token refs/digest per seat", "status": "FIXED - schema_version, next_observation, legal_mask/entity_token/move_token, observation_digest and per-seat policy provenance added and asserted"},
-    {"id": "A2", "finding": "2/4-driver runs had no cold/steady windows or stage breakdown, and the docs claimed them for every run", "status": "FIXED - per-driver windows and stage sums are retained in each multi JSON; the aggregate steady figure is the mean of per-driver rates, and the docs say so"},
-    {"id": "A3", "finding": "central-vs-per-driver comparison used different batching policies", "status": "FIXED - both use min_batch=2, timeout=0.02"},
-    {"id": "A4", "finding": "weight fingerprint was computed from a separately constructed model, fp=0 bypassed validation, RESET was unvalidated, and P1/P3 published different hashes", "status": "FIXED - fingerprint comes from the live model using P1's exact algorithm (P3 now reproduces P1's 356710...), fp=0 is rejected, RESET validates, the client rejects a mismatched response"},
-    {"id": "A5", "finding": "step-level mask/token refs came from the loop's last table, not each request's own table", "status": "FIXED - each future carries its own table; the test asserts mask sum == branch_k"},
-    {"id": "A6", "finding": "step_index in records was post-action", "status": "FIXED - the pre-action step_index is captured before env.step"},
-    {"id": "A7", "finding": "forward counters included only STEP forwards but were labelled as all forwards", "status": "FIXED - step_forward_* and encode_forward_* are separate and labelled"},
-    {"id": "A8", "finding": "stale PROJECT_STATUS/INTEGRATION_DECISION and a dangling audit_findings reference", "status": "FIXED - both documents updated; this key now exists"},
-    {"id": "A9", "finding": "legacy run_collector/collector_core were untested and emitted partial records; two evidence scripts were statically broken", "status": "FIXED - removed; evidence/run_baseline.py is the reproducible baseline"}
+    {
+      "id": "A1",
+      "finding": "PA4ActorTransitionV1 was narrower than DESIGN 3.2: no schema_version/next_observation, no legal mask/token refs/digest per seat",
+      "status": "FIXED - schema_version, next_observation, legal_mask/entity_token/move_token, observation_digest and per-seat policy provenance added and asserted"
+    },
+    {
+      "id": "A2",
+      "finding": "2/4-driver runs had no cold/steady windows or stage breakdown, and the docs claimed them for every run",
+      "status": "FIXED - per-driver windows and stage sums are retained in each multi JSON; the aggregate steady figure is the mean of per-driver rates, and the docs say so"
+    },
+    {
+      "id": "A3",
+      "finding": "central-vs-per-driver comparison used different batching policies",
+      "status": "FIXED - both use min_batch=2, timeout=0.02"
+    },
+    {
+      "id": "A4",
+      "finding": "weight fingerprint was computed from a separately constructed model, fp=0 bypassed validation, RESET was unvalidated, and P1/P3 published different hashes",
+      "status": "FIXED - fingerprint comes from the live model using P1's exact algorithm (P3 now reproduces P1's 356710...), fp=0 is rejected, RESET validates, the client rejects a mismatched response"
+    },
+    {
+      "id": "A5",
+      "finding": "step-level mask/token refs came from the loop's last table, not each request's own table",
+      "status": "FIXED - each future carries its own table; the test asserts mask sum == branch_k"
+    },
+    {
+      "id": "A6",
+      "finding": "step_index in records was post-action",
+      "status": "FIXED - the pre-action step_index is captured before env.step"
+    },
+    {
+      "id": "A7",
+      "finding": "forward counters included only STEP forwards but were labelled as all forwards",
+      "status": "FIXED - step_forward_* and encode_forward_* are separate and labelled"
+    },
+    {
+      "id": "A8",
+      "finding": "stale PROJECT_STATUS/INTEGRATION_DECISION and a dangling audit_findings reference",
+      "status": "FIXED - both documents updated; this key now exists"
+    },
+    {
+      "id": "A9",
+      "finding": "legacy run_collector/collector_core were untested and emitted partial records; two evidence scripts were statically broken",
+      "status": "FIXED - removed; evidence/run_baseline.py is the reproducible baseline"
+    },
+    {
+      "id": "A10",
+      "finding": "receipt provenance named the wrong measurement commit, and the test count and slowdown ratio contradicted the CSV/docs",
+      "status": "FIXED - all receipts/docs now cite 13395df and 158 tests; the ratio is 4.2-7.6x from the CSV"
+    },
+    {
+      "id": "A11",
+      "finding": "per-driver windows were labelled by arrival order; steady was undefined/short; the transport causality was over-stated",
+      "status": "FIXED - real driver indices, 'steady' defined as post-warmup steps with window length recorded (12-56 steps), and the causality text now says queue and forward time both rise without isolating transport from service/CPU contention"
+    },
+    {
+      "id": "A12",
+      "finding": "STEP/RESET fingerprints were not checked; seat records lacked request_kind/precision",
+      "status": "FIXED - every response is checked, and seat records carry request_kind and precision_profile"
+    },
+    {
+      "id": "A13",
+      "finding": "two evidence scripts read removed pre-A7 keys; two orphaned pre-schema JSONs remained",
+      "status": "FIXED - scripts updated, orphaned JSONs removed"
+    }
   ],
   "review_history": [
-    {"round": 1, "context": "Windows opencode.exe", "commit": "4079610", "result": "INSUFFICIENT_EVIDENCE", "note": "denied external_directory access to the WSL repo"},
-    {"round": 2, "context": "WSL", "commit": "4079610", "result": "FINDINGS", "note": "B>=2 supported per driver, but central/per-driver scope, transition retention, fingerprints and G3-D controls were missing"},
-    {"round": 3, "context": "WSL", "commit": "297cf8b", "result": "FINDINGS", "note": "accounting tautology fixed; P3-C retention/central inference still missing"},
-    {"round": 4, "context": "WSL", "commit": "68d1edf", "result": "FINDINGS", "note": "retention/central/fingerprints implemented but record schema incomplete, multi windows missing, comparison confounded"},
-    {"round": 5, "context": "WSL", "commit": "b3fc81e", "result": "PENDING_REAUDIT", "note": "all A1-A9 addressed"}
+    {
+      "round": 1,
+      "context": "Windows opencode.exe",
+      "commit": "4079610",
+      "result": "INSUFFICIENT_EVIDENCE",
+      "note": "denied external_directory access to the WSL repo"
+    },
+    {
+      "round": 2,
+      "context": "WSL",
+      "commit": "4079610",
+      "result": "FINDINGS",
+      "note": "B>=2 supported per driver, but central/per-driver scope, transition retention, fingerprints and G3-D controls were missing"
+    },
+    {
+      "round": 3,
+      "context": "WSL",
+      "commit": "297cf8b",
+      "result": "FINDINGS",
+      "note": "accounting tautology fixed; P3-C retention/central inference still missing"
+    },
+    {
+      "round": 4,
+      "context": "WSL",
+      "commit": "68d1edf",
+      "result": "FINDINGS",
+      "note": "retention/central/fingerprints implemented but record schema incomplete, multi windows missing, comparison confounded"
+    },
+    {
+      "round": 5,
+      "context": "WSL",
+      "commit": "b3fc81e",
+      "result": "FINDINGS",
+      "note": "A1-A7 fixed in code; remaining issues were evidence provenance, a wrong test count/ratio, per-driver attribution, an undefined steady window and an over-stated causality claim"
+    },
+    {
+      "round": 6,
+      "context": "WSL",
+      "commit": "13395df",
+      "result": "PENDING_REAUDIT",
+      "note": "N1-N12 evidence/code fixes applied"
+    }
   ],
   "gates": {
     "G3_A": "PASS_SCOPED_ADR_008",
@@ -114,12 +265,12 @@
         "model_forward_count == 1 with forward_batch_sizes == [4] for four independent rows",
         "model_device == cuda:0",
         "one server serves 2 and 4 spawned driver processes via transport=distributed",
-        "220 / 187 forwards contained requests from 2 / 4 distinct driver run_ids",
+        "235 / 180 forwards contained requests from 2 / 4 distinct driver run_ids",
         "each row's branch_k, request_key and selected index checked against its own request"
       ]
     },
     "G3_C": {
-      "test": "tests/collector/test_matches.py (26 tests)",
+      "test": "tests/collector/test_matches.py (27 tests)",
       "facts": [
         ">= 16 natural completions per run",
         "2 and 4 independent driver processes",
@@ -154,7 +305,7 @@
         "docs/phases/P3/TENSORDICT_TRANSITION_V1.md"
       ],
       "facts": [
-        "P1 39 + P2 51 + P3 67 = 157 tests green",
+        "P1 39 + P2 51 + P3 68 = 158 tests green",
         "frozen uv.lock unchanged",
         "PA3 reference unmodified",
         "auditor read the actual WSL repository files",
@@ -166,86 +317,91 @@
     {
       "config": "16 envs (1 worker)",
       "mode": "single",
-      "matches_per_s": 3.83,
-      "steady_matches_per_s": 7.61,
-      "transitions_per_s": 68.9,
+      "matches_per_s": 5.12,
+      "steady_matches_per_s": 7.77,
+      "transitions_per_s": 80.6,
       "bmax": 29,
-      "bmean": 5.61,
-      "measured_at_commit": "b3fc81e"
+      "bmean": 5.86,
+      "steady_steps": 56,
+      "measured_at_commit": "13395df"
     },
     {
       "config": "32 envs (1 worker)",
       "mode": "single",
-      "matches_per_s": 4.18,
-      "steady_matches_per_s": 9.61,
-      "transitions_per_s": 85.1,
+      "matches_per_s": 5.53,
+      "steady_matches_per_s": 9.23,
+      "transitions_per_s": 95.3,
       "bmax": 61,
-      "bmean": 7.19,
-      "measured_at_commit": "b3fc81e"
+      "bmean": 6.92,
+      "steady_steps": 27,
+      "measured_at_commit": "13395df"
     },
     {
       "config": "64 envs (1 worker)",
       "mode": "single",
-      "matches_per_s": 3.82,
-      "steady_matches_per_s": 12.52,
-      "transitions_per_s": 93.4,
+      "matches_per_s": 5.48,
+      "steady_matches_per_s": 11.17,
+      "transitions_per_s": 106.3,
       "bmax": 64,
-      "bmean": 8.27,
-      "measured_at_commit": "b3fc81e"
+      "bmean": 8.15,
+      "steady_steps": 12,
+      "measured_at_commit": "13395df"
     },
     {
       "config": "32 envs (2 workers)",
       "mode": "central",
-      "matches_per_s": 1.22,
-      "steady_matches_per_s": 0.78,
-      "transitions_per_s": 21.3,
+      "matches_per_s": 1.25,
+      "steady_matches_per_s": 0.82,
+      "transitions_per_s": 21.5,
       "bmax": 62,
-      "bmean": 3.37,
-      "measured_at_commit": "b3fc81e",
-      "cross_worker_forwards": 220,
+      "bmean": 4.02,
+      "steady_steps": null,
+      "measured_at_commit": "13395df",
+      "cross_worker_forwards": 235,
       "max_worker_ids_per_forward": 2
     },
     {
       "config": "32 envs (2 workers)",
       "mode": "per_driver",
-      "matches_per_s": 5.43,
-      "steady_matches_per_s": 5.52,
-      "transitions_per_s": 96.2,
+      "matches_per_s": 5.24,
+      "steady_matches_per_s": 5.6,
+      "transitions_per_s": 97.0,
       "bmax": 30,
-      "bmean": 4.33,
-      "measured_at_commit": "b3fc81e",
+      "bmean": 4.43,
+      "steady_steps": null,
+      "measured_at_commit": "13395df",
       "cross_worker_forwards": 0,
-      "max_worker_ids_per_forward": 0,
-      "steady_definition": "mean of per-driver steady rates"
+      "max_worker_ids_per_forward": 0
     },
     {
       "config": "64 envs (4 workers)",
       "mode": "central",
-      "matches_per_s": 1.0,
-      "steady_matches_per_s": 0.3,
-      "transitions_per_s": 18.0,
+      "matches_per_s": 0.98,
+      "steady_matches_per_s": 0.29,
+      "transitions_per_s": 17.3,
       "bmax": 64,
-      "bmean": 1.74,
-      "measured_at_commit": "b3fc81e",
-      "cross_worker_forwards": 187,
+      "bmean": 1.71,
+      "steady_steps": null,
+      "measured_at_commit": "13395df",
+      "cross_worker_forwards": 180,
       "max_worker_ids_per_forward": 4
     },
     {
       "config": "64 envs (4 workers)",
       "mode": "per_driver",
-      "matches_per_s": 6.95,
-      "steady_matches_per_s": 3.04,
-      "transitions_per_s": 121.3,
+      "matches_per_s": 7.47,
+      "steady_matches_per_s": 3.39,
+      "transitions_per_s": 125.8,
       "bmax": 30,
-      "bmean": 4.71,
-      "measured_at_commit": "b3fc81e",
+      "bmean": 4.86,
+      "steady_steps": null,
+      "measured_at_commit": "13395df",
       "cross_worker_forwards": 0,
-      "max_worker_ids_per_forward": 0,
-      "steady_definition": "mean of per-driver steady rates"
+      "max_worker_ids_per_forward": 0
     }
   ],
-  "performance_finding": "Cross-process central batching is correct and observable but ~4.3-7.4x slower than per-driver servers on this host: the distributed transport opens a gloo/TCP pair per client, while ProcessSlotTransport (faster) cannot serve two processes. Reported for P6/P7 transport selection, not as a model-compute conclusion.",
-  "provenance_note": "All performance rows were measured at commit 68d1edf by docs/phases/P3/evidence/run_baseline.py; each run's full report, including stage timings, is retained as evidence/baseline_<run_id>.json.",
+  "performance_finding": "Cross-process central batching is correct and observable but ~4.2-7.6x slower than per-driver servers on this host, with the same batching policy in both. Both queue time and model-forward time rise, so transport and service/CPU contention are not isolated. Reported for P6/P7 transport selection, not as a model-compute conclusion.",
+  "provenance_note": "All performance rows were measured at commit 13395df by docs/phases/P3/evidence/run_baseline.py; each run's full report, including stage timings, is retained as evidence/baseline_<run_id>.json.",
   "optimisations": [
     "batched decode: one observe_fixed_batch for all requesting seats instead of 2*N calls",
     "collector reuses the env's already-decoded observations instead of decoding twice",
@@ -274,8 +430,8 @@
   ],
   "limitations": [
     "AsyncBatchedCollector is not used; G3-A is a scoped PASS under ADR-008",
-    "central cross-process inference is ~4.3-7.4x slower than per-driver servers on this host (gloo/TCP per client)",
-    "throughput ~7.0 matches/s, far below the 1,000/s stretch goal which the design forbids proving on this GPU",
+    "central cross-process inference is ~4.2-7.6x slower than per-driver servers on this host (gloo/TCP per client)",
+    "throughput ~7.5 matches/s, far below the 1,000/s stretch goal which the design forbids proving on this GPU",
     "single-driver and central baseline runs use one seed per configuration; run-to-run variance is not characterised",
     "GPU encode/step are nearly flat in batch size; wider batches do not by themselves increase throughput",
     "random PA3 weights (seed 20261006); no strength or weight-parity claim",
@@ -293,7 +449,7 @@
   "test_results": {
     "action_distribution": "Ran 39 tests, OK",
     "environment": "Ran 51 tests, OK",
-    "collector": "Ran 67 tests, OK"
+    "collector": "Ran 68 tests, OK"
   },
   "notes": [
     "One env step remains one native advance attempt; one match is counted once on a unique terminated natural completion.",
