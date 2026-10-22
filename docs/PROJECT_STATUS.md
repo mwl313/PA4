@@ -1,10 +1,10 @@
 # PA4 Project Status
 
 **Last updated:** 2026-10-22
-**Current phase:** P3 — Batched Collector and Central Inference (**closed**)
-**Current verdict:** **P3 PASS** (5/5; G3-A scoped under ADR-008)
-**Last closed phase:** P3 **PASS**
-**Next phase:** P4 — not started
+**Current phase:** P3.5 — Observation Contract Repair (**implementation complete; auditor gate BLOCKED**)
+**Current verdict:** **P3.5 implementation PASS**, fresh-context audit **BLOCKED** (environmental)
+**Last closed phase:** P3 **PASS** (receipt preserved unchanged)
+**Next phase:** P4 — not started; blocked on the P3.5 auditor gate
 
 | Phase | Verdict | Evidence |
 |---|---|---|
@@ -12,6 +12,7 @@
 | **P1** Conditional action feasibility | **PASS** (G1-D CPU-scoped) | `docs/phases/P1/RECEIPT.json` |
 | **P2** Rust ↔ TorchRL environment adapter | **PASS** (5/5) | `docs/phases/P2/{FINAL_REPORT.md,RECEIPT.json}` |
 | **P3** Batched collector / central inference | **PASS** (5/5) | `docs/phases/P3/{FINAL_REPORT.md,RECEIPT.json,PERFORMANCE_BASELINE.csv}` |
+| **P3.5** Observation contract repair | **Implementation PASS; audit BLOCKED** | `docs/phases/P3.5/{FINAL_REPORT.md,RECEIPT.json,ADR_009.md}` |
 
 PASS establishes the phase contracts only. It does not prove Collector
 scalability, PPO stability, agent strength or throughput.
