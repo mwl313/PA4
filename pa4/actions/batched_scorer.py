@@ -61,13 +61,11 @@ def model_fingerprint(seed: int = 20261006) -> str:
     from agent.model.config import PA3Config
     from agent.model.pa3_model import PA3Model
 
+    from pa4.actions.conditional_policy import weight_fingerprint
+
     torch.manual_seed(seed)
     model = PA3Model(PA3Config(initialization="random", seed=seed)).eval()
-    h = hashlib.sha256()
-    for name, value in sorted(model.state_dict().items()):
-        h.update(name.encode())
-        h.update(value.detach().cpu().contiguous().numpy().tobytes())
-    _FP_CACHE[seed] = h.hexdigest()
+    _FP_CACHE[seed] = weight_fingerprint(model)
     return _FP_CACHE[seed]
 
 
@@ -174,8 +172,12 @@ class BatchedConditionalScorer(nn.Module):
         self.cache_high_water = 0
         # Provenance: which worker namespaces contributed to each forward.
         self.forward_run_ids: list[list[int]] = []
-        self.fingerprint = model_fingerprint(self._seed)
-        self.fingerprint_id = fingerprint_id(self.fingerprint)
+        self.fingerprint: str | None = None
+        self.fingerprint_id = 0
+        # Separate STEP and ENCODE forward accounting: the G3-B histogram is
+        # about STEP forwards, while total model work includes encoding.
+        self.encode_forward_count = 0
+        self.encode_batch_sizes: list[int] = []
 
     # -- model ------------------------------------------------------------
     def _ensure_model(self):
@@ -186,7 +188,15 @@ class BatchedConditionalScorer(nn.Module):
             torch.manual_seed(self._seed)
             model = PA3Model(PA3Config(initialization="random", seed=self._seed))
             self._model = model.to(self.device).eval()
+            from pa4.actions.conditional_policy import weight_fingerprint
+
+            self.fingerprint = weight_fingerprint(self._model)
+            self.fingerprint_id = fingerprint_id(self.fingerprint)
         return self._model
+
+    def _ensure_fingerprint(self) -> None:
+        if not self.fingerprint_id:
+            self._ensure_model()
 
     @property
     def model_device(self) -> str:
@@ -282,15 +292,20 @@ class BatchedConditionalScorer(nn.Module):
 
     def _do_reset(self, td, rows, results):
         for r in rows:
-            self._cache.pop(identity_key(td, r), None)
+            key = identity_key(td, r)
+            if not self._version_ok(td, r):
+                self._cache.pop(key, None)
+                results[r]["error_code"] = ERR_STALE_IDENTITY
+                continue
+            self._cache.pop(key, None)
             self.reset_calls += 1
             results[r]["cache_size"] = len(self._cache)
 
     def _version_ok(self, td, r) -> bool:
+        self._ensure_fingerprint()
         if _row_int(td, "policy_version", r) != self.policy_version:
             return False
-        fp = _row_int(td, "policy_fingerprint", r)
-        return fp == 0 or fp == self.fingerprint_id
+        return _row_int(td, "policy_fingerprint", r) == self.fingerprint_id
 
     def _do_encode(self, td, rows, results):
         model = self._ensure_model()
@@ -317,6 +332,8 @@ class BatchedConditionalScorer(nn.Module):
             run_ids = sorted({_row_int(td, "run_id", r) for r in valid_rows})
             self.forward_run_ids.append(run_ids)
             encoded = model.encode(obs)
+        self.encode_forward_count += 1
+        self.encode_batch_sizes.append(len(valid_rows))
         self.encode_calls += len(valid_rows)
         for i, r in enumerate(valid_rows):
             key = identity_key(td, r)
@@ -457,8 +474,8 @@ class BatchedConditionalScorer(nn.Module):
                 "request_key": torch.tensor([r["request_key"] for r in results], dtype=torch.long),
                 "branch_level": torch.tensor([r["branch_level"] for r in results], dtype=torch.long),
                 "policy_version": torch.tensor([r["policy_version"] for r in results], dtype=torch.long),
-                "policy_fingerprint": torch.tensor(
-                    [r["policy_fingerprint"] for r in results], dtype=torch.long),
+                "policy_fingerprint": torch.full(
+                    (n,), self.fingerprint_id, dtype=torch.long),
                 "cache_size": torch.tensor([r["cache_size"] for r in results], dtype=torch.long),
                 "error_code": torch.tensor([r["error_code"] for r in results], dtype=torch.long),
             },

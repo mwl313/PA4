@@ -117,12 +117,12 @@ class MultiContextTest(unittest.TestCase):
 class TransitionRetentionTest(unittest.TestCase):
     """P3-C: bounded PA4ActorTransitionV1 records with replay necessities."""
 
-    REQUIRED = ("run_id", "worker_id", "native_slot", "native_generation",
+    REQUIRED = ("schema_version", "run_id", "worker_id", "native_slot", "native_generation",
                 "episode_id", "step_index", "request_ids", "policy_version",
                 "policy_weight_fingerprint", "observation_contract_hash",
                 "real_p2_action_packet", "reward", "done", "terminated",
                 "truncated", "match_completed", "winner", "request_revised",
-                "match_id", "seat_records")
+                "match_id", "seat_records", "next_observation")
 
     @classmethod
     def setUpClass(cls):
@@ -145,6 +145,8 @@ class TransitionRetentionTest(unittest.TestCase):
         rec = next(iter(self.store))
         for key in self.REQUIRED:
             self.assertIn(key, rec)
+        self.assertEqual(rec["schema_version"], "pa4.actor_transition.v1")
+        self.assertEqual(len(rec["next_observation"]), len(rec["seat_records"]))
         self.assertEqual(len(rec["policy_weight_fingerprint"]), 64,
                          "weight fingerprint is not a sha256")
         self.assertEqual(rec["policy_weight_fingerprint"],
@@ -162,10 +164,19 @@ class TransitionRetentionTest(unittest.TestCase):
                               "side_ids"})
             for leaf in seat["observation"].values():
                 self.assertEqual(leaf.device.type, "cpu")
+            self.assertEqual(len(seat["observation_digest"]), 64)
             self.assertTrue(seat["branches"])
             for b in seat["branches"]:
                 self.assertIn(b["selected_index"], range(len(b["candidates"])))
                 self.assertGreaterEqual(b["branch_k"], 1)
+                # masks/refs are the fixed 64-slot table; only first k are real
+                for key in ("legal_mask", "entity_token", "move_token"):
+                    self.assertEqual(len(b[key]), 64)
+                self.assertEqual(sum(b["legal_mask"][:b["branch_k"]]), b["branch_k"])
+                self.assertFalse(any(b["legal_mask"][b["branch_k"]:]))
+            nxt = next(n for n in rec["next_observation"] if n["seat"] == seat["seat"])
+            self.assertEqual(set(nxt["observation"]), set(seat["observation"]))
+            self.assertIn("observation_valid", nxt)
 
     def test_action_packet_is_the_real_six_key_packet(self):
         rec = next(iter(self.store))
@@ -191,6 +202,20 @@ class TransitionRetentionTest(unittest.TestCase):
 
     def test_lost_completion_guard_matches_env(self):
         self.assertEqual(self.rep.env_completed_matches, self.rep.natural_matches)
+
+
+class LedgerGuardTest(unittest.TestCase):
+    def test_mismatch_is_an_error_and_match_is_not(self):
+        from pa4.collector.run_batched import completion_ledger_error
+
+        rep = BatchedReport(run_id="unit")
+        rep.natural_matches = 5
+        self.assertIsNone(completion_ledger_error(rep, 5))
+        msg = completion_ledger_error(rep, 6)
+        self.assertIn("lost completion", msg)
+        rep.errors.append("other")
+        self.assertIsNone(completion_ledger_error(rep, 6),
+                          "an existing error already fails the run")
 
 
 class BoundedStoreTest(unittest.TestCase):

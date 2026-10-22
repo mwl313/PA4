@@ -52,7 +52,8 @@ def driver_main(idx, num_envs, target, seed, out_q, device, transport=None,
         out_q.put(("err", idx, f"{exc!r}\n{traceback.format_exc()[-600:]}"))
 
 
-def _make_central_server(num_clients, device, stats_path):
+def _make_central_server(num_clients, device, stats_path,
+                         min_batch=1, timeout=0.0):
     from torchrl.modules.inference_server import InferenceServer
 
     from pa4.actions.batched_factory_instrumented import build_instrumented_service
@@ -69,7 +70,7 @@ def _make_central_server(num_clients, device, stats_path):
         transport="distributed", service_backend="process",
         request_spec=request_spec(), response_spec=response_spec(),
         num_clients=num_clients,
-        max_batch_size=64, min_batch_size=2, timeout=0.02,
+        max_batch_size=64, min_batch_size=min_batch, timeout=timeout,
         transport_options={"host": "127.0.0.1", "port": 0,
                            "channel_name": f"pa4p3-{os.getpid()}"},
     )
@@ -78,7 +79,7 @@ def _make_central_server(num_clients, device, stats_path):
 
 
 def run_multi(num_drivers=4, num_envs=16, target=32, seed=1, device="cuda",
-              central=True, warmup=2):
+              central=True, warmup=2, server_min_batch=1, server_timeout=0.0):
     ctx = mp.get_context("spawn")
     q = ctx.Queue()
     procs = []
@@ -88,7 +89,8 @@ def run_multi(num_drivers=4, num_envs=16, target=32, seed=1, device="cuda",
     t0 = time.perf_counter()
 
     if central:
-        srv = _make_central_server(num_drivers * clients_per_driver, device, stats_path)
+        srv = _make_central_server(num_drivers * clients_per_driver, device, stats_path,
+                                   min_batch=server_min_batch, timeout=server_timeout)
         transport = srv.transport
     else:
         transport = None
@@ -142,8 +144,46 @@ def run_multi(num_drivers=4, num_envs=16, target=32, seed=1, device="cuda",
     trans = sum(r["env_transitions"] for r in results)
     run_sets = service_stats.get("forward_run_ids", []) or []
     cross = [s for s in run_sets if len(set(s)) > 1]
-    steady_matches = sum(r.get("steady_matches", 0) for r in results)
-    steady_seconds = max((r.get("steady_seconds", 0.0) for r in results), default=0.0)
+
+    # Per-driver windows/stages are retained individually; the aggregate steady
+    # rate is the duration-weighted mean of the per-driver steady rates, and is
+    # labelled as such. The max-window figure is a lower bound on wall rate.
+    per_driver = []
+    for i, r in enumerate(results):
+        per_driver.append({
+            "worker": i,
+            "setup_seconds": r.get("setup_seconds", 0.0),
+            "warmup_seconds": r.get("warmup_seconds", 0.0),
+            "steady_seconds": r.get("steady_seconds", 0.0),
+            "steady_matches": r.get("steady_matches", 0),
+            "steady_env_steps": r.get("steady_env_steps", 0),
+            "wall_seconds": r.get("wall_seconds", 0.0),
+            "stage_seconds": r.get("stage_seconds", {}),
+            "service_stats": r.get("service_stats", {}),
+        })
+    steady_matches = sum(d["steady_matches"] for d in per_driver)
+    steady_sum = sum(d["steady_seconds"] for d in per_driver)
+    steady_max = max((d["steady_seconds"] for d in per_driver), default=0.0)
+    stage_sum = {}
+    for d in per_driver:
+        for k, v in d["stage_seconds"].items():
+            stage_sum[k] = stage_sum.get(k, 0.0) + v
+
+    if central:
+        svc_agg = service_stats
+    else:
+        # Each driver owned a server; merge its step-forward histogram.
+        sizes = []
+        for d in per_driver:
+            sizes.extend(d["service_stats"].get("step_forward_batch_sizes", []) or [])
+        svc_agg = {"step_forward_batch_sizes": sizes,
+                   "step_forward_count": len(sizes),
+                   "encode_forward_count": sum(
+                       d["service_stats"].get("encode_forward_count", 0)
+                       for d in per_driver),
+                   "max_worker_ids_per_forward": 0,
+                   "forward_run_ids": []}
+
     return {
         "num_drivers": num_drivers,
         "num_envs_each": num_envs,
@@ -154,9 +194,18 @@ def run_multi(num_drivers=4, num_envs=16, target=32, seed=1, device="cuda",
         "wall_s": round(wall, 2),
         "matches_per_s": round(matches / wall, 2) if wall else None,
         "transitions_per_s": round(trans / wall, 1) if wall else None,
+        "setup_seconds": sum(d["setup_seconds"] for d in per_driver),
+        "warmup_seconds": sum(d["warmup_seconds"] for d in per_driver),
+        "steady_seconds_sum": steady_sum,
+        "steady_seconds_max": steady_max,
         "steady_matches": steady_matches,
-        "steady_matches_per_s": (round(steady_matches / steady_seconds, 2)
-                                 if steady_seconds else None),
+        "steady_matches_per_s": (round(steady_matches / steady_sum, 2)
+                                 if steady_sum else None),
+        "steady_matches_per_s_max_window": (round(steady_matches / steady_max, 2)
+                                            if steady_max else None),
+        "steady_definition": "duration-weighted mean of per-driver steady windows",
+        "stage_seconds": stage_sum,
+        "per_driver": per_driver,
         "dupes": sum(r["duplicate_match_ids"] for r in results),
         "errors": errors + [e for r in results for e in r["errors"]],
         "per_driver_mps": [round(r["natural_matches"] / max(r["wall_seconds"], 1e-9), 2)
@@ -166,7 +215,7 @@ def run_multi(num_drivers=4, num_envs=16, target=32, seed=1, device="cuda",
         "cross_worker_forwards": len(cross),
         "max_worker_ids_per_forward": max((len(set(s)) for s in run_sets), default=0),
         "server_stats": server_stats,
-        "service_stats": service_stats,
+        "service_stats": svc_agg,
     }
 
 

@@ -20,8 +20,12 @@ class _Instrumented(BatchedConditionalScorer):
             try:
                 with open(path, "w") as fh:
                     json.dump({
-                        "model_forward_count": self.model_forward_count,
-                        "forward_batch_sizes": list(self.forward_batch_sizes),
+                        "step_forward_count": self.model_forward_count,
+                        "step_forward_batch_sizes": list(self.forward_batch_sizes),
+                        "encode_forward_count": self.encode_forward_count,
+                        "encode_batch_sizes": list(self.encode_batch_sizes),
+                        "total_model_forward_count": (self.model_forward_count
+                                                      + self.encode_forward_count),
                         "step_rows": self.step_rows,
                         "encode_calls": self.encode_calls,
                         "reset_calls": self.reset_calls,

@@ -18,7 +18,7 @@ from pa4.collector.batched_core import (
     OBS_LEAVES, POLICY_KINDS, BatchedConfig, BatchedReport, StagedInference, _ensure_paths,
 )
 from pa4.collector.transitions import (BoundedTransitionStore, accepted_records,
-                                       seat_record, transition)
+                                       next_observation, seat_record, transition)
 
 STAGES = ("request_info", "views", "encode", "step_levels", "packet",
           "env_step", "accounting", "reset")
@@ -115,8 +115,9 @@ def run_batched(cfg: BatchedConfig, clients=None, store: BoundedTransitionStore 
                 rep.env_steps -= 1
                 break
 
-            # Pre-action request identity, captured before the step.
+            # Pre-action identity, captured before the step.
             pre_request_ids = {r: tuple(env._slots[r].request_ids) for r in range(env._batch)}
+            pre_step_index = {r: int(env._slots[r].step_index) for r in range(env._batch)}
 
             # ---- 2. views for every requesting seat (no second decode) ----
             t = time.perf_counter()
@@ -160,7 +161,7 @@ def run_batched(cfg: BatchedConfig, clients=None, store: BoundedTransitionStore 
                 if not lvl_items:
                     continue
                 outs = inf.step_level(lvl_items, level)
-                for (ident, idx, k, lp) in outs:
+                for (ident, idx, k, lp, mask, entity, move) in outs:
                     cands = next(c for (i2, c, _, _) in lvl_items if i2 == ident)
                     if not (0 <= idx < len(cands)):
                         raise RuntimeError(f"index {idx} outside {len(cands)}")
@@ -169,6 +170,8 @@ def run_batched(cfg: BatchedConfig, clients=None, store: BoundedTransitionStore 
                         "level": level, "selected_index": idx,
                         "branch_k": k, "branch_logprob_fp32": lp,
                         "candidates": tuple(cands),
+                        "legal_mask": mask, "entity_token": entity,
+                        "move_token": move,
                     })
 
             inf.reset_all([ident for _, _, ident, _ in requests])
@@ -202,6 +205,8 @@ def run_batched(cfg: BatchedConfig, clients=None, store: BoundedTransitionStore 
                     branches=s,
                     actor_active=any(x["branch_k"] >= 2 for x in s),
                     joint_logprob_fp32=sum(x["branch_logprob_fp32"] for x in s),
+                    policy_version=cfg.policy_version,
+                    policy_weight_fingerprint=rep.policy_weight_fingerprint,
                 ))
                 seat_records[-1]["row"] = r
 
@@ -223,6 +228,10 @@ def run_batched(cfg: BatchedConfig, clients=None, store: BoundedTransitionStore 
             t = time.perf_counter()
             revised_rows = {r for r in range(n) if bool(out["next", "request_revised"][r])}
             accepted = accepted_records(seat_records, revised_rows)
+            post_views = _views_from_players(out["next"]["players"], requests)
+            post_by_seat = {(r, seat): (post_views[i],
+                                       bool(out["next", "players", "observation_valid"][r, seat]))
+                            for i, (r, seat, _ident_v, _v) in enumerate(requests)}
             rep.revised_seat_records += len(seat_records) - len(accepted)
             rep.seat_records += len(accepted)
             rep.actor_active_rows += sum(1 for s in accepted if s["actor_active"])
@@ -240,11 +249,14 @@ def run_batched(cfg: BatchedConfig, clients=None, store: BoundedTransitionStore 
                 store.put(transition(
                     run_id=cfg.run_id, worker_id=cfg.worker_index,
                     native_slot=st.slot, native_generation=st.generation,
-                    episode_id=st.episode_id, step_index=st.step_index,
+                    episode_id=st.episode_id, step_index=pre_step_index[r],
                     request_ids=pre_request_ids[r],
                     policy_version=cfg.policy_version,
                     policy_weight_fingerprint=rep.policy_weight_fingerprint,
                     observation_contract_hash=contract_hash,
+                    next_observations=[next_observation(
+                        s["seat"], *post_by_seat[(r, s["seat"])])
+                        for s in row_seats],
                     action_packet={
                         "action": action[r].tolist(),
                         "action_branch_count": counts[r].tolist(),
@@ -320,11 +332,20 @@ def run_batched(cfg: BatchedConfig, clients=None, store: BoundedTransitionStore 
     if inf.server_fingerprint is not None and inf.server_fingerprint != expected_fp:
         rep.errors.append(
             f"server weight fingerprint {inf.server_fingerprint} != expected {expected_fp}")
-    if not rep.errors and rep.env_completed_matches != rep.natural_matches:
-        rep.errors.append(
-            f"lost completion: env counted {rep.env_completed_matches}, "
-            f"collector ledger has {rep.natural_matches}")
+    err = completion_ledger_error(rep, rep.env_completed_matches)
+    if err:
+        rep.errors.append(err)
     return rep
+
+
+def completion_ledger_error(rep, env_completed_matches):
+    """Independent lost-completion check against the environment's counter."""
+    if rep.errors:
+        return None
+    if env_completed_matches != rep.natural_matches:
+        return (f"lost completion: env counted {env_completed_matches}, "
+                f"collector ledger has {rep.natural_matches}")
+    return None
 
 
 def account_step(next_td, slots, seen, rep, run_id, worker_index):

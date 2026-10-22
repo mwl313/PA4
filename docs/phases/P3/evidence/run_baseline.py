@@ -81,11 +81,11 @@ def main():
                                      if d["steady_matches_per_sec"] else None),
             "env_transitions": d["env_transitions"],
             "env_transitions_per_s": round(d["env_transitions_per_sec"] or 0, 1),
-            "forward_batch_max": max((d["service_stats"].get("forward_batch_sizes") or [0])
+            "forward_batch_max": max((d["service_stats"].get("step_forward_batch_sizes") or [0])
                                      or [0]),
-            "forward_batch_mean": (round(sum(d["service_stats"]["forward_batch_sizes"])
+            "forward_batch_mean": (round(sum(d["service_stats"]["step_forward_batch_sizes"])
                                          / len(d["service_stats"]["forward_batch_sizes"]), 2)
-                                   if d["service_stats"].get("forward_batch_sizes") else None),
+                                   if d["service_stats"].get("step_forward_batch_sizes") else None),
             "transitions_stored": d["transitions_stored"],
             "transitions_dropped": d["transitions_dropped"],
             "duplicate_matches": d["duplicate_match_ids"],
@@ -104,16 +104,24 @@ def main():
             "run_id": run_id, "git_sha": sha,
             "mode": "central" if central else "per_driver",
             "worker_count": num_drivers, "envs_per_worker": 16,
-            "total_envs": num_drivers * 16, "setup_s": None, "warmup_s": 2,
-            "steady_s": None, "matches": out["matches"],
+            "total_envs": num_drivers * 16,
+            "setup_s": round(out["setup_seconds"], 2),
+            "warmup_s": round(out["warmup_seconds"], 2),
+            "steady_s": round(out["steady_seconds_sum"], 2),
+            "steady_s_max": round(out["steady_seconds_max"], 2),
+            "window_note": out["steady_definition"],
+            "matches": out["matches"],
             "matches_per_s": out["matches_per_s"],
             "steady_matches": out["steady_matches"],
             "steady_matches_per_s": out["steady_matches_per_s"],
             "env_transitions": out["transitions"],
             "env_transitions_per_s": out["transitions_per_s"],
-            "forward_batch_max": (max((out["service_stats"].get("forward_batch_sizes") or [0])
+            "forward_batch_max": (max((out["service_stats"].get("step_forward_batch_sizes") or [0])
                                       or [0]) if out.get("service_stats") else None),
-            "forward_batch_mean": None,
+            "forward_batch_mean": (round(sum(out["service_stats"]["step_forward_batch_sizes"])
+                                         / len(out["service_stats"]["step_forward_batch_sizes"]), 2)
+                                   if out.get("service_stats", {}).get("step_forward_batch_sizes")
+                                   else None),
             "transitions_stored": out["transitions_stored"],
             "transitions_dropped": out["transitions_dropped"],
             "duplicate_matches": out["dupes"],
@@ -123,7 +131,8 @@ def main():
         })
 
     fields = ["run_id", "git_sha", "mode", "worker_count", "envs_per_worker",
-              "total_envs", "setup_s", "warmup_s", "steady_s", "matches",
+              "total_envs", "setup_s", "warmup_s", "steady_s", "steady_s_max",
+              "window_note", "matches",
               "matches_per_s", "steady_matches", "steady_matches_per_s",
               "env_transitions", "env_transitions_per_s", "forward_batch_max",
               "forward_batch_mean", "transitions_stored", "transitions_dropped",

@@ -1,9 +1,10 @@
 """P3-C: bounded, in-memory PA4ActorTransitionV1 records.
 
-Design: PA4-P3-DESIGN-v1.0 §3.2. Records hold the *pre-action* per-seat
-observation by value, the ordered candidate table for every prefix level, the
-selected index/logprob, the real P2 action packet and the native outcome, so P4
-can replay a behaviour decision exactly.
+Design: PA4-P3-DESIGN-v1.0 §3.2. A record holds the *pre-action* per-seat
+observation by value, the ordered candidate table for every prefix level (with
+its legal mask and token refs), the selected index/logprob, the real P2 action
+packet, the post-action per-seat view and the native outcome, so P4 can replay a
+behaviour decision exactly.
 
 Storage is deliberately bounded: a fixed-capacity deque that drops the oldest
 record when full and counts the drop. There is no database, no serialization and
@@ -12,10 +13,13 @@ no unbounded retention.
 
 from __future__ import annotations
 
+import hashlib
 from collections import deque
 
 OBS_LEAVES = ("token_mask", "categories", "category_known", "floats", "float_known",
               "flags", "flag_known", "role_ids", "side_ids")
+
+SCHEMA_VERSION = "pa4.actor_transition.v1"
 
 
 class BoundedTransitionStore:
@@ -66,20 +70,39 @@ def _clone(t):
     return t.detach().to("cpu").clone()
 
 
+def observation_digest(view: dict) -> str:
+    """Content digest over one decoded view, dtype/shape aware."""
+    h = hashlib.sha256()
+    for name in OBS_LEAVES:
+        t = view[name].detach().cpu().contiguous()
+        h.update(name.encode())
+        h.update(str(t.dtype).encode())
+        h.update(str(tuple(t.shape)).encode())
+        h.update(t.numpy().tobytes())
+    return h.hexdigest()
+
+
 def seat_record(seat: int, request_id: int, view: dict, branches: list[dict],
-                actor_active: bool, joint_logprob_fp32: float) -> dict:
-    """One seat's decision, including its pre-action observation by value."""
+                actor_active: bool, joint_logprob_fp32: float,
+                policy_version: int, policy_weight_fingerprint: str) -> dict:
+    """One seat's accepted decision, including its pre-action observation."""
     return {
         "seat": int(seat),
         "request_id": int(request_id),
         "observation": {k: _clone(view[k]) for k in OBS_LEAVES},
+        "observation_digest": observation_digest(view),
         "actor_active": bool(actor_active),
         "joint_logprob_fp32": float(joint_logprob_fp32),
+        "policy_version": int(policy_version),
+        "policy_weight_fingerprint": policy_weight_fingerprint,
         "branches": [
             {
                 "level": int(b["level"]),
                 "candidates": tuple(tuple(int(v) for v in row)
                                     for row in b["candidates"]),
+                "legal_mask": [bool(x) for x in b["legal_mask"]],
+                "entity_token": [int(x) for x in b["entity_token"]],
+                "move_token": [int(x) for x in b["move_token"]],
                 "selected_index": int(b["selected_index"]),
                 "branch_k": int(b["branch_k"]),
                 "branch_logprob_fp32": float(b["branch_logprob_fp32"]),
@@ -89,15 +112,26 @@ def seat_record(seat: int, request_id: int, view: dict, branches: list[dict],
     }
 
 
+def next_observation(seat: int, view: dict, valid: bool) -> dict:
+    """Post-action per-seat P2-visible data (neutral padding kept explicit)."""
+    return {
+        "seat": int(seat),
+        "observation_valid": bool(valid),
+        "observation": {k: _clone(view[k]) for k in OBS_LEAVES},
+    }
+
+
 def transition(*, run_id: str, worker_id: int, native_slot: int,
                native_generation: int, episode_id: int, step_index: int,
                request_ids, policy_version: int, policy_weight_fingerprint: str,
                observation_contract_hash: str, action_packet: dict,
+               next_observations: list[dict],
                reward, done: bool, terminated: bool, truncated: bool,
                match_completed: bool, winner: int, request_revised: bool,
                match_id, seat_records: list[dict]) -> dict:
     """Assemble one PA4ActorTransitionV1 record (plain, detached values)."""
     return {
+        "schema_version": SCHEMA_VERSION,
         "run_id": run_id,
         "worker_id": int(worker_id),
         "native_slot": int(native_slot),
@@ -108,6 +142,7 @@ def transition(*, run_id: str, worker_id: int, native_slot: int,
         "policy_version": int(policy_version),
         "policy_weight_fingerprint": policy_weight_fingerprint,
         "observation_contract_hash": observation_contract_hash,
+        "next_observation": next_observations,
         "real_p2_action_packet": action_packet,
         "reward": [float(x) for x in reward],
         "done": bool(done),

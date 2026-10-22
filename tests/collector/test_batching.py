@@ -228,6 +228,42 @@ class BatchedForwardTest(unittest.TestCase):
         self.assertEqual(int(out["error_code"][0]), 0,
                          "the rejected version corrupted the live cache entry")
 
+    def test_foreign_version_on_encode_rejected(self):
+        svc = BatchedConditionalScorer(device="cuda")
+        e, st, obs = self.envs[0]
+        out = svc(torch.stack([make_row(e, st, obs, w=0, pv=2)]))
+        self.assertEqual(int(out["error_code"][0]), ERR_STALE_IDENTITY)
+        self.assertEqual(svc.cache_size(), 0)
+
+    def test_zero_fingerprint_is_not_a_wildcard(self):
+        svc = BatchedConditionalScorer(device="cuda")
+        e, st, obs = self.envs[0]
+        out = svc(torch.stack([make_row(e, st, obs, w=0, fp=0)]))
+        self.assertEqual(int(out["error_code"][0]), ERR_STALE_IDENTITY)
+
+    def test_duplicate_step_identity_in_one_batch_rejected(self):
+        svc = BatchedConditionalScorer(device="cuda")
+        e, st, obs = self.envs[0]
+        svc(torch.stack([make_row(e, st, obs, w=0)]))
+        cands, table = branch_table(e, st, obs)
+        r = make_row(e, st, obs, w=0, op=1, level=0, cands=cands, table=table)
+        out = svc(torch.stack([r, r]))
+        self.assertEqual(int(out["error_code"][0]), ERR_STALE_IDENTITY)
+        self.assertEqual(int(out["error_code"][1]), ERR_STALE_IDENTITY)
+        self.assertEqual(svc.cache_size(), 0, "rejected duplicates must evict the entry")
+
+    def test_same_worker_id_different_run_id_does_not_alias(self):
+        """Production identities namespace by driver run_id, not only worker_id."""
+        svc = BatchedConditionalScorer(device="cuda")
+        e, st, obs = self.envs[0]
+        a = make_row(e, st, obs, w=0)
+        b = make_row(e, st, obs, w=0)
+        a["run_id"] = torch.tensor(0)
+        b["run_id"] = torch.tensor(1)
+        out = svc(torch.stack([a, b]))
+        self.assertTrue(bool((out["error_code"] == 0).all()))
+        self.assertEqual(svc.cache_size(), 2)
+
     def test_fabricated_identity_fails_closed(self):
         """A STEP whose identity was never encoded must not be served."""
         svc = BatchedConditionalScorer(device="cuda")

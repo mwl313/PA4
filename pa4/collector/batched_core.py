@@ -78,10 +78,6 @@ class BatchedReport:
     operational_errors: int = 0
     errors: list = field(default_factory=list)
     wall_seconds: float = 0.0
-    warmup_seconds: float = 0.0
-    steady_seconds: float = 0.0
-    steady_matches: int = 0
-    steady_env_steps: int = 0
     service_stats: dict = field(default_factory=dict)
     server_stats: dict = field(default_factory=dict)
     # P3-C transition retention
@@ -109,8 +105,6 @@ class BatchedReport:
             self.steady_matches / self.steady_seconds if self.steady_seconds else None)
         d["env_transitions_per_sec"] = (
             self.env_transitions / self.wall_seconds if self.wall_seconds else None)
-        d["steady_matches_per_sec"] = (
-            self.steady_matches / self.steady_seconds if self.steady_seconds else None)
         return d
 
 
@@ -174,12 +168,16 @@ class StagedInference:
                 raise RuntimeError(f"ENCODE err {err}")
             if self.server_fingerprint is None:
                 self.server_fingerprint = int(r["policy_fingerprint"])
+                if self.server_fingerprint != self.fingerprint_id:
+                    raise RuntimeError(
+                        "server weight fingerprint "
+                        f"{self.server_fingerprint} != expected {self.fingerprint_id}")
             ob = _view_to_obs(view)
             out.append((ident, ob.layout, ob.active_to_roster(), ob))
         return out
 
     def step_level(self, items, level):
-        """items: [(ident, candidates, layout, a2r)] -> [(ident, idx, k, lp)]."""
+        """items: [(ident, candidates, layout, a2r)] -> per-row index, k, lp, mask, refs."""
         futs = []
         for (ident, cands, layout, a2r) in items:
             from pa4.actions.conditional_policy import build_branch_table
@@ -193,16 +191,19 @@ class StagedInference:
             td["legal_mask"] = table.mask[0, 0]
             td["entity_token"] = table.entity_token[0, 0]
             td["move_token"] = table.move_token[0, 0]
-            futs.append((slot, ident, self.clients[slot].submit(td)))
+            futs.append((slot, ident, table, self.clients[slot].submit(td)))
         out = []
-        for slot, ident, fut in futs:
+        for slot, ident, table, fut in futs:
             r = fut.result(timeout=self.result_timeout)
             err = int(r["error_code"])
             self._release(slot)
             if err:
                 raise RuntimeError(f"STEP err {err} at level {level}")
             out.append((ident, int(r["selected_index"]), int(r["branch_k"]),
-                        float(r["branch_logprob"])))
+                        float(r["branch_logprob"]),
+                        table.mask[0, 0].tolist(),
+                        table.entity_token[0, 0].tolist(),
+                        table.move_token[0, 0].tolist()))
         return out
 
     def reset_all(self, items):
