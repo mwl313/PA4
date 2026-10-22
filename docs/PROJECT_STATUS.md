@@ -1,9 +1,9 @@
 # PA4 Project Status
 
 **Last updated:** 2026-10-22
-**Current phase:** P3 — Batched Collector and Central Inference (**open**)
-**Current verdict:** **P3 PENDING_FINAL_AUDIT** (G3-A–G3-D PASS; G3-E re-audit in progress)
-**Last closed phase:** P2 **PASS** (5/5)
+**Current phase:** P3 — Batched Collector and Central Inference (**closed**)
+**Current verdict:** **P3 PASS** (5/5; G3-A scoped under ADR-008)
+**Last closed phase:** P3 **PASS**
 **Next phase:** P4 — not started
 
 | Phase | Verdict | Evidence |
@@ -11,7 +11,7 @@
 | **P0** Discovery / environment freeze | **PASS** (4/4) | `docs/phases/P0/{ENVIRONMENT.md,COMPATIBILITY.md,SOURCE_FREEZE.md}` |
 | **P1** Conditional action feasibility | **PASS** (G1-D CPU-scoped) | `docs/phases/P1/RECEIPT.json` |
 | **P2** Rust ↔ TorchRL environment adapter | **PASS** (5/5) | `docs/phases/P2/{FINAL_REPORT.md,RECEIPT.json}` |
-| **P3** Batched collector / central inference | **PARTIAL** (open) | `docs/phases/P3/{FINAL_REPORT.md,RECEIPT.json}` |
+| **P3** Batched collector / central inference | **PASS** (5/5) | `docs/phases/P3/{FINAL_REPORT.md,RECEIPT.json,PERFORMANCE_BASELINE.csv}` |
 
 PASS establishes the phase contracts only. It does not prove Collector
 scalability, PPO stability, agent strength or throughput.
@@ -42,44 +42,51 @@ scalability, PPO stability, agent strength or throughput.
 `pa4-auditor` now runs from WSL and can read the actual repository. Access was
 proven with a literal file read (`ACCESS_OK`) before the review. Five review
 rounds are recorded in `docs/phases/P2/RECEIPT.json`; the final round at
-`136d333` returned `VERDICT: CLEAN`.
+`136d333` returned `VERDICT: CLEAN`. Seven P3 rounds are recorded in
+`docs/phases/P3/RECEIPT.json`; round 7 returned `CLEAN` after the stale-value
+fixes.
 
 The auditor is the **same model** as the Lead. This is a process control and a
 second reading of real files, **not** independent-model verification.
 
 
-## P3 — Batched Collector and Central Inference (open)
+## P3 — Batched Collector and Central Inference (closed)
 
-**Status: PENDING_FINAL_AUDIT.** The first WSL audit found unmet deliverables
-(not missing access). They are now implemented and measured; the re-audit of the
-tested commit is in progress. No PASS is claimed yet.
+**Status: PASS (5/5).** G3-A is a scoped PASS under the user-approved ADR-008
+(the stock `AsyncBatchedCollector` is not used). G3-E closed on the round-7
+read-only audit, which returned `CLEAN` after the stale-wording fixes below.
+The evidence is in this repository; the auditor is the same DeepSeek model in a
+fresh context, so this is a process control, not independent-model proof.
 
-- Tested code: `13395df0e731cdc93996d63306c74703257c1dd6`
-- **158 tests green:** P1 39 + P2 51 + P3 68.
+- Tested code: `13395df0e731cdc93996d63306c74703257c1dd6`; baseline evidence
+  regenerated at `5c9096a` by the committed generator.
+- **158 tests green:** P1 39 + P2 51 + P3 68 (re-run on the final tree).
 - Real CUDA batching, both topologies:
   - per driver: one forward covering 4 independent rows, `cuda:0`, bmax 64;
   - **central**: one parent-owned `InferenceServer` (`transport="distributed"`)
-    serves 2 and 4 spawned drivers; 235/180 forwards mixed 2/4 worker
+    serves 2 and 4 spawned drivers; 233/180 forwards mixed 2/4 worker
     processes.
 - P3-C **bounded `PA4ActorTransitionV1` retention** implemented: pre-action
   observations, ordered candidates, selected indices, FP32 logprobs, the real
   packet, native outcome, match id, policy version and sha256 weight
   fingerprint; drops are counted.
-- Measured throughput (steady / wall): single driver 7.8–11.2 / 5.1–5.5
-  matches/s; 2 drivers central 0.82 / 1.25, per-driver 5.60 / 5.24; 4 drivers
-  central 0.29 / 0.98, per-driver 3.39 / 7.47. For multi-driver runs the steady
+- Measured throughput (steady / wall): single driver 7.9–9.7 / 5.1–5.5
+  matches/s; 2 drivers central 0.81 / 1.24, per-driver 6.19 / 5.70; 4 drivers
+  central 0.32 / 1.05, per-driver 3.27 / 7.19. For multi-driver runs the steady
   figure is the mean of per-driver steady rates (drivers run concurrently).
-- **Finding:** central cross-process inference is correct but ~4.2–7.6× slower
-  than per-driver servers on this host, with both topologies using the same
-  server batching policy. Queue time and forward time both rise; the split
-  between transport and service/CPU contention is not isolated. A transport
-  selection input for P6/P7.
+- **Finding:** central cross-process inference is correct but 4.60–6.85× slower
+  on the wall measure (and 7.64–10.22× on the per-driver steady mean) than
+  per-driver servers on this host, with both topologies using the same server
+  batching policy. Per-match encode and staged forward time both rise; the
+  split between transport and service/CPU contention is not isolated. A
+  transport-selection input for P6/P7.
 - Key earlier finding retained: `ProcessInferenceServer.client()` caches one
   client; `srv.clients(n)` returns distinct slots.
-- Addressed from the audit: transition retention, central cross-worker batching,
+- Addressed from the audits: transition retention, central cross-worker batching,
   weight/observation fingerprints, duplicate-in-batch and foreign-version
   rejection, lost-completion guard, revision filtering, cold/steady + stage
-  timing, retained artifacts, removal of the untested legacy collector, stale docs.
+  timing, retained artifacts, a generator that reproduces every retained
+  baseline artifact, removal of the untested legacy collector, stale docs.
 - The P3-C record now matches the design schema: `schema_version`,
   `next_observation`, per-level legal mask/token refs, observation digest and
   per-seat policy provenance.
@@ -98,9 +105,9 @@ tested commit is in progress. No PASS is claimed yet.
 
 ## Immediate next task
 
-**Do not start P4.** P3 remains open pending the final audit verdict. The audit
-history is in `docs/phases/P3/RECEIPT.json` under `audit_findings` and
-`review_history`.
+**P3 is closed. Do not start P4 without a separate instruction.** P4 (GAE,
+PPO-2, optimizer, checkpoint parity) is not started. The P3 audit history is in
+`docs/phases/P3/RECEIPT.json` under `audit_findings` and `review_history`.
 
 ## Artifacts
 
@@ -108,3 +115,4 @@ history is in `docs/phases/P3/RECEIPT.json` under `audit_findings` and
 - `docs/phases/P0/` — environment, compatibility, source freeze, receipt
 - `docs/phases/P1/` — action distribution design, receipt, final report
 - `docs/phases/P2/` — design, TensorDict spec, episode trace report, final report, receipt
+- `docs/phases/P3/` — design, ADR-008, integration decision, batching evidence, transition spec, baseline CSV + stage timing, final report, receipt

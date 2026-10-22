@@ -1,12 +1,12 @@
 {
   "phase": "P3",
   "design_id": "PA4-P3-DESIGN-v1.0",
-  "verdict": "PENDING_FINAL_AUDIT",
-  "verdict_scope": "The P3-C transition store, cross-process central batching, weight fingerprints, batch/identity validation, lost-completion guard, revision filtering and cold/steady + stage timing are now implemented and measured. G3-A..G3-D are PASS; G3-E is PENDING the re-audit of this commit. The verdict becomes PASS only if that review is clean.",
+  "verdict": "PASS",
+  "verdict_scope": "All five P3 gate contracts are satisfied. G3-A is a scoped PASS under the user-approved ADR-008 (stock AsyncBatchedCollector not used). G3-E was closed by the round-7 read-only audit of the regenerated baseline (measurement commit 5c9096a; code unchanged from 13395df), which returned CLEAN after the stale-wording fixes.",
   "design_source_sha256": "f73c556794bb406c1bd322a093fe7c05f0f330b32b3763d69c492266e313563e",
   "pa4_base_sha": "4d8f349b247bb929914db5b9ebe2c5ce84c18288",
   "pa4_tested_code_sha": "13395df0e731cdc93996d63306c74703257c1dd6",
-  "pa4_final_head_sha": "RECORDED_IN_METADATA_COMMIT",
+  "pa4_final_head_sha": "RECORDED_IN_FINAL_METADATA_COMMIT",
   "pa3_reference_sha": "65bc980abd8e0bbec14158b9ddc2884bb1726a4e",
   "pa3_worktree_dirty_files": 0,
   "dependency_lock_sha256": "8f414f526aad676f6466099da9bf96240f739abae9b9376a5c32fe845340d96e",
@@ -25,36 +25,36 @@
   "cross_worker_batching": {
     "server": "one parent-owned InferenceServer, transport=distributed",
     "drivers": 4,
-    "cross_worker_forwards_2_drivers": 235,
+    "cross_worker_forwards_2_drivers": 233,
     "cross_worker_forwards_4_drivers": 180,
     "max_worker_ids_per_forward": 4,
     "evidence": "docs/phases/P3/evidence/baseline_multi4x16_central.json"
   },
   "step_forward_batch_by_run": {
     "bl_16_1": {
-      "forwards": 631,
+      "forwards": 624,
       "bmax": 29,
-      "bmean": 5.86
+      "bmean": 5.88
     },
     "bl_32_1": {
-      "forwards": 582,
+      "forwards": 596,
       "bmax": 61,
-      "bmean": 6.92
+      "bmean": 7.17
     },
     "bl_64_16": {
-      "forwards": 579,
+      "forwards": 588,
       "bmax": 64,
-      "bmean": 8.15
+      "bmean": 8.4
     },
     "multi2x16_central": {
-      "forwards": 1013,
+      "forwards": 1019,
       "bmax": 62,
       "bmean": 4.02
     },
     "multi4x16_central": {
-      "forwards": 4801,
+      "forwards": 4332,
       "bmax": 64,
-      "bmean": 1.71
+      "bmean": 1.82
     }
   },
   "policy_weight_fingerprint": "356710ea293dd656fc9f028efa9064a8e738dce1bfffc14b9981abee6e7b5ab4",
@@ -105,21 +105,21 @@
   "gpu_peak_allocation_gib_note": "P3-D asks for an approximate per-process memory high-water; it was not instrumented. Reported as null rather than guessed.",
   "natural_completed_matches_by_run": {
     "bl_16_1": 65,
-    "bl_32_1": 65,
-    "bl_64_16": 66,
+    "bl_32_1": 67,
+    "bl_64_16": 67,
     "multi2x16_central": 65,
-    "multi2x16_perdrv": 64,
-    "multi4x16_central": 128,
-    "multi4x16_perdrv": 133
+    "multi2x16_perdrv": 67,
+    "multi4x16_central": 129,
+    "multi4x16_perdrv": 130
   },
   "duplicate_match_ids": 0,
   "invalid_actions": 0,
   "operational_errors": 0,
   "revisions_observed": 0,
   "truncations_observed": 0,
-  "raw_actor_natural_matches_per_sec": 5.53,
-  "best_env_transitions_per_sec": 125.8,
-  "steady_matches_per_sec_best": 11.17,
+  "raw_actor_natural_matches_per_sec": 7.19,
+  "best_env_transitions_per_sec": 122.1,
+  "steady_matches_per_sec_best": 9.71,
   "accepted_training_matches_per_sec": null,
   "accepted_training_matches_note": "no PPO learner exists in P3; always null",
   "p1_regression_test_count": 39,
@@ -128,8 +128,8 @@
   "total_tests": 158,
   "check_env_specs": "passed on the P3-modified PA4EnvBase (fast/batched observation path added in P3)",
   "auditor_read_actual_wsl_repo": true,
-  "auditor_access_proof": "pa4-auditor returned ACCESS_OK and quoted lines 1-6 of pa4/collector/batched_core.py and pa4/actions/batched_scorer.py verbatim, plus the literal docs/phases/P3 listing.",
-  "auditor_verdict": "PENDING_REAUDIT",
+  "auditor_access_proof": "pa4-auditor read the actual WSL repository in a fresh context: it quoted PA4-P3-DESIGN-v1.0 G3-E, compared the CSV with all seven retained JSONs and the receipt, and verified the generator commit and the 158-test claim. External /tmp access was denied, so it audited repository files only; the test logs remain lead-run evidence.",
+  "auditor_verdict": "CLEAN",
   "audit_findings": [
     {
       "id": "A1",
@@ -179,12 +179,12 @@
     {
       "id": "A10",
       "finding": "receipt provenance named the wrong measurement commit, and the test count and slowdown ratio contradicted the CSV/docs",
-      "status": "FIXED - all receipts/docs now cite 13395df and 158 tests; the ratio is 4.2-7.6x from the CSV"
+      "status": "FIXED - all receipts/docs cite code commit 13395df and 158 tests; the ratios are recomputed from the regenerated CSV (4.60-6.85x wall, 7.64-10.22x steady mean)"
     },
     {
       "id": "A11",
       "finding": "per-driver windows were labelled by arrival order; steady was undefined/short; the transport causality was over-stated",
-      "status": "FIXED - real driver indices, 'steady' defined as post-warmup steps with window length recorded (12-56 steps), and the causality text now says queue and forward time both rise without isolating transport from service/CPU contention"
+      "status": "FIXED - real driver indices, 'steady' defined as post-warmup steps with window length recorded (13-55 steps for one driver; 29-35 per driver in the multi runs), and the causality text now says queue and forward time both rise without isolating transport from service/CPU contention"
     },
     {
       "id": "A12",
@@ -195,6 +195,21 @@
       "id": "A13",
       "finding": "two evidence scripts read removed pre-A7 keys; two orphaned pre-schema JSONs remained",
       "status": "FIXED - scripts updated, orphaned JSONs removed"
+    },
+    {
+      "id": "A14",
+      "finding": "The committed baseline CSV contained steady_steps and row values that the committed run_baseline.py could not produce: the last session ran the modified script but committed only its outputs, and stage timing was only inside the JSON.",
+      "status": "FIXED - the script is the committed generator, every JSON records run_config, and BASELINE_STAGE_TIMING.csv carries aggregate and per-driver stage seconds; all seven runs were regenerated at 5c9096a."
+    },
+    {
+      "id": "A15",
+      "finding": "FINAL_REPORT and BATCHING_EVIDENCE still attributed the central-vs-per-driver gap to the transport alone while the receipt and PROJECT_STATUS said it was not isolated; the measurements show both encode and staged forward time rise per match.",
+      "status": "FIXED - both documents now report the two ratios separately and say transport vs service/CPU contention was not isolated."
+    },
+    {
+      "id": "A16",
+      "finding": "Round 7 found stale receipt values from the previous baseline (235 cross-worker forwards, 4.2-7.6x ratio, 12-56 steady steps), an upper ratio bound that was not directly derivable from the CSV, and provenance wording that called 5c9096a the artifact commit before the artifacts were committed.",
+      "status": "FIXED - all values now match the regenerated CSV (233/180, 4.60-6.85x wall, 7.64-10.22x steady mean, 13-55 steps), 5c9096a is described as the generator/measurement commit, the section-5 label and closing-commit wording were corrected, and the closing commit carries the artifacts."
     }
   ],
   "review_history": [
@@ -239,6 +254,13 @@
       "commit": "13395df",
       "result": "PENDING_REAUDIT",
       "note": "N1-N12 evidence/code fixes applied"
+    },
+    {
+      "round": 7,
+      "context": "WSL, fresh read-only context",
+      "commit": "5c9096a + uncommitted candidate evidence/docs",
+      "result": "CLEAN",
+      "note": "Verified generator/CSV/JSON/receipt parity, stage CSV, run_config presence, 158-test count, no P4/P3.0 writes, and no overclaim. Six documentation findings (stale 235, stale ratios/steps, rounding, provenance wording, evidence wording) were fixed; the re-check then found one remaining provenance label in FINAL_REPORT section 5, which was corrected; the final re-check returned CLEAN."
     }
   ],
   "gates": {
@@ -246,7 +268,7 @@
     "G3_B": "PASS",
     "G3_C": "PASS",
     "G3_D": "PASS",
-    "G3_E": "PENDING"
+    "G3_E": "PASS"
   },
   "gate_evidence": {
     "G3_A": {
@@ -265,7 +287,7 @@
         "model_forward_count == 1 with forward_batch_sizes == [4] for four independent rows",
         "model_device == cuda:0",
         "one server serves 2 and 4 spawned driver processes via transport=distributed",
-        "235 / 180 forwards contained requests from 2 / 4 distinct driver run_ids",
+        "233 / 180 forwards contained requests from 2 / 4 distinct driver run_ids",
         "each row's branch_k, request_key and selected index checked against its own request"
       ]
     },
@@ -300,16 +322,18 @@
     "G3_E": {
       "artifacts": [
         "docs/phases/P3/PERFORMANCE_BASELINE.csv (7 measured configurations, per-row commit)",
-        "docs/phases/P3/evidence/baseline_*.json (one retained JSON per run, with windows and stage timings)",
+        "docs/phases/P3/BASELINE_STAGE_TIMING.csv (aggregate and per-driver stage seconds)",
+        "docs/phases/P3/evidence/baseline_*.json (one retained JSON per run, with run_config, windows and stage timings)",
         "docs/phases/P3/BATCHING_EVIDENCE.md",
         "docs/phases/P3/TENSORDICT_TRANSITION_V1.md"
       ],
       "facts": [
-        "P1 39 + P2 51 + P3 68 = 158 tests green",
+        "P1 39 + P2 51 + P3 68 = 158 tests green on the final tree",
         "frozen uv.lock unchanged",
-        "PA3 reference unmodified",
+        "PA3 reference unmodified, 0 dirty files",
+        "run_baseline.py at 5c9096a is the generator of every retained baseline artifact; each JSON records the run's topology, seed, target, env count and batching/window knobs, and the full effective configuration and versions are recorded in this receipt",
         "auditor read the actual WSL repository files",
-        "auditor verdict: PENDING_REAUDIT"
+        "round-7 auditor verdict: CLEAN"
       ]
     }
   },
@@ -318,90 +342,90 @@
       "config": "16 envs (1 worker)",
       "mode": "single",
       "matches_per_s": 5.12,
-      "steady_matches_per_s": 7.77,
-      "transitions_per_s": 80.6,
+      "steady_matches_per_s": 7.86,
+      "transitions_per_s": 79.3,
       "bmax": 29,
-      "bmean": 5.86,
-      "steady_steps": 56,
-      "measured_at_commit": "13395df"
+      "bmean": 5.88,
+      "steady_steps": 55,
+      "measured_at_commit": "5c9096a"
     },
     {
       "config": "32 envs (1 worker)",
       "mode": "single",
-      "matches_per_s": 5.53,
-      "steady_matches_per_s": 9.23,
-      "transitions_per_s": 95.3,
+      "matches_per_s": 5.47,
+      "steady_matches_per_s": 8.88,
+      "transitions_per_s": 96.6,
       "bmax": 61,
-      "bmean": 6.92,
-      "steady_steps": 27,
-      "measured_at_commit": "13395df"
+      "bmean": 7.17,
+      "steady_steps": 29,
+      "measured_at_commit": "5c9096a"
     },
     {
       "config": "64 envs (1 worker)",
       "mode": "single",
-      "matches_per_s": 5.48,
-      "steady_matches_per_s": 11.17,
-      "transitions_per_s": 106.3,
+      "matches_per_s": 5.21,
+      "steady_matches_per_s": 9.71,
+      "transitions_per_s": 104.6,
       "bmax": 64,
-      "bmean": 8.15,
-      "steady_steps": 12,
-      "measured_at_commit": "13395df"
+      "bmean": 8.4,
+      "steady_steps": 13,
+      "measured_at_commit": "5c9096a"
     },
     {
       "config": "32 envs (2 workers)",
       "mode": "central",
-      "matches_per_s": 1.25,
-      "steady_matches_per_s": 0.82,
-      "transitions_per_s": 21.5,
+      "matches_per_s": 1.24,
+      "steady_matches_per_s": 0.81,
+      "transitions_per_s": 21.3,
       "bmax": 62,
       "bmean": 4.02,
       "steady_steps": null,
-      "measured_at_commit": "13395df",
-      "cross_worker_forwards": 235,
+      "measured_at_commit": "5c9096a",
+      "cross_worker_forwards": 233,
       "max_worker_ids_per_forward": 2
     },
     {
       "config": "32 envs (2 workers)",
       "mode": "per_driver",
-      "matches_per_s": 5.24,
-      "steady_matches_per_s": 5.6,
-      "transitions_per_s": 97.0,
+      "matches_per_s": 5.7,
+      "steady_matches_per_s": 6.19,
+      "transitions_per_s": 92.5,
       "bmax": 30,
-      "bmean": 4.43,
+      "bmean": 4.46,
       "steady_steps": null,
-      "measured_at_commit": "13395df",
+      "measured_at_commit": "5c9096a",
       "cross_worker_forwards": 0,
       "max_worker_ids_per_forward": 0
     },
     {
       "config": "64 envs (4 workers)",
       "mode": "central",
-      "matches_per_s": 0.98,
-      "steady_matches_per_s": 0.29,
-      "transitions_per_s": 17.3,
+      "matches_per_s": 1.05,
+      "steady_matches_per_s": 0.32,
+      "transitions_per_s": 17.6,
       "bmax": 64,
-      "bmean": 1.71,
+      "bmean": 1.82,
       "steady_steps": null,
-      "measured_at_commit": "13395df",
+      "measured_at_commit": "5c9096a",
       "cross_worker_forwards": 180,
       "max_worker_ids_per_forward": 4
     },
     {
       "config": "64 envs (4 workers)",
       "mode": "per_driver",
-      "matches_per_s": 7.47,
-      "steady_matches_per_s": 3.39,
-      "transitions_per_s": 125.8,
+      "matches_per_s": 7.19,
+      "steady_matches_per_s": 3.27,
+      "transitions_per_s": 122.1,
       "bmax": 30,
-      "bmean": 4.86,
+      "bmean": 4.77,
       "steady_steps": null,
-      "measured_at_commit": "13395df",
+      "measured_at_commit": "5c9096a",
       "cross_worker_forwards": 0,
       "max_worker_ids_per_forward": 0
     }
   ],
-  "performance_finding": "Cross-process central batching is correct and observable but ~4.2-7.6x slower than per-driver servers on this host, with the same batching policy in both. Both queue time and model-forward time rise, so transport and service/CPU contention are not isolated. Reported for P6/P7 transport selection, not as a model-compute conclusion.",
-  "provenance_note": "All performance rows were measured at commit 13395df by docs/phases/P3/evidence/run_baseline.py; each run's full report, including stage timings, is retained as evidence/baseline_<run_id>.json.",
+  "performance_finding": "Cross-process central batching is correct and observable but 4.60-6.85x slower than per-driver servers on the wall measure (5.70/1.24 and 7.19/1.05) and 7.64-10.22x slower on the per-driver steady mean (6.19/0.81 and 3.27/0.32), with the same batching policy and model in both. Per-match encode and staged forward time both rise, so transport and service/CPU contention are not isolated. Reported for P6/P7 transport selection, not as a model-compute conclusion.",
+  "provenance_note": "All performance rows were measured at commit 5c9096a by the committed docs/phases/P3/evidence/run_baseline.py (sha256 in evidence_sha256). Each run's full report, run_config and stage timings are retained as evidence/baseline_<run_id>.json; aggregate and per-driver stage seconds are in BASELINE_STAGE_TIMING.csv.",
   "optimisations": [
     "batched decode: one observe_fixed_batch for all requesting seats instead of 2*N calls",
     "collector reuses the env's already-decoded observations instead of decoding twice",
@@ -430,9 +454,9 @@
   ],
   "limitations": [
     "AsyncBatchedCollector is not used; G3-A is a scoped PASS under ADR-008",
-    "central cross-process inference is ~4.2-7.6x slower than per-driver servers on this host (gloo/TCP per client)",
-    "throughput ~7.5 matches/s, far below the 1,000/s stretch goal which the design forbids proving on this GPU",
-    "single-driver and central baseline runs use one seed per configuration; run-to-run variance is not characterised",
+    "central cross-process inference is 4.60-6.85x slower on the wall measure and 7.64-10.22x on the per-driver steady mean; transport vs service/CPU contention was not isolated",
+    "throughput ~7.2 matches/s on the wall measure (~9.7 steady matches/s for one driver), far below the 1,000/s stretch goal which the design forbids proving on this GPU",
+    "baseline runs use one seed per configuration and were run once; run-to-run variance is not characterised",
     "GPU encode/step are nearly flat in batch size; wider batches do not by themselves increase throughput",
     "random PA3 weights (seed 20261006); no strength or weight-parity claim",
     "path B (staged prefix) only; path A would remove sequential level round-trips but is out of scope",
@@ -457,7 +481,59 @@
     "Transition records hold the pre-action observation by value and are copied to CPU on store.",
     "The P3 execution prompt file named in the task does not exist on this machine; PA4-P3-DESIGN-v1.0 was used as the authority.",
     "No P4/PPO/optimizer/cloud work was performed.",
-    "No secrets committed; no push without authorization."
+    "No secrets committed; no push without authorization.",
+    "The 158 tests were re-run on the final tree (03b7834/5c9096a); the only later changes are evidence and documentation."
   ],
-  "generated_at": "2026-10-22"
+  "generated_at": "2026-10-22",
+  "pa4_measurement_commit": "5c9096a35f9b01775a458d2ac4aea9c3ad6eedaf",
+  "baseline_run_config": {
+    "seed": 1,
+    "single_driver": {
+      "envs": [
+        16,
+        32,
+        64
+      ],
+      "target_matches": 64,
+      "max_steps": 20000,
+      "min_batch_size": 16,
+      "server_timeout": 0.002,
+      "warmup_steps": 8,
+      "transition_capacity": 256,
+      "device": "cuda",
+      "policy_version": 1,
+      "policy_seed": 20261006,
+      "max_batch_size": 64,
+      "result_timeout": 300.0,
+      "use_fast_obs": true
+    },
+    "multi_driver": {
+      "workers": [
+        2,
+        4
+      ],
+      "envs_per_driver": 16,
+      "target_matches_per_driver": 32,
+      "warmup_steps": 2,
+      "server_min_batch": 2,
+      "server_timeout": 0.02,
+      "driver_min_batch": 2,
+      "driver_timeout": 0.02,
+      "max_steps_per_driver": 12800,
+      "per_driver_seed": "1 + driver_index * 101",
+      "max_batch_size": 64,
+      "device": "cuda",
+      "policy_version": 1,
+      "policy_seed": 20261006,
+      "result_timeout": 300.0,
+      "transition_capacity": 256,
+      "use_fast_obs": true
+    },
+    "source": "per-run knobs are in each docs/phases/P3/evidence/baseline_*.json run_config; the effective defaults above come from pa4/collector/{batched_core,multi_driver}.py at 5c9096a"
+  },
+  "evidence_sha256": {
+    "docs/phases/P3/evidence/run_baseline.py": "48b667beb81884342ad4cbee4e01f34d3149f3817109b9c1d7ef16c4789dd461",
+    "docs/phases/P3/PERFORMANCE_BASELINE.csv": "419136142d828ff851ffd9c27c5dc5ec8f1f65d21d24f789387f2027f2a1120e",
+    "docs/phases/P3/BASELINE_STAGE_TIMING.csv": "563c7bd54a3ef39e9c0bd1216eaa36491ba6ed69493a2e839c8b1b6e0f51cf7b"
+  }
 }

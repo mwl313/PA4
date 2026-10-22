@@ -1,8 +1,8 @@
 run_id,git_sha,mode,worker_count,envs_per_worker,total_envs,setup_s,warmup_s,steady_s,steady_s_max,steady_steps,window_note,matches,matches_per_s,steady_matches,steady_matches_per_s,env_transitions,env_transitions_per_s,forward_batch_max,forward_batch_mean,transitions_stored,transitions_dropped,duplicate_matches,operational_errors,cross_worker_forwards,max_worker_ids_per_forward
-bl_16_1,13395df,single,1,16,16,1.86,1.98,8.36,,56,single-driver: measured post-warmup steps,65,5.12,65,7.77,1024,80.6,29,5.86,1024,768,0,0,,
-bl_32_1,13395df,single,1,32,32,1.59,2.75,6.93,,27,single-driver: measured post-warmup steps,65,5.53,64,9.23,1120,95.3,61,6.92,1120,864,0,0,,
-bl_64_16,13395df,single,1,64,64,1.52,4.4,5.64,,12,single-driver: measured post-warmup steps,66,5.48,63,11.17,1280,106.3,64,8.15,1280,1024,0,0,,
-multi2x16_central,13395df,central,2,16,32,,,,41.08,,"mean of per-driver steady rates; drivers run concurrently, so the wall rate is the aggregate",65,1.25,65,0.82,1120,21.5,62,4.02,1120,608,0,0,235,2
-multi2x16_perdrv,13395df,per_driver,2,16,32,,,,6.16,,"mean of per-driver steady rates; drivers run concurrently, so the wall rate is the aggregate",64,5.24,64,5.6,1184,97.0,30,4.43,1184,672,0,0,0,0
-multi4x16_central,13395df,central,4,16,64,,,,112.72,,"mean of per-driver steady rates; drivers run concurrently, so the wall rate is the aggregate",128,0.98,128,0.29,2256,17.3,64,1.71,2256,1232,0,0,180,4
-multi4x16_perdrv,13395df,per_driver,4,16,64,,,,10.11,,"mean of per-driver steady rates; drivers run concurrently, so the wall rate is the aggregate",133,7.47,133,3.39,2240,125.8,30,4.86,2240,1216,0,0,0,0
+bl_16_1,5c9096a,single,1,16,16,1.89,2.05,8.27,8.27,55,single-driver: measured post-warmup steps,65,5.12,65,7.86,1008,79.3,29,5.88,1008,752,0,0,,
+bl_32_1,5c9096a,single,1,32,32,1.54,2.68,7.55,7.55,29,single-driver: measured post-warmup steps,67,5.47,67,8.88,1184,96.6,61,7.17,1184,928,0,0,,
+bl_64_16,5c9096a,single,1,64,64,1.75,4.43,6.18,6.18,13,single-driver: measured post-warmup steps,67,5.21,60,9.71,1344,104.6,64,8.4,1344,1088,0,0,,
+multi2x16_central,5c9096a,central,2,16,32,,,,41.31,,"mean of per-driver steady rates; drivers run concurrently, so the wall rate is the aggregate",65,1.24,65,0.81,1120,21.3,62,4.02,1120,608,0,0,233,2
+multi2x16_perdrv,5c9096a,per_driver,2,16,32,,,,5.65,,"mean of per-driver steady rates; drivers run concurrently, so the wall rate is the aggregate",67,5.7,67,6.19,1088,92.5,30,4.46,1088,576,0,0,0,0
+multi4x16_central,5c9096a,central,4,16,64,,,,105.11,,"mean of per-driver steady rates; drivers run concurrently, so the wall rate is the aggregate",129,1.05,129,0.32,2160,17.6,64,1.82,2160,1136,0,0,180,4
+multi4x16_perdrv,5c9096a,per_driver,4,16,64,,,,10.35,,"mean of per-driver steady rates; drivers run concurrently, so the wall rate is the aggregate",130,7.19,130,3.27,2208,122.1,30,4.77,2208,1184,0,0,0,0
