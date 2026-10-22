@@ -84,7 +84,7 @@ def main():
             "forward_batch_max": max((d["service_stats"].get("step_forward_batch_sizes") or [0])
                                      or [0]),
             "forward_batch_mean": (round(sum(d["service_stats"]["step_forward_batch_sizes"])
-                                         / len(d["service_stats"]["forward_batch_sizes"]), 2)
+                                         / len(d["service_stats"]["step_forward_batch_sizes"]), 2)
                                    if d["service_stats"].get("step_forward_batch_sizes") else None),
             "transitions_stored": d["transitions_stored"],
             "transitions_dropped": d["transitions_dropped"],
@@ -105,9 +105,12 @@ def main():
             "mode": "central" if central else "per_driver",
             "worker_count": num_drivers, "envs_per_worker": 16,
             "total_envs": num_drivers * 16,
-            "setup_s": round(out["setup_seconds"], 2),
-            "warmup_s": round(out["warmup_seconds"], 2),
-            "steady_s": round(out["steady_seconds_sum"], 2),
+            # Drivers run concurrently: summed windows are not wall windows, so
+            # only the longest per-driver window is reported here. Full
+            # per-driver windows are retained in the JSON.
+            "setup_s": None,
+            "warmup_s": None,
+            "steady_s": None,
             "steady_s_max": round(out["steady_seconds_max"], 2),
             "window_note": out["steady_definition"],
             "matches": out["matches"],

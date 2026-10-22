@@ -24,7 +24,8 @@ def _bootstrap():
 
 
 def driver_main(idx, num_envs, target, seed, out_q, device, transport=None,
-                clients_per_driver=0, central_stats_path=None, warmup=2):
+                clients_per_driver=0, central_stats_path=None, warmup=2,
+                min_batch=2, timeout=0.02):
     _bootstrap()
     os.environ["PA4_POLICY_DEVICE"] = device
     try:
@@ -41,7 +42,7 @@ def driver_main(idx, num_envs, target, seed, out_q, device, transport=None,
             num_envs=num_envs, target_matches=target,
             max_steps=max(4000, target * 400), seed=seed + idx * 101,
             run_id=f"drv{idx}", worker_index=idx,
-            min_batch_size=1, server_timeout=0.0,
+            min_batch_size=min_batch, server_timeout=timeout,
             device=device, warmup_steps=warmup,
         )
         rep = run_batched(cfg, clients=clients)
@@ -79,7 +80,8 @@ def _make_central_server(num_clients, device, stats_path,
 
 
 def run_multi(num_drivers=4, num_envs=16, target=32, seed=1, device="cuda",
-              central=True, warmup=2, server_min_batch=1, server_timeout=0.0):
+              central=True, warmup=2, server_min_batch=2, server_timeout=0.02,
+              driver_min_batch=2, driver_timeout=0.02):
     ctx = mp.get_context("spawn")
     q = ctx.Queue()
     procs = []
@@ -99,7 +101,8 @@ def run_multi(num_drivers=4, num_envs=16, target=32, seed=1, device="cuda",
         p = ctx.Process(
             target=driver_main,
             args=(i, num_envs, target, seed, q, device, transport,
-                  clients_per_driver, stats_path, warmup),
+                  clients_per_driver, stats_path, warmup,
+                  driver_min_batch, driver_timeout),
             daemon=False,
         )
         p.start()
@@ -164,6 +167,12 @@ def run_multi(num_drivers=4, num_envs=16, target=32, seed=1, device="cuda",
     steady_matches = sum(d["steady_matches"] for d in per_driver)
     steady_sum = sum(d["steady_seconds"] for d in per_driver)
     steady_max = max((d["steady_seconds"] for d in per_driver), default=0.0)
+    # Drivers run concurrently, so summing their windows is NOT a wall window.
+    # The aggregate steady figure is the mean of the per-driver rates; the wall
+    # rate (matches / wall_s) stays the primary throughput number.
+    rates = [(d["steady_matches"] / d["steady_seconds"])
+             for d in per_driver if d["steady_seconds"]]
+    steady_rate_mean = (sum(rates) / len(rates)) if rates else None
     stage_sum = {}
     for d in per_driver:
         for k, v in d["stage_seconds"].items():
@@ -199,11 +208,13 @@ def run_multi(num_drivers=4, num_envs=16, target=32, seed=1, device="cuda",
         "steady_seconds_sum": steady_sum,
         "steady_seconds_max": steady_max,
         "steady_matches": steady_matches,
-        "steady_matches_per_s": (round(steady_matches / steady_sum, 2)
-                                 if steady_sum else None),
+        "steady_matches_per_s": (round(steady_rate_mean, 2)
+                                 if steady_rate_mean is not None else None),
         "steady_matches_per_s_max_window": (round(steady_matches / steady_max, 2)
                                             if steady_max else None),
-        "steady_definition": "duration-weighted mean of per-driver steady windows",
+        "per_driver_steady_matches_per_s": [round(r, 2) for r in rates],
+        "steady_definition": ("mean of per-driver steady rates; drivers run "
+                              "concurrently, so the wall rate is the aggregate"),
         "stage_seconds": stage_sum,
         "per_driver": per_driver,
         "dupes": sum(r["duplicate_match_ids"] for r in results),
