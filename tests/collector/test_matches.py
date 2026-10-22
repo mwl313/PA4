@@ -10,8 +10,12 @@ import unittest
 sys.path.insert(0, "/home/pa4/projects/_pa3_ref")
 sys.path.insert(0, "/home/pa4/projects/PokeAgent4.0")
 
-from pa4.collector.batched_core import BatchedConfig
-from pa4.collector.run_batched import run_batched
+import torch
+from tensordict import TensorDict
+
+from pa4.collector.batched_core import BatchedConfig, BatchedReport
+from pa4.collector.run_batched import account_step, run_batched
+from pa4.env.native_env import SlotState
 
 
 class NaturalMatchIntegrityTest(unittest.TestCase):
@@ -46,20 +50,32 @@ class NaturalMatchIntegrityTest(unittest.TestCase):
 
     def test_two_seat_behavior_rows_recorded(self):
         self.assertGreater(self.d["seat_records"], 0)
-        # every seat record is one seat's decision; both seats appear
         self.assertGreater(self.d["actor_active_rows"], 0)
+        # both seats really decided in this run, not just one
+        self.assertGreater(self.d["seats_by_seat"][0], 0,
+                           "seat 0 produced no decision records")
+        self.assertGreater(self.d["seats_by_seat"][1], 0,
+                           "seat 1 produced no decision records")
+        self.assertEqual(sum(self.d["seats_by_seat"]), self.d["seat_records"])
 
     def test_match_count_never_exceeds_transitions(self):
         """A match cannot be counted more often than there were transitions."""
         self.assertLessEqual(self.d["natural_matches"], self.d["env_transitions"])
 
     def test_no_truncations_masquerading_as_matches(self):
-        """Every counted match must have come from terminated=True."""
-        self.assertEqual(
-            self.d["natural_matches"] + self.d["truncations"],
-            self.d["natural_matches"] + self.d["truncations"])
-        # truncations are tracked separately and are not in match_ids
-        self.assertLessEqual(self.d["truncations"], self.d["env_transitions"])
+        """Every counted match must have come from terminated=True.
+
+        The rule itself is proven directly in AccountingUnitTest; here we check
+        the live run's ledger is internally consistent and that this run saw no
+        truncation that could have been mistaken for a match.
+        """
+        self.assertEqual(self.d["natural_matches"], len(self.d["match_ids"]))
+        self.assertEqual(len(set(map(tuple, self.d["match_ids"]))),
+                         len(self.d["match_ids"]))
+        self.assertEqual(self.d["errors"], [], self.d["errors"][:1])
+        self.assertEqual(self.d["truncations"], 0,
+                         "a truncation appeared in this run; the exclusion path "
+                         "must be re-verified")
 
     def test_completion_rate_is_plausible(self):
         """16 matches from 8 envs means at most ~2 per slot."""
@@ -78,6 +94,79 @@ class MultiContextTest(unittest.TestCase):
         self.assertGreaterEqual(out["matches"], 16,
                                 f"expected >=16 matches, got {out['matches']}")
         self.assertEqual(len(out["per_driver_mps"]), 2)
+
+
+class AccountingUnitTest(unittest.TestCase):
+    """Exactly-once accounting, driven directly with synthetic step outputs.
+
+    A live run with zero truncations cannot prove the exclusion rule, so the rule
+    is exercised here on the same `account_step` the collector calls.
+    """
+
+    def _out(self, completed=(), truncated=(), revised=()):
+        n = 1
+        return TensorDict(
+            {
+                "match_completed": torch.tensor([bool(completed)], dtype=torch.bool),
+                "truncated": torch.tensor([bool(truncated)], dtype=torch.bool),
+                "request_revised": torch.tensor([bool(revised)], dtype=torch.bool),
+            },
+            batch_size=[n],
+        )
+
+    def _rep(self):
+        return BatchedReport(run_id="unit")
+
+    def test_natural_completion_is_counted_once(self):
+        rep, seen = self._rep(), set()
+        slots = [SlotState(slot=3, generation=7, episode_id=2)]
+        account_step(self._out(completed=True), slots, seen, rep, "unit", 5)
+        self.assertEqual(rep.natural_matches, 1)
+        self.assertEqual(rep.match_ids, [["unit", 5, 3, 7, 2]])
+        self.assertEqual(rep.duplicate_match_ids, 0)
+        self.assertEqual(rep.truncations, 0)
+
+    def test_repeated_completion_is_a_duplicate_not_a_second_match(self):
+        rep, seen = self._rep(), set()
+        slots = [SlotState(slot=3, generation=7, episode_id=2)]
+        out = self._out(completed=True)
+        account_step(out, slots, seen, rep, "unit", 0)
+        account_step(out, slots, seen, rep, "unit", 0)
+        self.assertEqual(rep.natural_matches, 1, "the same match was counted twice")
+        self.assertEqual(rep.duplicate_match_ids, 1)
+
+    def test_truncation_is_never_a_match(self):
+        rep, seen = self._rep(), set()
+        slots = [SlotState(slot=0, generation=1, episode_id=4)]
+        account_step(self._out(truncated=True), slots, seen, rep, "unit", 0)
+        self.assertEqual(rep.natural_matches, 0)
+        self.assertEqual(rep.match_ids, [])
+        self.assertEqual(rep.truncations, 1)
+
+    def test_completed_and_truncated_together_is_an_error(self):
+        rep, seen = self._rep(), set()
+        slots = [SlotState(slot=0, generation=1, episode_id=4)]
+        account_step(self._out(completed=True, truncated=True), slots, seen, rep, "unit", 0)
+        self.assertEqual(len(rep.errors), 1)
+        self.assertIn("both true", rep.errors[0])
+
+    def test_revision_is_not_a_match(self):
+        rep, seen = self._rep(), set()
+        slots = [SlotState(slot=0, generation=1, episode_id=4)]
+        account_step(self._out(revised=True), slots, seen, rep, "unit", 0)
+        self.assertEqual(rep.natural_matches, 0)
+        self.assertEqual(rep.revisions, 1)
+
+    def test_next_episode_same_slot_is_a_new_match(self):
+        rep, seen = self._rep(), set()
+        account_step(self._out(completed=True),
+                     [SlotState(slot=0, generation=1, episode_id=4)],
+                     seen, rep, "unit", 0)
+        account_step(self._out(completed=True),
+                     [SlotState(slot=0, generation=1, episode_id=5)],
+                     seen, rep, "unit", 0)
+        self.assertEqual(rep.natural_matches, 2)
+        self.assertEqual(rep.duplicate_match_ids, 0)
 
 
 if __name__ == "__main__":

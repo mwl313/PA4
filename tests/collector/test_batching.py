@@ -98,11 +98,16 @@ class BatchedForwardTest(unittest.TestCase):
                          "expected ONE forward for the four STEP rows")
         self.assertEqual(svc.forward_batch_sizes, [4])
         self.assertTrue(bool((out["error_code"] == 0).all()))
-        # each row got a valid selection for its own candidate set
+        # each row got a valid selection for ITS OWN candidate set
         for w in range(4):
+            cands_w = steps[w]["candidate_count"].item()
             idx = int(out["selected_index"][w])
             self.assertGreaterEqual(idx, 0)
             self.assertLess(idx, int(out["branch_k"][w]))
+            self.assertEqual(int(out["branch_k"][w]), int(cands_w),
+                             f"row {w} branch_k does not match its own candidates")
+            self.assertEqual(int(out["request_key"][w]), w,
+                             f"row {w} response came back under another key")
 
     def test_rows_are_independent(self):
         """Different requests must get different cached state, not aliases."""
@@ -167,6 +172,47 @@ class BatchedForwardTest(unittest.TestCase):
                      gen=st.generation + 7)
         out = svc(torch.stack([r]))
         self.assertEqual(int(out["error_code"][0]), ERR_NO_CACHE)
+
+    def test_same_local_id_different_worker_does_not_alias(self):
+        """G3-D: the P1 cache-key collision. Same slot/gen/episode/seat/id,
+        different worker -> two independent entries, never one aliased row."""
+        svc = BatchedConditionalScorer(device="cuda")
+        e, st, obs = self.envs[0]
+        a = make_row(e, st, obs, w=0)
+        b = make_row(e, st, obs, w=0)
+        b["worker_id"] = torch.tensor(1)
+        out = svc(torch.stack([a, b]))
+        self.assertTrue(bool((out["error_code"] == 0).all()))
+        self.assertEqual(svc.cache_size(), 2,
+                         "two workers with the same local id must not share a cache entry")
+
+        # and each worker's STEP resolves against its own entry
+        cands, table = branch_table(e, st, obs)
+        sa = make_row(e, st, obs, w=0, op=1, level=0, cands=cands, table=table)
+        sb = make_row(e, st, obs, w=0, op=1, level=0, cands=cands, table=table)
+        sb["worker_id"] = torch.tensor(1)
+        out = svc(torch.stack([sa, sb]))
+        self.assertTrue(bool((out["error_code"] == 0).all()), out["error_code"])
+        self.assertEqual(svc.cache_size(), 2)
+
+    def test_mixed_policy_version_rejected_without_corrupting_valid_entry(self):
+        """G3-D: a STEP with a different policy version must not be accepted, and
+        must not corrupt the legitimate same-identity entry of the live version."""
+        svc = BatchedConditionalScorer(device="cuda")
+        e, st, obs = self.envs[0]
+        svc(torch.stack([make_row(e, st, obs, w=0, pv=1)]))
+        cands, table = branch_table(e, st, obs)
+
+        stale = make_row(e, st, obs, w=0, op=1, level=0, cands=cands, table=table, pv=2)
+        out = svc(torch.stack([stale]))
+        self.assertEqual(int(out["error_code"][0]), ERR_NO_CACHE,
+                         "a mixed-version request was accepted")
+
+        # the pv=1 entry must still be intact and usable
+        live = make_row(e, st, obs, w=0, op=1, level=0, cands=cands, table=table, pv=1)
+        out = svc(torch.stack([live]))
+        self.assertEqual(int(out["error_code"][0]), 0,
+                         "the rejected version corrupted the live cache entry")
 
     def test_reset_evicts_only_the_addressed_entry(self):
         svc = BatchedConditionalScorer(device="cuda")

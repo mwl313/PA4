@@ -155,6 +155,7 @@ def run_batched(cfg: BatchedConfig) -> BatchedReport:
                     "joint_logprob_fp32": sum(x["branch_logprob_fp32"] for x in s),
                     "branches": s,
                 })
+                rep.seats_by_seat[seat] += 1
 
             from tensordict import TensorDict
 
@@ -170,20 +171,9 @@ def run_batched(cfg: BatchedConfig) -> BatchedReport:
             rep.seat_records += len(seat_records)
             rep.actor_active_rows += sum(1 for s in seat_records if s["actor_active"])
 
-            # ---- 6. accounting ----
-            for r, st in enumerate(env._slots):
-                if bool(out["next", "match_completed"][r]):
-                    mid = (cfg.run_id, 0, st.slot, st.generation, st.episode_id)
-                    if mid in seen:
-                        rep.duplicate_match_ids += 1
-                    else:
-                        seen.add(mid)
-                        rep.match_ids.append(list(mid))
-                if bool(out["next", "truncated"][r]):
-                    rep.truncations += 1
-                if bool(out["next", "request_revised"][r]):
-                    rep.revisions += 1
-            rep.natural_matches = len(rep.match_ids)
+            # ---- 6. accounting (exactly-once, truncations excluded) ----
+            account_step(out["next"], env._slots, seen, rep,
+                         cfg.run_id, cfg.worker_index)
 
             # refill finished rows
             done_rows = [r for r in range(n) if bool(out["next", "done"][r, 0])]
@@ -214,6 +204,38 @@ def run_batched(cfg: BatchedConfig) -> BatchedReport:
             rep.service_stats = json.load(fh)
     except Exception:
         pass
+    return rep
+
+
+def account_step(next_td, slots, seen, rep, run_id, worker_index):
+    """Count each natural completion exactly once; never count a truncation.
+
+    Kept separate from the collection loop so the rule is directly testable:
+    a `match_completed` row becomes one fully-qualified match id, a repeat of the
+    same id is a duplicate (not a second match), and a `truncated` row increments
+    only `truncations`. `match_completed` comes from P2, which never sets it for a
+    truncation; the mutual-exclusion check below turns any regression into a
+    recorded error instead of a silent miscount.
+    """
+    for r, st in enumerate(slots):
+        completed = bool(next_td["match_completed"][r])
+        truncated = bool(next_td["truncated"][r])
+        if completed and truncated:
+            rep.errors.append(
+                f"row {r}: match_completed and truncated are both true "
+                f"(slot={st.slot} gen={st.generation} ep={st.episode_id})")
+        if completed:
+            mid = (run_id, worker_index, st.slot, st.generation, st.episode_id)
+            if mid in seen:
+                rep.duplicate_match_ids += 1
+            else:
+                seen.add(mid)
+                rep.match_ids.append(list(mid))
+        if truncated:
+            rep.truncations += 1
+        if bool(next_td["request_revised"][r]):
+            rep.revisions += 1
+    rep.natural_matches = len(rep.match_ids)
     return rep
 
 

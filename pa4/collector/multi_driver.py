@@ -27,7 +27,8 @@ def driver_main(idx, num_envs, target, seed, out_q, device):
         cfg = BatchedConfig(
             num_envs=num_envs, target_matches=target,
             max_steps=max(4000, target * 400), seed=seed + idx * 101,
-            run_id=f"drv{idx}", min_batch_size=1, server_timeout=0.0,
+            run_id=f"drv{idx}", worker_index=idx,
+            min_batch_size=1, server_timeout=0.0,
             device=device,
         )
         rep = run_batched(cfg)

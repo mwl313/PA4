@@ -55,6 +55,7 @@ class BatchedConfig:
     strict_validation: bool = False
     use_fast_obs: bool = True
     run_id: str = "pa4-p3-batched"
+    worker_index: int = 0
     teams: list | None = None
 
 
@@ -69,6 +70,7 @@ class BatchedReport:
     env_transitions: int = 0
     seat_records: int = 0
     actor_active_rows: int = 0
+    seats_by_seat: list = field(default_factory=lambda: [0, 0])
     illegal_actions: int = 0
     revisions: int = 0
     truncations: int = 0
