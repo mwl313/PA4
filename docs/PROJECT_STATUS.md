@@ -98,17 +98,18 @@ fresh context, so this is a process control, not independent-model proof.
 round-8 fresh-context auditor read the real repo and returned `FINDINGS`; the
 four MAJOR findings (vacuous identity gate, mislabelled `next_observation`, no
 server-seam ragged test, stale provenance/duplicate key) and F5–F9 were fixed
-at `b0e2513` with tests that fail if the fix is reverted.
+at `e6da02f` with tests that fail if the fix is reverted.
 
-- **189 tests green:** P1 39 + P2 51 + collector 99; `check_env_specs` OK.
+- **193 tests green:** P1 39 + P2 51 + collector 103; `check_env_specs` OK.
 - Transport byte-exact on **960** real views, encoder/value parity on CUDA
   **0.000e+00** over **480** views, **2264/2264** negative controls detected.
 - Real server seam with **non-empty ragged** passes; disabling the forwarding
   makes it fail (both runs retained in `evidence/f3_ragged_forwarding_*.txt`).
-- Collector smoke: 4 natural matches, **111 seat records, all `ragged.v2`, 0 drops**.
-- Fresh same-session A/B, two pairs: **−26.0%/−23.0%** and **−17.5%/−22.4%**
-  (16/32 envs); `views` (8.56 ms/step) is only leaf extraction and the gate,
-  not the repair cost (`payload_to_transport` runs inside `env_step`/`reset`).
+- Collector smoke: 4 natural matches, **102 seat records, all `ragged.v2`, 0 drops, no collector errors**.
+- Fresh same-session A/B, three pairs: observed deltas **−26.0% to −10.6%**
+  (16 envs) and **−31.5% to −22.4%** (32 envs); `views` (6.36 ms/step) is only
+  leaf extraction and the gate, not the repair cost (`payload_to_transport`
+  runs inside `env_step`/`reset`).
 - PA3 untouched (0 dirty), `uv.lock` unchanged.
 - **P35_I remains BLOCKED** until the round-9 fresh-context audit returns CLEAN.
 
@@ -127,7 +128,7 @@ at `b0e2513` with tests that fail if the fix is reverted.
 ## Immediate next task
 
 **P3.5 re-audit.** Do not start P4. The round-9 fresh-context `pa4-auditor`
-must read the corrected tree (`06e3b04` + this metadata commit) and return
+must read the corrected tree (`e6da02f` + this metadata commit) and return
 CLEAN before P35_I can be set PASS. P4 (GAE, PPO-2, optimizer, checkpoint
 parity) is not started. Audit history is in `docs/phases/P3.5/RECEIPT.json`
 and `docs/phases/P3/RECEIPT.json`.

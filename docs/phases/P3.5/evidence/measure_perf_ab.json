@@ -6,52 +6,168 @@
       "pre_repair_tree": "a977a5c",
       "repaired_tree": "06e3b04",
       "pre_repair": [
-        {"num_envs": 16, "wall_seconds": 20.054, "natural_matches": 64,
-         "matches_per_sec": 3.191, "env_transitions": 992,
-         "transitions_per_sec": 49.47, "duplicate_match_ids": 0},
-        {"num_envs": 32, "wall_seconds": 16.202, "natural_matches": 66,
-         "matches_per_sec": 4.074, "env_transitions": 1152,
-         "transitions_per_sec": 71.1, "duplicate_match_ids": 0}
+        {
+          "num_envs": 16,
+          "wall_seconds": 20.054,
+          "natural_matches": 64,
+          "matches_per_sec": 3.191,
+          "env_transitions": 992,
+          "transitions_per_sec": 49.47,
+          "duplicate_match_ids": 0
+        },
+        {
+          "num_envs": 32,
+          "wall_seconds": 16.202,
+          "natural_matches": 66,
+          "matches_per_sec": 4.074,
+          "env_transitions": 1152,
+          "transitions_per_sec": 71.1,
+          "duplicate_match_ids": 0
+        }
       ],
       "repaired": [
-        {"num_envs": 16, "wall_seconds": 27.523, "natural_matches": 65,
-         "matches_per_sec": 2.362, "env_transitions": 1056,
-         "transitions_per_sec": 38.37, "transitions_dropped": 800,
-         "duplicate_match_ids": 0},
-        {"num_envs": 32, "wall_seconds": 21.367, "natural_matches": 67,
-         "matches_per_sec": 3.136, "env_transitions": 1152,
-         "transitions_per_sec": 53.91, "transitions_dropped": 896,
-         "duplicate_match_ids": 0}
+        {
+          "num_envs": 16,
+          "wall_seconds": 27.523,
+          "natural_matches": 65,
+          "matches_per_sec": 2.362,
+          "env_transitions": 1056,
+          "transitions_per_sec": 38.37,
+          "transitions_dropped": 800,
+          "duplicate_match_ids": 0
+        },
+        {
+          "num_envs": 32,
+          "wall_seconds": 21.367,
+          "natural_matches": 67,
+          "matches_per_sec": 3.136,
+          "env_transitions": 1152,
+          "transitions_per_sec": 53.91,
+          "transitions_dropped": 896,
+          "duplicate_match_ids": 0
+        }
       ],
-      "delta_percent": {"16_envs": -26.0, "32_envs": -23.0}
+      "delta_percent": {
+        "16_envs": -26.0,
+        "32_envs": -23.0
+      }
     },
     {
       "pair": 2,
       "pre_repair_tree": "a977a5c",
       "repaired_tree": "b0e2513",
       "pre_repair": [
-        {"num_envs": 16, "wall_seconds": 21.606, "natural_matches": 64,
-         "matches_per_sec": 2.962, "env_transitions": 1024,
-         "transitions_per_sec": 47.39, "duplicate_match_ids": 0},
-        {"num_envs": 32, "wall_seconds": 16.504, "natural_matches": 65,
-         "matches_per_sec": 3.938, "env_transitions": 1152,
-         "transitions_per_sec": 69.8, "duplicate_match_ids": 0}
+        {
+          "num_envs": 16,
+          "wall_seconds": 21.606,
+          "natural_matches": 64,
+          "matches_per_sec": 2.962,
+          "env_transitions": 1024,
+          "transitions_per_sec": 47.39,
+          "duplicate_match_ids": 0
+        },
+        {
+          "num_envs": 32,
+          "wall_seconds": 16.504,
+          "natural_matches": 65,
+          "matches_per_sec": 3.938,
+          "env_transitions": 1152,
+          "transitions_per_sec": 69.8,
+          "duplicate_match_ids": 0
+        }
       ],
       "repaired": [
-        {"num_envs": 16, "wall_seconds": 26.611, "natural_matches": 65,
-         "matches_per_sec": 2.443, "env_transitions": 1008,
-         "transitions_per_sec": 37.88, "transitions_dropped": 752,
-         "duplicate_match_ids": 0},
-        {"num_envs": 32, "wall_seconds": 20.936, "natural_matches": 64,
-         "matches_per_sec": 3.057, "env_transitions": 1056,
-         "transitions_per_sec": 50.44, "transitions_dropped": 800,
-         "duplicate_match_ids": 0}
+        {
+          "num_envs": 16,
+          "wall_seconds": 26.611,
+          "natural_matches": 65,
+          "matches_per_sec": 2.443,
+          "env_transitions": 1008,
+          "transitions_per_sec": 37.88,
+          "transitions_dropped": 752,
+          "duplicate_match_ids": 0
+        },
+        {
+          "num_envs": 32,
+          "wall_seconds": 20.936,
+          "natural_matches": 64,
+          "matches_per_sec": 3.057,
+          "env_transitions": 1056,
+          "transitions_per_sec": 50.44,
+          "transitions_dropped": 800,
+          "duplicate_match_ids": 0
+        }
       ],
-      "delta_percent": {"16_envs": -17.5, "32_envs": -22.4}
+      "delta_percent": {
+        "16_envs": -17.5,
+        "32_envs": -22.4
+      }
+    },
+    {
+      "pair": 3,
+      "pre_repair_tree": "a977a5c",
+      "repaired_tree": "e6da02f",
+      "pre_repair": [
+        {
+          "num_envs": 16,
+          "wall_seconds": 21.404,
+          "natural_matches": 64,
+          "matches_per_sec": 2.99,
+          "env_transitions": 1024,
+          "transitions_per_sec": 47.84,
+          "duplicate_match_ids": 0
+        },
+        {
+          "num_envs": 32,
+          "wall_seconds": 14.906,
+          "natural_matches": 65,
+          "matches_per_sec": 4.361,
+          "env_transitions": 1056,
+          "transitions_per_sec": 70.85,
+          "duplicate_match_ids": 0
+        }
+      ],
+      "repaired": [
+        {
+          "num_envs": 16,
+          "wall_seconds": 24.309,
+          "natural_matches": 65,
+          "matches_per_sec": 2.674,
+          "env_transitions": 992,
+          "transitions_per_sec": 40.81,
+          "transitions_dropped": 736,
+          "duplicate_match_ids": 0
+        },
+        {
+          "num_envs": 32,
+          "wall_seconds": 22.106,
+          "natural_matches": 66,
+          "matches_per_sec": 2.986,
+          "env_transitions": 1184,
+          "transitions_per_sec": 53.56,
+          "transitions_dropped": 928,
+          "duplicate_match_ids": 0
+        }
+      ],
+      "delta_percent": {
+        "16_envs": -10.6,
+        "32_envs": -31.5
+      }
     }
   ],
-  "observed_regression_range_percent": {"16_envs": [-26.0, -17.5],
-                                       "32_envs": [-23.0, -22.4],
-                                       "overall": [-26.0, -17.5]},
-  "note": "The old P3 receipt recorded 5.12/5.47 matches/s in a different host window; comparing to it would overstate the repair cost. The fresh A/B regression is 17.5-26% across two measured pairs, with visible run-to-run variance. One run per configuration per pair."
+  "observed_regression_range_percent": {
+    "16_envs": [
+      -26.0,
+      -10.6
+    ],
+    "32_envs": [
+      -31.5,
+      -22.4
+    ],
+    "overall": [
+      -31.5,
+      -10.6
+    ]
+  },
+  "note": "The old P3 receipt recorded 5.12/5.47 matches/s in a different host window; comparing to it would overstate the repair cost. Three fresh A/B pairs show the repaired path is consistently slower, but the host has substantial run-to-run variance: observed deltas are -26.0% to -10.6% (16 envs) and -31.5% to -22.4% (32 envs). One run per configuration per pair."
 }

@@ -5,9 +5,10 @@ fills `ragged` with RaggedBatch.empty(). PA3's contract says all five ragged
 families are "added before encoder". If real battles carry non-empty ragged
 rows, the served policy is NOT the full PA3 policy input contract.
 
-This probe measures, with identical weights and identical fixed leaves:
-  (a) how many ragged rows a realistic battle observation carries,
-  (b) the resulting change in encoder output, value, and branch logprobs.
+This is a historical pre-repair probe. It synthesises per-token ragged rows
+with identical fixed leaves and measures the encoder/value change when those
+rows are present versus empty. It does not read a real battle and does not
+score branch logprobs; real row counts are in capacity_survey.json.
 """
 import sys
 

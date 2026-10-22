@@ -1,17 +1,17 @@
 {
  "label": "repaired",
  "num_envs": 16,
- "wall_s": 21.488,
- "matches_per_s": 2.234,
- "matches": 48,
+ "wall_s": 22.054,
+ "matches_per_s": 2.222,
+ "matches": 49,
  "stages_ms": {
-  "accounting": 10.41,
-  "encode": 73.21,
-  "env_step": 14.1,
-  "packet": 14.62,
+  "accounting": 10.6,
+  "encode": 72.44,
+  "env_step": 11.09,
+  "packet": 12.06,
   "request_info": 0.05,
-  "reset": 7.28,
-  "step_levels": 239.02,
-  "views": 8.56
+  "reset": 8.37,
+  "step_levels": 244.22,
+  "views": 6.36
  }
 }

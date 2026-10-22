@@ -1,11 +1,11 @@
 === per-call cost at num_envs=16 ===
-native observe_fixed_batch(16)                 320.3 us
-parse_batch(16)                                 41.1 us
-payload_to_transport(16)  <-- added            964.8 us
-decode_batch(16) fixed+ragged                 1960.2 us
+native observe_fixed_batch(16)                 325.9 us
+parse_batch(16)                                 44.2 us
+payload_to_transport(16)  <-- added            953.5 us
+decode_batch(16) fixed+ragged                 1864.3 us
 
-  component: native                            308.2 us
-  component: parse                              42.7 us
-  component: transport                         983.7 us
-  component: decode                           1804.0 us
-TOTAL per step (16 views)                     3138.6 us
+  component: native                            312.7 us
+  component: parse                              43.7 us
+  component: transport                         952.9 us
+  component: decode                           2398.7 us
+TOTAL per step (16 views)                     3708.1 us

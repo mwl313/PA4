@@ -1,30 +1,30 @@
-{"num_envs": 16, "target_matches": 64, "wall_seconds": 26.611, "natural_matches": 65, "raw_matches_per_sec": 2.443, "env_transitions": 1008, "env_transitions_per_sec": 37.88, "seat_records": 1791, "drops": 752, "duplicate_match_ids": 0}
-{"num_envs": 32, "target_matches": 64, "wall_seconds": 20.936, "natural_matches": 64, "raw_matches_per_sec": 3.057, "env_transitions": 1056, "env_transitions_per_sec": 50.44, "seat_records": 1863, "drops": 800, "duplicate_match_ids": 0}
+{"num_envs": 16, "target_matches": 64, "wall_seconds": 24.309, "natural_matches": 65, "raw_matches_per_sec": 2.674, "env_transitions": 992, "env_transitions_per_sec": 40.81, "seat_records": 1751, "drops": 736, "duplicate_match_ids": 0}
+{"num_envs": 32, "target_matches": 64, "wall_seconds": 22.106, "natural_matches": 66, "raw_matches_per_sec": 2.986, "env_transitions": 1184, "env_transitions_per_sec": 53.56, "seat_records": 2100, "drops": 928, "duplicate_match_ids": 0}
 
 JSON:
 [
  {
   "num_envs": 16,
   "target_matches": 64,
-  "wall_seconds": 26.611,
+  "wall_seconds": 24.309,
   "natural_matches": 65,
-  "raw_matches_per_sec": 2.443,
-  "env_transitions": 1008,
-  "env_transitions_per_sec": 37.88,
-  "seat_records": 1791,
-  "drops": 752,
+  "raw_matches_per_sec": 2.674,
+  "env_transitions": 992,
+  "env_transitions_per_sec": 40.81,
+  "seat_records": 1751,
+  "drops": 736,
   "duplicate_match_ids": 0
  },
  {
   "num_envs": 32,
   "target_matches": 64,
-  "wall_seconds": 20.936,
-  "natural_matches": 64,
-  "raw_matches_per_sec": 3.057,
-  "env_transitions": 1056,
-  "env_transitions_per_sec": 50.44,
-  "seat_records": 1863,
-  "drops": 800,
+  "wall_seconds": 22.106,
+  "natural_matches": 66,
+  "raw_matches_per_sec": 2.986,
+  "env_transitions": 1184,
+  "env_transitions_per_sec": 53.56,
+  "seat_records": 2100,
+  "drops": 928,
   "duplicate_match_ids": 0
  }
 ]

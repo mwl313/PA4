@@ -69,12 +69,16 @@ def main():
     print("nonempty family counts:", fam_nonempty)
     print()
     drops = int(getattr(store, "dropped", -1))
+    errors = list(getattr(rep, "errors", []) or [])
+    guaranteed_nonempty = all(fam_nonempty[f] > 0 for f in ("base_moves", "move_effects"))
     ok = (total_seats > 0 and checked == total_seats
           and ragged_ok == checked
           and reps == {rt.OBSERVATION_REPRESENTATION}
-          and drops == 0)
+          and drops == 0 and guaranteed_nonempty and not errors)
     print("seat records with ragged:", checked, "of", total_seats)
     print("dropped:", drops)
+    print("guaranteed non-empty families:", guaranteed_nonempty)
+    print("collector errors:", errors)
     print("RESULT:", "PASS" if ok else "FAIL")
 
 if __name__ == "__main__":

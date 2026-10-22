@@ -3,7 +3,8 @@
 Builds ObservationBatch two ways from the SAME native payload:
   A. PA3 canonical      : from_native(payload) -> ObservationBatch.ragged
   B. P3.5 transport     : payload_to_transport -> transport_to_ragged
-and compares encoder tokens, global_repr and value on CPU and CUDA.
+and compares encoder tokens, global_repr and value on the selected device
+(CUDA when available, otherwise CPU).
 
 Negative controls deliberately corrupt one family and assert the comparison
 DETECTS it, so this harness cannot pass by accident.
@@ -24,10 +25,6 @@ from pa4.env import ragged_transport as rt
 from agent.model.pa3_model import PA3Model
 from agent.types.observation import ObservationBatch, ObservationLayout
 from agent.types.ragged import FIELDS, from_native
-
-FIXED_LEAVES = ("token_mask", "categories", "category_known", "floats",
-                "float_known", "flags", "flag_known")
-
 
 def fixed_kwargs(payload, layout):
     tm = torch.as_tensor(np.asarray(payload["token_mask"]).astype(bool))

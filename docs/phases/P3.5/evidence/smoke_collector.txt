@@ -1,8 +1,10 @@
-report: {'natural_matches': 4, 'duplicate_match_ids': 0, 'env_steps': 16, 'seat_records': 111, 'actor_active_rows': 103, 'transitions_stored': 64, 'transitions_dropped': 0}
-retained records: 64
+report: {'natural_matches': 4, 'duplicate_match_ids': 0, 'env_steps': 15, 'seat_records': 102, 'actor_active_rows': 95, 'transitions_stored': 60, 'transitions_dropped': 0}
+retained records: 60
 representations seen: {'pa4.observation.ragged.v2'}
-nonempty family counts: {'effects': 68, 'repertoire': 85, 'types': 111, 'base_moves': 111, 'move_effects': 111}
+nonempty family counts: {'effects': 53, 'repertoire': 74, 'types': 102, 'base_moves': 102, 'move_effects': 102}
 
-seat records with ragged: 111 of 111
+seat records with ragged: 102 of 102
 dropped: 0
+guaranteed non-empty families: True
+collector errors: []
 RESULT: PASS
