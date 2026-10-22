@@ -1,0 +1,5 @@
+rows to replay: 12
+scorer fingerprint: 356710ea293dd656 ...
+max branch delta: 2.384e-07
+max joint  delta: 4.768e-07
+RESULT: PASS
