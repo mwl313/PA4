@@ -1,0 +1,178 @@
+{
+  "phase": "P4.5",
+  "design_id": "PA4-P45-DIAG-DESIGN-v1.0",
+  "design_sha256": "4d6d65bb5d5a0a03b39495984344f3be6fb88454d016c9931d338dd48ae173d5",
+  "mode": "diagnostic_only",
+  "verdict": "PASS",
+  "optimization_implemented": false,
+
+  "baseline_git_sha": "d0f42f1e127f166864aa94bff7e6b2b7f864016a",
+  "diagnostic_branch": "diagnostics/p45-performance-forensics",
+  "pa3_reference_sha": "65bc980abd8e0bbec14158b9ddc2884bb1726a4e",
+  "pa3_dirty_files": 0,
+  "lock_sha256": "8f414f526aad676f6466099da9bf96240f739abae9b9376a5c32fe845340d96e",
+  "lock_changed": false,
+
+  "environment": {
+    "gpu": "NVIDIA GeForce RTX 4060 Ti",
+    "vram_mib": 8187.5,
+    "sm_count": 34,
+    "compute_capability": "8.9",
+    "cuda": "12.8",
+    "driver": "610.88",
+    "torch": "2.9.1+cu128",
+    "torchrl": "0.14.1",
+    "tensordict": "0.14.3",
+    "python": "3.12.3",
+    "logical_cores": 12,
+    "wsl": true,
+    "idle_gpu_state": "P8, 210 MHz, 9.95 W"
+  },
+
+  "protected_p4_evidence_sha256": {
+    "FULL_STACK_BASELINE.csv": "0553cb8a5985a0ff00b3581fc30ce4e04b3f0e9035c389d55a6859b29b2df85a",
+    "RECEIPT.json": "2e0574b164d44cb31418ba14356279153aecdf7629022ede94492dfdf5aae8ea",
+    "FINAL_REPORT.md": "995262cdb7d6a8a4f016fa1d64b8cf2aa455f6fb330ab8dd3285563b773c01d6",
+    "evidence/full_run.json": "6872eefd3360dcddccb1235ebff04c02388c33bcf31b5e9242c0edc1e8b4ff12",
+    "CHECKPOINT_RECOVERY.md": "85c2d2c919cca29e9bb5a99fbcc5fb7b0d145ae91f2e09375edf503d159b2b3e"
+  },
+
+  "gates": {
+    "D45_0_source_freeze": "PASS",
+    "D45_1_accounting": "PASS",
+    "D45_2_instrumentation": "PASS",
+    "D45_3_baseline": "PASS",
+    "D45_4_cpu_gpu_evidence": "PARTIAL",
+    "D45_5_root_cause_ranking": "PASS",
+    "D45_6_invariance_audit_next_step": "PASS"
+  },
+
+  "gate_notes": {
+    "D45_0": "HEAD, branch and clean state recorded before any change; P4 evidence hashed and unmodified; PA3 clean; uv.lock unchanged; instrumentation isolated under pa4/diagnostics and gated by PA4_P45_PROFILE.",
+    "D45_1": "20-iteration stage sums recomputed by code (373.347 / 332.808 / 11.211 / 3.176 s). The 0.407 s outer-vs-row difference is documented as a timer-boundary difference, not forced equal.",
+    "D45_2": "Exclusive accounting verified by construction (parent_excl + children_excl == parent_incl). 10 negative-control tests: off-mode records nothing and writes no file, controlled sleep appears only in its span, three-level nesting does not double count, counters survive exceptions, missing CUDA capability reports UNVERIFIED.",
+    "D45_3": "Three uninstrumented 4-iteration full-stack trials with real Rust and real PPO: 0.5374 / 0.5338 / 0.5030 accepted matches/s, median 0.5338, spread 6.4%, zero drops, zero duplicates, fingerprint chain intact.",
+    "D45_4": "PARTIAL. Parent CPU self time and GPU kernel durations are directly measured (CUDA events at 7 batch sizes). Child-process kernel attribution is NOT directly observed: a parent torch.profiler trace cannot see the spawned inference server's kernels, so the transport wait is reported as wall-duration and cross-checked against an equivalent in-process encode rather than attributed per kernel.",
+    "D45_5": "All ten bottlenecks in BOTTLENECK_RANKING.csv; top five have direct measurements. Collection (51.81%) and update (46.19%) are parent wall intervals that together account for 98.0% of the row sum.",
+    "D45_6": "282 tests green (272 inherited + 10 diagnostics), P0 smoke PASS, P4 behaviour contracts unchanged, fresh-context auditor verified real file access, findings addressed."
+  },
+
+  "number_of_uninstrumented_trials": 3,
+  "baseline_accepted_matches_per_sec": 0.5338,
+  "baseline_spread_pct": 6.4,
+  "historical_20_iteration_matches_per_sec": 0.4439,
+
+  "instrumented_run_matches_per_sec": 0.5524,
+  "instrumentation_overhead_ratio": 1.0349,
+  "instrumentation_overhead_note": "instrumented run was 3.5% faster than the uninstrumented median, i.e. within noise; no measurable overhead detected",
+
+  "timing_coverage_fraction": 0.98,
+  "unattributed_wall_fraction": 0.0051,
+
+  "cuda_trace_available": "PARTIAL",
+  "cuda_trace_note": "CUDA event timing available and used; full Chrome/Perfetto trace export not produced; child-process kernels not directly profiled",
+
+  "key_measurements": {
+    "encoder_batch_scaling": {
+      "batch_1_kernel_ms": 5.583,
+      "batch_8_kernel_ms": 6.06,
+      "batch_16_kernel_ms": 7.114,
+      "batch_32_kernel_ms": 10.272,
+      "batch_64_kernel_ms": 10.85,
+      "cost_ratio_1_to_64": 1.94,
+      "per_row_reduction_1_to_64_x": 32.8,
+      "conclusion": "latency-bound: fixed ~5 ms overhead per forward regardless of batch width"
+    },
+    "transport_per_request_ms": {
+      "prep": 0.172,
+      "submit": 0.334,
+      "wait": 11.492,
+      "wait_to_prep_ratio": 66.8
+    },
+    "collection_stage_share_pct": {
+      "step_levels": 62.1,
+      "encode": 32.2,
+      "env_step": 2.0,
+      "accounting": 1.2,
+      "other": 2.5
+    },
+    "learner_stage_share_pct": {
+      "ppo_loop": 66.2,
+      "vold_encode": 23.2,
+      "vold_obs": 4.3,
+      "checkpoint": 2.2,
+      "model_create": 3.3,
+      "vold_item": 0.3
+    },
+    "amdahl_upper_bounds_x": {
+      "eliminate_collection": 2.075,
+      "eliminate_update": 1.858,
+      "batch_both_learner_paths": 1.703,
+      "eliminate_step_levels": 1.474,
+      "eliminate_ppo_loop_per_row": 1.44,
+      "eliminate_encode": 1.201,
+      "eliminate_vold_per_row": 1.12
+    }
+  },
+
+  "hypotheses": {
+    "H1_per_row_vold_and_item_sync": "PARTIALLY_SUPPORTED",
+    "H2_microbatch_and_per_row_scorer": "SUPPORTED",
+    "H3_ipc_queue_barrier": "SUPPORTED",
+    "H4_instrumentation_in_production_path": "REJECTED",
+    "H5_per_iteration_recreation": "PARTIALLY_SUPPORTED",
+    "H6_gpu_saturated_faster_gpu_helps": "REJECTED"
+  },
+
+  "policy_parity_passed": true,
+  "policy_parity_note": "instrumentation is off by default and proven inert; P4 replay parity and fingerprint chain unchanged",
+
+  "tests": {
+    "p1_action_distribution": 39,
+    "p2_environment": 51,
+    "p3_collector": 103,
+    "p4_ppo": 79,
+    "diagnostics": 10,
+    "inherited_total": 272,
+    "grand_total": 282,
+    "all_ok": true
+  },
+
+  "p0_smoke": "PASS",
+
+  "recommendation": {
+    "next_step": "implement batched learner scoring (ARCHITECTURE_DECISION Option D) gated by E1 parity",
+    "architecture_ceiling_current_topology": "2.5-3.5x (0.44 -> ~1.1-1.5 matches/s)",
+    "c1_ready": true,
+    "c1_note": "no correctness regression found; slow but correct; C1 is a compatibility check, not a training campaign; requires separate authorization",
+    "p5_may_proceed": true,
+    "p5_note": "depends on correct matches and policy identity, both verified; size the league to the measured rate",
+    "requires_separate_authorization": ["C1", "P5", "P6", "P7", "any optimization implementation", "any cloud spend"]
+  },
+
+  "limitations": [
+    "Child-process GPU kernels are not directly attributed; transport wait is wall-measured and cross-checked against an equivalent in-process encode.",
+    "Full Chrome/Perfetto trace not exported; CUDA event timing used instead.",
+    "The 4-iteration baseline rate (0.53 m/s) is not directly comparable to the 20-iteration historical rate (0.44 m/s) because setup amortises differently.",
+    "Amdahl bounds assume the strictly sequential topology; they do not apply unchanged if future work overlaps stages.",
+    "Whether the PA4_P3_STATS_PATH cache-hit path materially affected the original P4 timing was not established either way."
+  ],
+
+  "artifacts": {
+    "documents": [
+      "docs/phases/P4.5/DESIGN.md",
+      "docs/phases/P4.5/FINAL_REPORT.md",
+      "docs/phases/P4.5/RECEIPT.json",
+      "docs/phases/P4.5/HISTORICAL_RECONCILIATION.md",
+      "docs/phases/P4.5/BOTTLENECK_RANKING.csv",
+      "docs/phases/P4.5/PERF_RUNS.csv",
+      "docs/phases/P4.5/ENVIRONMENT.json",
+      "docs/phases/P4.5/TIMING_DICTIONARY.md",
+      "docs/phases/P4.5/ARCHITECTURE_DECISION.md"
+    ],
+    "benchmarks": "benchmarks/p45/",
+    "evidence": "docs/phases/P4.5/evidence/",
+    "instrumentation": "pa4/diagnostics/profiler.py",
+    "tests": "tests/diagnostics/test_profiler_controls.py"
+  }
+}

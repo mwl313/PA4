@@ -1,0 +1,32 @@
+profiles: 2   total exclusive across all spans: 56736.5 ms
+
+stage                                calls    excl_ms      %   ms/call
+collect.run_batched                      2    33303.3  58.7% 16651.644
+update.ppo_loop                          2    15516.1  27.3%  7758.031
+update.vold_encode                     753     5430.4   9.6%     7.212
+update.vold_obs                        753     1010.7   1.8%     1.342
+update.checkpoint                        2      508.2   0.9%   254.116
+update.frozen_model_create               2      391.8   0.7%   195.885
+update.learner_create                    2      368.3   0.6%   184.138
+update.vold_item                       753       79.4   0.1%     0.105
+update.vold_value                      753       73.0   0.1%     0.097
+update.frozen_state_load                 2       32.3   0.1%    16.161
+update.gae                               2        9.1   0.0%     4.549
+update.cohort_build                      2        6.8   0.0%     3.420
+update.learner_clone_before              2        6.8   0.0%     3.409
+update.normalize                         2        0.3   0.0%     0.149
+
+=== learner-only breakdown (update.*) ===
+  update.ppo_loop                    15516.1 ms   66.2% of update  (2 calls)
+  update.vold_encode                  5430.4 ms   23.2% of update  (753 calls)
+  update.vold_obs                     1010.7 ms    4.3% of update  (753 calls)
+  update.checkpoint                    508.2 ms    2.2% of update  (2 calls)
+  update.frozen_model_create           391.8 ms    1.7% of update  (2 calls)
+  update.learner_create                368.3 ms    1.6% of update  (2 calls)
+  update.vold_item                      79.4 ms    0.3% of update  (753 calls)
+  update.vold_value                     73.0 ms    0.3% of update  (753 calls)
+  update.frozen_state_load              32.3 ms    0.1% of update  (2 calls)
+  update.gae                             9.1 ms    0.0% of update  (2 calls)
+  update.cohort_build                    6.8 ms    0.0% of update  (2 calls)
+  update.learner_clone_before            6.8 ms    0.0% of update  (2 calls)
+  update.normalize                       0.3 ms    0.0% of update  (2 calls)

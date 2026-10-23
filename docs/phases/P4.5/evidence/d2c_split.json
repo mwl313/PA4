@@ -1,0 +1,13 @@
+{
+ "requests": 24,
+ "batch_rows": 4,
+ "per_request_ms": {
+  "prep": 0.179,
+  "submit": 0.343,
+  "wait": 11.792
+ },
+ "wait_to_prep_ratio": 65.99,
+ "direct_gpu_encode_batch_ms": 6.091,
+ "direct_gpu_encode_per_row_ms": 1.523,
+ "note": "prep+submit are CPU; wait covers queue dwell + server-side decode + GPU + IPC return, so it is NOT pure GPU time"
+}

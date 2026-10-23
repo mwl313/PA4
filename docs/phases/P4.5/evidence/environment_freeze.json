@@ -1,0 +1,78 @@
+{
+  "phase": "P4.5",
+  "design_id": "PA4-P45-DIAG-DESIGN-v1.0",
+  "captured_utc": "2026-10-23T01:15:10Z",
+  "source": {
+    "repo": "/home/pa4/projects/PokeAgent4.0",
+    "head": "d0f42f1e127f166864aa94bff7e6b2b7f864016a",
+    "branch": "diagnostics/p45-performance-forensics",
+    "worktree_clean": false,
+    "pa3_reference": "65bc980abd8e0bbec14158b9ddc2884bb1726a4e",
+    "pa3_dirty_files": 0,
+    "uv_lock_sha256": "8f414f526aad676f6466099da9bf96240f739abae9b9376a5c32fe845340d96e",
+    "uv_lock_check": ""
+  },
+  "python": {
+    "version": "3.12.3",
+    "torch": "2.9.1+cu128",
+    "torchrl": "0.14.1",
+    "tensordict": "0.14.3",
+    "torch_num_threads": 6,
+    "interop_threads": 12
+  },
+  "host": {
+    "platform": "Linux-6.18.35.2-microsoft-standard-WSL2+-x86_64-with-glibc2.39",
+    "kernel": "6.18.35.2-microsoft-standard-WSL2+",
+    "cpu_model": "AMD Ryzen 5 7600 6-Core Processor",
+    "logical_cores": 12,
+    "mem_total_kb": 15933444,
+    "wsl": true
+  },
+  "gpu": {
+    "name": "NVIDIA GeForce RTX 4060 Ti",
+    "cuda_available": true,
+    "cuda_version": "12.8",
+    "total_memory_mib": 8187.5,
+    "sm_count": 34,
+    "capability": "8.9",
+    "nvidia_smi": "NVIDIA GeForce RTX 4060 Ti, 610.88, 8188 MiB, 210 MHz, 9.95 W, 38, P8"
+  },
+  "thread_env": {
+    "OMP_NUM_THREADS": null,
+    "MKL_NUM_THREADS": null,
+    "CUDA_VISIBLE_DEVICES": null,
+    "CUDA_LAUNCH_BLOCKING": null,
+    "TORCH_NUM_THREADS": null,
+    "PA4_P3_STATS_PATH": null,
+    "PA4_POLICY_SNAPSHOT": null
+  },
+  "torch_flags": {
+    "cudnn_enabled": true,
+    "cudnn_benchmark": false,
+    "matmul_allow_tf32": false,
+    "cudnn_allow_tf32": true,
+    "deterministic": false
+  },
+  "protected_p4_evidence": {
+    "FULL_STACK_BASELINE.csv": {
+      "sha256": "0553cb8a5985a0ff00b3581fc30ce4e04b3f0e9035c389d55a6859b29b2df85a",
+      "bytes": 11375
+    },
+    "RECEIPT.json": {
+      "sha256": "2e0574b164d44cb31418ba14356279153aecdf7629022ede94492dfdf5aae8ea",
+      "bytes": 8973
+    },
+    "FINAL_REPORT.md": {
+      "sha256": "995262cdb7d6a8a4f016fa1d64b8cf2aa455f6fb330ab8dd3285563b773c01d6",
+      "bytes": 7351
+    },
+    "evidence/full_run.json": {
+      "sha256": "6872eefd3360dcddccb1235ebff04c02388c33bcf31b5e9242c0edc1e8b4ff12",
+      "bytes": 26531
+    },
+    "CHECKPOINT_RECOVERY.md": {
+      "sha256": "85c2d2c919cca29e9bb5a99fbcc5fb7b0d145ae91f2e09375edf503d159b2b3e",
+      "bytes": 8892
+    }
+  }
+}

@@ -1,0 +1,39 @@
+ batch  kernel_ms  per_row_ms   wall_ms
+     1      5.583       5.583     5.455
+     2      5.230       2.615     5.487
+     4      5.455       1.364     5.443
+     8      5.639       0.705     5.670
+
+{
+ "by_batch_size": {
+  "1": {
+   "kernel_ms": 5.583,
+   "per_row_ms": 5.583,
+   "wall_ms": 5.455,
+   "launch_overhead_ms": -0.128
+  },
+  "2": {
+   "kernel_ms": 5.23,
+   "per_row_ms": 2.615,
+   "wall_ms": 5.487,
+   "launch_overhead_ms": 0.257
+  },
+  "4": {
+   "kernel_ms": 5.455,
+   "per_row_ms": 1.364,
+   "wall_ms": 5.443,
+   "launch_overhead_ms": -0.012
+  },
+  "8": {
+   "kernel_ms": 5.639,
+   "per_row_ms": 0.705,
+   "wall_ms": 5.67,
+   "launch_overhead_ms": 0.031
+  }
+ },
+ "interpretation": {
+  "kernel": "device-side encode duration via CUDA events",
+  "per_row": "kernel_ms / batch, shows batching amortisation",
+  "launch_overhead": "wall - kernel; Python/dispatch cost per call"
+ }
+}

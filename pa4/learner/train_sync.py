@@ -32,6 +32,7 @@ from pa4.learner.sink import LosslessBuffer, verify_lossless
 from pa4.learner.snapshot import (load_snapshot, save_snapshot,
                                   snapshot_fingerprint)
 from pa4.learner.update import PpoUpdater, UpdateConfig
+from pa4.diagnostics.profiler import get_profiler
 
 DEFAULT_SEED = 20261006
 
@@ -223,6 +224,7 @@ class SynchronousTrainer:
 
         state_k, snap_k = load_snapshot(theta_k_path)
 
+        prof = get_profiler()
         rec = IterationRecord(iteration=len(self.records) + 1,
                               policy_version=self.policy_version,
                               theta_k_fingerprint=snap_k.fingerprint)
@@ -241,7 +243,8 @@ class SynchronousTrainer:
             snapshot_path=snap_k.path,
             transition_capacity=500_000,
         )
-        rep = run_batched(bcfg, store=sink)
+        with prof.span("collect.run_batched"):
+            rep = run_batched(bcfg, store=sink)
         rec.collection_seconds = time.perf_counter() - t_collect
 
         verify_lossless(sink)
@@ -265,38 +268,50 @@ class SynchronousTrainer:
                 f"matches reached the target {cfg.matches_per_iteration} "
                 "(max_steps or exclusions); refusing to train on a partial cohort")
 
-        cohort = build_cohort(records,
-                              expected_fingerprint=snap_k.fingerprint,
-                              expected_policy_version=self.policy_version)
+        with prof.span("update.cohort_build"):
+            cohort = build_cohort(records,
+                                  expected_fingerprint=snap_k.fingerprint,
+                                  expected_policy_version=self.policy_version)
         rec.accepted_matches = cohort.matches()
         rec.incomplete_episodes = cohort.incomplete
 
         # ---- 2. V_old from the FROZEN critic -------------------------
         t_update = time.perf_counter()
-        frozen = _build_model(cfg.seed).to(cfg.device)
-        frozen.load_state_dict(state_k, strict=True)
-        frozen.eval()
+        with prof.span("update.frozen_model_create"):
+            frozen = _build_model(cfg.seed).to(cfg.device)
+        with prof.span("update.frozen_state_load"):
+            frozen.load_state_dict(state_k, strict=True)
+            frozen.eval()
 
         rows = cohort.value_rows()
         values_by_identity = {}
         with torch.no_grad():
             for row in rows:
-                obs = build_observation(row, device=cfg.device)
-                values_by_identity[row.identity()] = float(
-                    frozen.value(frozen.encode(obs)).item())
+                with prof.span("update.vold_obs"):
+                    obs = build_observation(row, device=cfg.device)
+                with prof.span("update.vold_encode"):
+                    enc = frozen.encode(obs)
+                with prof.span("update.vold_value"):
+                    val = frozen.value(enc)
+                with prof.span("update.vold_item"):
+                    values_by_identity[row.identity()] = float(val.item())
         del frozen
 
-        row_order, adv, ret, actor_mask = gae.gae_for_cohort(
-            cohort, values_by_identity)
+        with prof.span("update.gae"):
+            row_order, adv, ret, actor_mask = gae.gae_for_cohort(
+                cohort, values_by_identity)
         value_mask = torch.ones(len(row_order), dtype=torch.bool)
         rec.actor_rows = int(actor_mask.sum())
         rec.value_rows = int(value_mask.sum())
 
-        adv_norm = gae.normalize_advantages(adv, actor_mask)
+        with prof.span("update.normalize"):
+            adv_norm = gae.normalize_advantages(adv, actor_mask)
 
         # ---- 3. learner ----------------------------------------------
-        learner, updater = self._learner_and_updater(state_k)
-        before = {k: v.detach().clone() for k, v in learner.state_dict().items()}
+        with prof.span("update.learner_create"):
+            learner, updater = self._learner_and_updater(state_k)
+        with prof.span("update.learner_clone_before"):
+            before = {k: v.detach().clone() for k, v in learner.state_dict().items()}
 
         lr = ppo_loss.learning_rate(
             self.committed_matches, start=cfg.lr_start, peak=cfg.lr_peak,
@@ -322,7 +337,8 @@ class SynchronousTrainer:
             return evaluate_stored_batch(learner, sub_rows, device=cfg.device)
 
         updater.set_lr(lr)
-        result = updater.run(batch, evaluator)
+        with prof.span("update.ppo_loop"):
+            result = updater.run(batch, evaluator)
         rec.update_seconds = time.perf_counter() - t_update
 
         # M2: a non-finite update is never committed or published.
@@ -405,7 +421,8 @@ class SynchronousTrainer:
                 "policy_version": next_version,
             },
         )
-        ckpt_path = ckpt_mod.save_checkpoint(ckpt, self.run_dir)
+        with prof.span("update.checkpoint"):
+            ckpt_path = ckpt_mod.save_checkpoint(ckpt, self.run_dir)
         rec.checkpoint_path = ckpt_path
         rec.checkpoint_sha256 = ckpt_mod._file_sha256(ckpt_path)
 
@@ -431,6 +448,11 @@ class SynchronousTrainer:
             shutil.copyfile(src, dst)
 
         rec.wall_seconds = time.perf_counter() - t_iter
+        if prof.enabled:
+            dump_dir = os.environ.get("PA4_P45_OUT", self.run_dir)
+            os.makedirs(dump_dir, exist_ok=True)
+            prof.dump(os.path.join(
+                dump_dir, f"profile_iter{rec.iteration:03d}.json"))
         self.records.append(rec)
         return rec
 

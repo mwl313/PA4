@@ -1,0 +1,82 @@
+{
+  "source": {
+    "csv": {
+      "file": "docs/phases/P4/FULL_STACK_BASELINE.csv",
+      "sha256": "0553cb8a5985a0ff00b3581fc30ce4e04b3f0e9035c389d55a6859b29b2df85a",
+      "rows": 20
+    },
+    "json": {
+      "file": "docs/phases/P4/evidence/full_run.json",
+      "sha256": "6872eefd3360dcddccb1235ebff04c02388c33bcf31b5e9242c0edc1e8b4ff12"
+    }
+  },
+  "iterations": 20,
+  "stage_sums_s": {
+    "collection_seconds": 373.347,
+    "update_seconds": 332.808,
+    "checkpoint_seconds": 11.211,
+    "wall_seconds": 720.541
+  },
+  "residual_inside_rows_s": 3.176,
+  "shares_of_row_sum_pct": {
+    "collection": 51.81,
+    "update": 46.19,
+    "checkpoint": 1.56,
+    "residual": 0.44
+  },
+  "outer_stopwatch_s": 720.948,
+  "outer_minus_row_sum_s": 0.407,
+  "json_summary_crosscheck": {
+    "iterations": 20,
+    "generated_natural_matches": 320,
+    "accepted_unique_matches": 320,
+    "optimizer_steps_cumulative_final": 265,
+    "dropped_total": 0,
+    "duplicates_total": 0,
+    "nan_inf_total": 0,
+    "accepted_training_matches_per_sec": 0.4439,
+    "peak_vram_mib": 574.6,
+    "fingerprint_chain_ok": true,
+    "distinct_policy_versions": 20,
+    "early_stopped_iterations": 15
+  },
+  "per_iteration": {
+    "collection_seconds": {
+      "min": 16.704,
+      "median": 18.805,
+      "max": 21.777,
+      "spread_pct": 27.0
+    },
+    "update_seconds": {
+      "min": 10.551,
+      "median": 17.303,
+      "max": 19.619,
+      "spread_pct": 52.4
+    },
+    "checkpoint_seconds": {
+      "min": 0.53,
+      "median": 0.545,
+      "max": 0.715,
+      "spread_pct": 34.0
+    },
+    "wall_seconds": {
+      "min": 29.503,
+      "median": 36.453,
+      "max": 40.95,
+      "spread_pct": 31.4
+    }
+  },
+  "amdahl_counterfactuals": {
+    "eliminate_collector_only": 2.075,
+    "eliminate_update_only": 1.858,
+    "eliminate_checkpoint_only": 1.016,
+    "eliminate_collector_and_update": 50.085,
+    "note": "upper bounds for a strictly sequential topology; NOT forecasts"
+  },
+  "timer_semantics": {
+    "collection_seconds": "train_sync.run_iteration: from the call into run_batched() until it returns. Includes server creation/start, snapshot load into the inference child, initial reset, every ENCODE/STEP round trip and its wait, native step/reset, transition materialisation and sink put.",
+    "update_seconds": "train_sync.run_iteration: from after cohort build until the PPO updater returns. Includes frozen critic construction + state load, per-row V_old build_observation/encode/value/.item, GAE, advantage normalisation, per-microbatch row rebuild, ragged stacking, batched trainable encoder, per-row evaluate_encoded, backward, clip, Adam.",
+    "checkpoint_seconds": "torch.save of the full state, fsync, sha256, atomic rename, pointer publication and the policy snapshot write.",
+    "wall_seconds": "per-iteration perf_counter span covering collection + update + checkpoint + in-iteration residual (cohort assembly, publish)."
+  }
+}

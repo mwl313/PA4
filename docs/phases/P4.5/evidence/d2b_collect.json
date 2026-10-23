@@ -1,0 +1,48 @@
+{
+ "wall_seconds": 18.76,
+ "natural_matches": 16,
+ "env_steps": 61,
+ "seat_records": 433,
+ "transition_records": 244,
+ "stages_ms": {
+  "accounting": 183.5,
+  "encode": 5109.7,
+  "env_step": 304.9,
+  "packet": 218.8,
+  "request_info": 1.0,
+  "reset": 57.7,
+  "step_levels": 9820.1,
+  "views": 112.2
+ },
+ "stage_total_ms": 15807.7,
+ "unaccounted_ms": 2952.2,
+ "stage_share_pct": {
+  "accounting": 1.2,
+  "encode": 32.3,
+  "env_step": 1.9,
+  "packet": 1.4,
+  "request_info": 0.0,
+  "reset": 0.4,
+  "step_levels": 62.1,
+  "views": 0.7
+ },
+ "per_env_step_ms": {
+  "accounting": 3.01,
+  "encode": 83.76,
+  "env_step": 5.0,
+  "packet": 3.59,
+  "request_info": 0.02,
+  "reset": 0.95,
+  "step_levels": 160.99,
+  "views": 1.84
+ },
+ "server_timeout": 0.05,
+ "min_batch_size": 4,
+ "unmeasured_by_existing_timers": [
+  "inference service startup and snapshot load",
+  "per-request submit vs queue vs result-wait split",
+  "transition materialisation inside 'accounting'",
+  "server shutdown",
+  "per-forward JSON stats write (PA4_P3_STATS_PATH)"
+ ]
+}

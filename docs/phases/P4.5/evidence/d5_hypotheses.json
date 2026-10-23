@@ -1,0 +1,47 @@
+{
+  "hypotheses": {
+    "H1_per_row_vold": {
+      "claim": "Per-row frozen V_old encode plus .item() synchronisation is a major learner bottleneck.",
+      "evidence": "753 vold_encode calls = 5430 ms (23.2% of learner); vold_item only 79 ms (0.3%); vold_obs 1011 ms (4.3%).",
+      "verdict": "PARTIALLY SUPPORTED",
+      "detail": "The per-row ENCODE is real and large (23% of learner). But the hypothesised .item() synchronisation is negligible (0.3%), so the cost is per-call kernel latency, not host sync. Because a batch of 1 costs 5.58 ms and a batch of 64 costs 10.85 ms, each per-row call wastes roughly 5.41 ms of fixed overhead."
+    },
+    "H2_small_microbatch_and_per_row_scorer": {
+      "claim": "microbatch_rows=8, per-row conditional scorer and ragged CPU/NumPy transforms dominate the learner.",
+      "evidence": "Learner split: ppo_loop 66.2%, vold_encode 23.2%, vold_obs 4.3%, checkpoint 2.2%, model create 3.3%. The ppo_loop contains the per-row evaluate_encoded path; an earlier isolated split measured it at 73.6% of a single learner evaluation.",
+      "verdict": "SUPPORTED",
+      "detail": "Per-row scorer evaluation inside ppo_loop plus per-row V_old encode together account for essentially all learner time. Batch 1 vs 64 kernel scaling shows the mechanism is per-call latency amortisation, not arithmetic."
+    },
+    "H3_ipc_queue_barrier": {
+      "claim": "InferenceServer ENCODE and prefix STEP IPC/queue/synchronisation barriers dominate collection.",
+      "evidence": "Per request: prep 0.179 ms, submit 0.343 ms, wait 11.792 ms (wait/prep = 65.99x). Direct in-process GPU encode of the same 4 rows: 6.091 ms (1.355 ms/row). Within collection: step_levels 9820.1 ms (62.1%), encode 5109.7 ms (32.3%).",
+      "verdict": "SUPPORTED",
+      "detail": "The transport path pays ~11.5 ms per request while the equivalent GPU work is ~1.3-5.8 ms for a small batch. step_levels + encode are 94% of accounted collection, and both are dominated by submit/queue/wait rather than payload construction (prep is 66x smaller than wait)."
+    },
+    "H4_instrumentation_in_production_path": {
+      "claim": "Per-forward JSON statistics writes or accidental instrumentation inflate the nominal P4 path.",
+      "evidence": "PA4_P3_STATS_PATH was unset in the frozen environment (ENVIRONMENT.json thread_env). The profiler is off unless PA4_P45_PROFILE=1, and off-mode tests prove it records nothing and writes no file. The instrumented run (0.5524 m/s over 2 iters) is not faster than the uninstrumented median (0.5338 m/s).",
+      "verdict": "REJECTED",
+      "detail": "No stats-file path is active by default; instrumentation is gated and off-mode is proven inert by 10 negative-control tests."
+    },
+    "H5_per_iteration_recreation": {
+      "claim": "Recreating the actor server, frozen critic and reloading optimizer/snapshot files each iteration is a major cost.",
+      "evidence": "frozen_model_create 391.8 ms + frozen_state_load 32.3 ms + learner_create 368.3 ms over 2 iterations = ~793 ms, about 3.5% of learner time and ~1.4% of wall.",
+      "verdict": "PARTIALLY SUPPORTED",
+      "detail": "Model construction is ~200 ms per call and happens twice per iteration. It is measurable but an order of magnitude smaller than the per-row scoring costs; not a primary cause."
+    },
+    "H6_gpu_saturated_needs_faster_gpu": {
+      "claim": "The runtime is GPU-saturated, so a faster GPU helps without architectural change.",
+      "evidence": "Encode kernel time at batch 1 = 5.583 ms and at batch 64 = 10.85 ms, i.e. 1.94x for 64x the work. Per-row kernel cost falls from 5.583 ms to 0.17 ms. Peak VRAM 496-663 MiB of 8188 MiB. GPU idles at 210 MHz / P8 between calls.",
+      "verdict": "REJECTED",
+      "detail": "The GPU is not saturated: it is starved. Latency dominates, and a faster card would reduce the fixed ~5 ms kernel latency only partially. The measured lever is batch size, not FLOPS."
+    }
+  },
+  "decisive_number": {
+    "batch_1_kernel_ms": 5.583,
+    "batch_64_kernel_ms": 10.85,
+    "scaling_1_to_64": 1.94,
+    "per_row_at_1": 5.583,
+    "per_row_at_64": 0.17
+  }
+}

@@ -1,0 +1,6 @@
+run_id,kind,git_sha,instrumented,iterations,wall_s,accepted_matches,accepted_matches_per_sec,collection_s,update_s,checkpoint_s,dropped,valid,note
+p4_historical_20iter,historical,d0f42f1,False,20,720.541,320,0.4439,373.347,332.808,11.211,0,True,authoritative P4 baseline; outer denominator
+p45_base_trial1,uninstrumented,d0f42f1+diag,False,4,120.958,65,0.5374,68.332,49.657,2.152,0,True,optimizer_steps=45
+p45_base_trial2,uninstrumented,d0f42f1+diag,False,4,125.511,67,0.5338,70.248,52.44,2.096,0,True,optimizer_steps=45
+p45_base_trial3,uninstrumented,d0f42f1+diag,False,4,127.232,64,0.503,69.414,54.957,2.13,0,True,optimizer_steps=49
+p45_instrumented_2iter,instrumented,d0f42f1+diag,True,2,57.933,32,0.5524,33.303,22.946,1.124,0,True,attribution only; NOT a throughput claim

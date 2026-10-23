@@ -1,0 +1,56 @@
+ batch  kernel_ms  per_row_ms   scaling
+     1      5.583       5.583     1.00x
+     2      5.461       2.730     0.98x
+     4      5.418       1.355     0.97x
+     8      5.634       0.704     1.01x
+    16      7.168       0.448     1.28x
+    32     10.286       0.321     1.84x
+    64     10.850       0.170     1.94x
+
+{
+ "measurements": [
+  {
+   "batch": 1,
+   "kernel_ms": 5.583,
+   "per_row_ms": 5.583,
+   "vs_batch1": 1.0
+  },
+  {
+   "batch": 2,
+   "kernel_ms": 5.461,
+   "per_row_ms": 2.73,
+   "vs_batch1": 0.98
+  },
+  {
+   "batch": 4,
+   "kernel_ms": 5.418,
+   "per_row_ms": 1.355,
+   "vs_batch1": 0.97
+  },
+  {
+   "batch": 8,
+   "kernel_ms": 5.634,
+   "per_row_ms": 0.704,
+   "vs_batch1": 1.01
+  },
+  {
+   "batch": 16,
+   "kernel_ms": 7.168,
+   "per_row_ms": 0.448,
+   "vs_batch1": 1.28
+  },
+  {
+   "batch": 32,
+   "kernel_ms": 10.286,
+   "per_row_ms": 0.321,
+   "vs_batch1": 1.84
+  },
+  {
+   "batch": 64,
+   "kernel_ms": 10.85,
+   "per_row_ms": 0.17,
+   "vs_batch1": 1.94
+  }
+ ],
+ "verdict": "latency/overhead-bound: cost barely grows with batch"
+}
