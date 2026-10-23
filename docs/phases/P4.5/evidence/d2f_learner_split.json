@@ -1,18 +1,20 @@
 {
- "rows": 183,
+ "rows": 167,
  "repeats": 3,
- "total_ms": 1310.8,
+ "method": "branch tables hoisted OUT of the evaluate loop so the four components are disjoint and sum to the total",
+ "total_ms": 1094.7,
  "components_ms": {
-  "obs_rebuild": 204.1,
-  "branch_tables": 253.6,
-  "batched_encoder": 47.1,
-  "per_row_evaluate": 959.3
+  "obs_rebuild": 192.3,
+  "branch_tables": 279.8,
+  "batched_encoder": 51.3,
+  "evaluate_encoded_only": 571.4
  },
  "share_pct": {
-  "obs_rebuild": 15.6,
-  "branch_tables": 19.3,
-  "batched_encoder": 3.6,
-  "per_row_evaluate": 73.2
+  "obs_rebuild": 17.6,
+  "branch_tables": 25.6,
+  "batched_encoder": 4.7,
+  "evaluate_encoded_only": 52.2
  },
- "per_row_evaluate_ms_per_row": 5.242
+ "share_sum_pct": 100.0,
+ "per_row_evaluate_ms": 3.421
 }

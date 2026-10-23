@@ -58,7 +58,7 @@ def main():
         "step_levels_share": (f"{coll['stage_share_pct']['step_levels']}", report),
         "encode_share": (f"{coll['stage_share_pct']['encode']}", report),
         "baseline_median": (f"{base['median_matches_per_sec']}", report),
-        "learner_split_row": (f"{lsplit['share_pct']['per_row_evaluate']}", report),
+        "learner_split_row": (f"{lsplit['share_pct']['evaluate_encoded_only']}", report),
         "hist_collection": (f"{hist['stage_sums_s']['collection_seconds']}", hist_md),
         "hist_update": (f"{hist['stage_sums_s']['update_seconds']}", hist_md),
         "hist_outer": (f"{hist['stage_sums_s']['wall_seconds']}", hist_md),
@@ -104,7 +104,34 @@ def main():
     if cov < 0.90:
         fails.append(f"attribution coverage {cov:.3f} < 0.90")
 
+    # ---- round-2 invariants -------------------------------------------
+    lsplit = load(E / "d2f_learner_split.json", ("share_pct",))
+    total_share = sum(lsplit["share_pct"].values())
+    if abs(total_share - 100.0) > 0.6:
+        fails.append(f"learner split sums to {total_share:.1f}%, not 100% "
+                     "(components overlap)")
+
+    csv_text = (D / "BOTTLENECK_RANKING.csv").read_text(encoding="utf-8")
+    stale = {
+        "73.6%": "old learner split",
+        "94.6%": "inflated coverage",
+        "11.5 ms": "old transport wait",
+        "66.8×": "old transport ratio",
+    }
+    docs = {
+        "FINAL_REPORT.md": report,
+        "ARCHITECTURE_DECISION.md": (D / "ARCHITECTURE_DECISION.md").read_text(encoding="utf-8"),
+        "HISTORICAL_RECONCILIATION.md": hist_md,
+        "BOTTLENECK_RANKING.csv": csv_text,
+        "RECEIPT.json": json.dumps(receipt),
+    }
+    for name, text in docs.items():
+        for token, label in stale.items():
+            if token in text:
+                fails.append(f"{name} still contains {label}: {token!r}")
+
     print(f"attribution coverage : {cov*100:.1f}%")
+    print(f"learner split sum    : {total_share:.1f}%")
     print(f"verdict              : {receipt['verdict']} (non-PASS gates: {part})")
     print(f"tests                : {receipt['tests']['grand_total']}")
     print(f"csv rows sorted      : {walls == sorted(walls, reverse=True)}")

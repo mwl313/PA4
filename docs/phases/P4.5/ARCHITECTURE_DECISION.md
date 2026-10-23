@@ -34,7 +34,7 @@ Per inference request (`evidence/d2c_split.json`):
 | submit (IPC send) | 0.343 |
 | **wait** (queue + decode + GPU + return) | **11.792** |
 
-Wait is **66× prep**. The measured in-process encode for a 4-row batch is 47.1 ms for 183 rows — i.e. batching is far cheaper than this transport path. So a large share of the 11.5 ms is **queue and round-trip
+Wait is **65.99× prep**. The measured in-process batched encode is 47.1 ms for 183 rows — i.e. batching is far cheaper than this transport path. So a large share of the 11.792 ms is **queue and round-trip
 dwell**, not computation.
 
 ## 3. Amdahl bounds (measured, sequential topology)
@@ -58,7 +58,7 @@ gives at most 1.70×.** With the collection transport also batched, the
 compounded ceiling is **1.70 × 1.47 ≈ 2.50×** if the STEP transport barrier were
 removed entirely (which is itself a bound, not a forecast).
 
-Under the current topology, **~1.3 matches/s is the realistic ceiling with
+Under the current topology, **~1.1 matches/s is the realistic ceiling with
 everything batched**. The design's D6 requirement is satisfied: the
 architectural question is not "which micro-optimisation" but "does the
 topology itself have to change".

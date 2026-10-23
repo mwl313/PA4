@@ -72,7 +72,7 @@ off:
 chain intact in all three, real parameter updates every iteration.
 
 The 4-iteration rate (0.53) exceeds the historical 20-iteration rate (0.44)
-because per-iteration setup amortises over fewer iterations here — **the two are
+because fixed per-run setup is spread over 4 iterations here versus 20 in the historical trial (fewer iterations amortise setup LESS, so the 4-iteration rate is flattered by other factors and the two are not comparable) — **the two are
 not directly comparable and are not being compared.**
 
 ## 3. Instrumentation overhead (D45-2)
@@ -87,7 +87,7 @@ while the uninstrumented median used 4, so per-iteration setup amortises
 differently and the two rates are not directly comparable. The reliable
 evidence for zero overhead is structural, not statistical: off-mode is
 asserted inert (no counters, no file, gate defaults off, identical return
-value) and no production code path reads `prof.enabled`.
+value) and the only production read of `prof.enabled` under the P4 loop is the guarded per-iteration dump at the end of `run_iteration`, which records nothing when disabled.
 **All throughput claims in this report come from uninstrumented runs.**
 
 ## 4. Learner attribution (measured, exclusive ms)
@@ -104,7 +104,7 @@ value) and no production code path reads `prof.enabled`.
 | `vold_value` | 753 | 73 | 0.3% |
 | GAE, cohort, normalize, clone | — | ~23 | 0.1% |
 
-Within a single learner evaluation the components split as **per-row `evaluate_encoded` 73.2%**, branch-table construction 19.3%, observation rebuild 15.6%, and the batched encoder only 3.6% (`evidence/d2f_learner_split.json`, 183 rows, 1310.8 ms total). The encoder is the one part already batched, and it is the cheapest.
+Within one learner evaluation the four components are measured **disjointly** by hoisting branch-table construction out of the evaluate loop (`evidence/d2f_learner_split.json`, 167 rows, 1094.7 ms): `evaluate_encoded` 52.2%, branch-table construction 25.6%, observation rebuild 17.6%, batched encoder 4.7% — summing to 100.0%. The encoder is the one part already batched, and it is the cheapest.
 
 **The hypothesised `.item()` synchronisation bottleneck is 0.3%** — effectively
 absent. The cost is per-call kernel latency, not host sync.
@@ -121,14 +121,14 @@ absent. The cost is per-call kernel latency, not host sync.
 
 Per request: prep 0.179 ms, submit 0.343 ms, **wait 11.792 ms** — wait/prep = **65.99×**.
 
-The existing collection stage timers do not cover **18.7%** of measured collection wall (`d2b_collect.json`: 2952.2 ms unaccounted of 15807.7 ms); that residual includes service startup, snapshot load and shutdown.
+The existing collection stage timers cover 15807.7 ms of the 18760.0 ms measured collection wall. The remaining **2952.2 ms (15.7% of collection wall)** is not attributed by those timers; it includes service startup, snapshot load and shutdown (`d2b_collect.json`).
 
 ## 6. Hypothesis verdicts (D45-5)
 
 | # | Hypothesis | Verdict | Deciding measurement |
 |---|---|---|---|
 | H1 | Per-row frozen V_old + `.item()` sync | **PARTIALLY** | encode is 23.2% of learner, but `.item()` is only 0.3% |
-| H2 | microbatch 8 / per-row scorer / ragged CPU | **SUPPORTED** | `ppo_loop` 66.2%, dominated by per-row `evaluate_encoded` |
+| H2 | microbatch 8 / per-row scorer / ragged CPU | **SUPPORTED** | `ppo_loop` is 66.2% of learner time; within one evaluation `evaluate_encoded` alone is 52.2% and branch-table construction 25.6%, both per row |
 | H3 | InferenceServer IPC/queue barriers | **SUPPORTED** | wait 11.792 ms vs prep 0.179 ms (66×); step_levels + encode are 94.4% of accounted collection |
 | H4 | Instrumentation in the production path | **REJECTED** | `PA4_P3_STATS_PATH` unset; profiler off by default and structurally inert. The instrumented run measured 0.5524 m/s vs 0.5338 uninstrumented, i.e. slightly *faster*, consistent with noise and not with overhead |
 | H5 | Per-iteration model recreation | **PARTIALLY** | frozen critic rebuilt + state reloaded each iteration (the learner itself is built once and restored); measured 11.2 s attributed to construction over the 20-iteration baseline, 1.6% of wall |
@@ -144,13 +144,13 @@ update 332.808 s). Amdahl is 1/(1-f) with f = attributed/wall.
 | Rank | Bottleneck | Attributed wall | % of 720.5 s | Confidence | Amdahl bound |
 |---|---|---:|---:|---|---:|
 | 1 | prefix STEP transport barrier | 231.85 s | 32.18% | HIGH | **1.474×** |
-| 2 | per-row conditional scorer evaluation | 161.27 s | 22.38% | HIGH | **1.288×** |
-| 3 | ENCODE transport barrier | 120.59 s | 16.74% | HIGH | **1.201×** |
+| 2 | ENCODE transport barrier | 120.59 s | 16.74% | HIGH | **1.201×** |
+| 3 | per-row conditional scorer evaluation | 115.01 s | 15.96% | HIGH | **1.19×** |
 | 4 | per-row frozen V_old encode | 77.12 s | 10.7% | HIGH | **1.12×** |
-| 5 | branch-table construction | 42.52 s | 5.9% | HIGH | **1.063×** |
+| 5 | branch-table construction | 56.4 s | 7.83% | HIGH | **1.085×** |
 
-The ten ranked bottlenecks together attribute 681.7 s of 720.5 s (94.6%), on a single non-overlapping basis.
-Full ten-row table with file/function, call counts, CPU/GPU split and evidence
+The ten ranked bottlenecks together attribute 649.4 s of 720.5 s (90.1%), on a single non-overlapping basis.
+Full ten-row table with file/function, call counts (in section 4/5), CPU/GPU split and evidence
 references: `BOTTLENECK_RANKING.csv`.
 
 ## 8. What the numbers say about architecture

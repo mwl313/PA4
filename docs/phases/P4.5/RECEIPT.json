@@ -49,7 +49,7 @@
     "D45_3": "Three uninstrumented 4-iteration full-stack trials with real Rust and real PPO: 0.5374 / 0.5338 / 0.5030 accepted matches/s, median 0.5338, spread 6.4%, zero drops, zero duplicates, fingerprint chain intact.",
     "D45_4": "PARTIAL. Parent CPU self time and GPU kernel durations are directly measured (CUDA events at 7 batch sizes). Child-process kernel attribution is NOT directly observed: a parent torch.profiler trace cannot see the spawned inference server's kernels, so the transport wait is reported as wall-duration and cross-checked against an equivalent in-process encode rather than attributed per kernel.",
     "D45_5": "All ten bottlenecks in BOTTLENECK_RANKING.csv; top five have direct measurements. Collection (51.81%) and update (46.19%) are parent wall intervals that together account for 98.0% of the row sum.",
-    "D45_6": "282 tests green (272 inherited + 10 diagnostics), P0 smoke PASS, P4 behaviour contracts unchanged, fresh-context auditor verified real file access, findings addressed."
+    "D45_6": "286 tests green (272 inherited + 14 diagnostics), P0 smoke PASS, P4 behaviour contracts unchanged, fresh-context auditor verified real file access, findings addressed."
   },
   "number_of_uninstrumented_trials": 3,
   "baseline_accepted_matches_per_sec": 0.5338,
@@ -102,12 +102,12 @@
       "eliminate_vold_per_row": 1.12
     },
     "learner_evaluation_split_pct": {
-      "obs_rebuild": 15.6,
-      "branch_tables": 19.3,
-      "batched_encoder": 3.6,
-      "per_row_evaluate": 73.2
+      "obs_rebuild": 17.6,
+      "branch_tables": 25.6,
+      "batched_encoder": 4.7,
+      "evaluate_encoded_only": 52.2
     },
-    "collection_residual_pct": 0.0
+    "collection_residual_pct": 15.7
   },
   "hypotheses": {
     "H1_per_row_vold_and_item_sync": "PARTIALLY_SUPPORTED",
