@@ -79,10 +79,9 @@
     },
     "collection_stage_share_pct": {
       "step_levels": 62.1,
-      "encode": 32.2,
-      "env_step": 2.0,
-      "accounting": 1.2,
-      "other": 2.5
+      "encode": 32.3,
+      "env_step": 1.9,
+      "accounting": 1.2
     },
     "learner_stage_share_pct": {
       "ppo_loop": 66.2,

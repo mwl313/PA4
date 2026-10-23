@@ -72,7 +72,7 @@ one forward per phase.
 
 | Dimension | Assessment |
 |---|---|
-| Evidence for | Batch-64 per-row cost is **32.8× lower** than batch-1; `step_levels` + `encode` are 94% of accounted collection and both are per-request round trips; wait is 67× prep |
+| Evidence for | Batch-64 per-row cost is **32.8× lower** than batch-1; `step_levels` + `encode` are 94% of accounted collection and both are per-request round trips; wait is 65.99× prep |
 | Correctness risk | **Medium.** Must preserve the exact `ObservationBatch` including all five ragged families, ordered candidate tables, saved indices and GRU prefix carry. PA3's `evaluate_encoded` already handles multi-level prefix carry, and P4-B proved stored-action replay to `1e-7` through that same call |
 | Implementation complexity | Medium: replaces `StagedInference` with a local scorer; the learner already loads snapshots and the collection path already builds `ObservationBatch` objects |
 | TorchRL compatibility | **Reduces** TorchRL surface. ADR-008 already permits this: stock `AsyncBatchedCollector` cannot query staged Rust candidates |
@@ -109,7 +109,7 @@ more aggressively.
 | Dimension | Assessment |
 |---|---|
 | Evidence for | Cheapest change; no correctness risk to the served path |
-| Evidence against | The wait is 67× prep, so the round-trip structure itself is the cost; tuning `min_batch_size`/`timeout` was already explored in P3 and larger values were *slower*. Persistence saves ~0.2 s/iteration of startup against a 36 s iteration |
+| Evidence against | The wait is 65.99× prep, so the round-trip structure itself is the cost; tuning `min_batch_size`/`timeout` was already explored in P3 and larger values were *slower*. Persistence saves ~0.2 s/iteration of startup against a 36 s iteration |
 | Expected effect | Bounded by `eliminate_encode + eliminate_step_levels` ≈ **1.5×**, and likely much less |
 
 **Judgment:** worth doing *as part of* A, not instead of it.

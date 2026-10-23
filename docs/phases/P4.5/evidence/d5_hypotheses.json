@@ -16,13 +16,13 @@
       "claim": "InferenceServer ENCODE and prefix STEP IPC/queue/synchronisation barriers dominate collection.",
       "evidence": "Per request: prep 0.179 ms, submit 0.343 ms, wait 11.792 ms (wait/prep = 65.99x). Direct in-process GPU encode of the same 4 rows: 6.091 ms (1.355 ms/row). Within collection: step_levels 9820.1 ms (62.1%), encode 5109.7 ms (32.3%).",
       "verdict": "SUPPORTED",
-      "detail": "The transport path pays 11.792 ms per request while payload prep is 0.179 ms. step_levels + encode are 94.3% of accounted collection, and both are dominated by submit/queue/wait."
+      "detail": "The transport path pays 11.792 ms per request while payload prep is 0.179 ms. step_levels + encode are 94.4% of accounted collection, and both are dominated by submit/queue/wait."
     },
     "H4_instrumentation_in_production_path": {
       "claim": "Per-forward JSON statistics writes or accidental instrumentation inflate the nominal P4 path.",
       "evidence": "PA4_P3_STATS_PATH was unset in the frozen environment (ENVIRONMENT.json thread_env). The profiler is off unless PA4_P45_PROFILE=1, and off-mode tests prove it records nothing and writes no file. The instrumented run (0.5524 m/s over 2 iters) is slightly faster than the uninstrumented median (0.5338 m/s).",
       "verdict": "REJECTED",
-      "detail": "No stats-file path is active by default; instrumentation is gated and off-mode is proven inert by 10 negative-control tests."
+      "detail": "No stats-file path is active by default; instrumentation is gated and off-mode is proven inert by 14 negative-control tests."
     },
     "H5_per_iteration_recreation": {
       "claim": "Recreating the actor server, frozen critic and reloading optimizer/snapshot files each iteration is a major cost.",

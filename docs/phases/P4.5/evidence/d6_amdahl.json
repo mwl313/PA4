@@ -44,7 +44,7 @@
   },
   {
    "candidate": "batch_per_row_vold",
-   "fraction_of_wall_removed": 0.1072,
+   "fraction_of_wall_removed": 0.107,
    "amdahl_upper_bound_x": 1.12,
    "notes": "batch the frozen critic across rows"
   }

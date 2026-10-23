@@ -104,7 +104,7 @@ value) and the only production read of `prof.enabled` under the P4 loop is the g
 | `vold_value` | 753 | 73 | 0.3% |
 | GAE, cohort, normalize, clone | — | ~23 | 0.1% |
 
-Within one learner evaluation the four components are measured **disjointly** by hoisting branch-table construction out of the evaluate loop (`evidence/d2f_learner_split.json`, 167 rows, 1094.7 ms): `evaluate_encoded` 52.2%, branch-table construction 25.6%, observation rebuild 17.6%, batched encoder 4.7% — summing to 100.0%. The encoder is the one part already batched, and it is the cheapest.
+Within one learner evaluation the four components are measured **disjointly** by hoisting branch-table construction out of the evaluate loop (`evidence/d2f_learner_split.json`, 167 rows, 1094.7 ms): `evaluate_encoded` 52.2%, branch-table construction 25.6%, observation rebuild 17.6%, batched encoder 4.7% — which sum to 100.0% (the printed one-decimal values differ by 0.1 from rounding). The encoder is the one part already batched, and it is the cheapest.
 
 **The hypothesised `.item()` synchronisation bottleneck is 0.3%** — effectively
 absent. The cost is per-call kernel latency, not host sync.
