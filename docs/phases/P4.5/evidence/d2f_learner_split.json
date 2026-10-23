@@ -1,0 +1,18 @@
+{
+ "rows": 183,
+ "repeats": 3,
+ "total_ms": 1310.8,
+ "components_ms": {
+  "obs_rebuild": 204.1,
+  "branch_tables": 253.6,
+  "batched_encoder": 47.1,
+  "per_row_evaluate": 959.3
+ },
+ "share_pct": {
+  "obs_rebuild": 15.6,
+  "branch_tables": 19.3,
+  "batched_encoder": 3.6,
+  "per_row_evaluate": 73.2
+ },
+ "per_row_evaluate_ms_per_row": 5.242
+}

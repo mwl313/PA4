@@ -54,16 +54,19 @@ denominator (720.948 s), which is the more conservative of the two:
 
 ## 4. Per-iteration spread (median, not mean)
 
+Read directly from `evidence/historical_reconstruction.json` `per_iteration`:
+
 | Stage | min | median | max | spread |
 |---|---:|---:|---:|---:|
-| collection | 18.6 s | 18.7 s | 20.5 s | 10.4% |
-| update | 13.5 s | 16.6 s | 19.1 s | 33.8% |
-| checkpoint | 0.50 s | 0.56 s | 0.66 s | 28.6% |
-| wall | 32.6 s | 36.2 s | 39.2 s | 18.2% |
+| collection | 16.704 s | 18.805 s | 21.777 s | 27.0% |
+| update | 10.551 s | 17.303 s | 19.619 s | 52.4% |
+| checkpoint | 0.53 s | 0.545 s | 0.715 s | 34.0% |
+| wall | 29.503 s | 36.453 s | 40.95 s | 31.4% |
 
-The **update stage varies most (33.8%)** because the number of accepted
-row decisions per match differs between runs, so the per-row learner work is
-not constant. Collection is comparatively stable.
+The **update stage varies most (52.4%)** because
+the number of accepted row decisions per match differs between iterations, so
+per-row learner work is not constant. Collection varies
+27.0%.
 
 ## 5. What each historical timer actually contains
 

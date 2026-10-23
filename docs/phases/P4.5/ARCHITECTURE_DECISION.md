@@ -30,12 +30,11 @@ Per inference request (`evidence/d2c_split.json`):
 
 | Component | ms |
 |---|---|
-| payload prep (Python) | 0.172 |
-| submit (IPC send) | 0.334 |
-| **wait** (queue + decode + GPU + return) | **11.492** |
+| payload prep (Python) | 0.179 |
+| submit (IPC send) | 0.343 |
+| **wait** (queue + decode + GPU + return) | **11.792** |
 
-Wait is **67× prep**. The equivalent in-process GPU work for that batch is
-5.8 ms for 4 rows. So a large share of the 11.5 ms is **queue and round-trip
+Wait is **66× prep**. The measured in-process encode for a 4-row batch is 47.1 ms for 183 rows — i.e. batching is far cheaper than this transport path. So a large share of the 11.5 ms is **queue and round-trip
 dwell**, not computation.
 
 ## 3. Amdahl bounds (measured, sequential topology)
@@ -56,8 +55,8 @@ multiply, they do not sum.
 
 **No single fix exceeds 2.08×, and doing all the learner batching perfectly
 gives at most 1.70×.** With the collection transport also batched, the
-compounded ceiling is roughly 1.70 × 1.47 ≈ 2.5–3.5× depending on how much of
-the transport wait is removable.
+compounded ceiling is **1.70 × 1.47 ≈ 2.50×** if the STEP transport barrier were
+removed entirely (which is itself a bound, not a forecast).
 
 Under the current topology, **~1.3 matches/s is the realistic ceiling with
 everything batched**. The design's D6 requirement is satisfied: the
@@ -78,7 +77,7 @@ one forward per phase.
 | Implementation complexity | Medium: replaces `StagedInference` with a local scorer; the learner already loads snapshots and the collection path already builds `ObservationBatch` objects |
 | TorchRL compatibility | **Reduces** TorchRL surface. ADR-008 already permits this: stock `AsyncBatchedCollector` cannot query staged Rust candidates |
 | GPU residency | Actor and learner cannot both hold the model; P4 already mandates sequential residency, so this is consistent |
-| Expected full-stack effect | Removes the transport wait *and* widens batches. Amdahl ceiling ≈ **2.5–3.5×**, not 10–30× |
+| Expected full-stack effect | Removes the transport wait *and* widens batches. Compounded Amdahl ceiling ≈ **2.5×**, not 10–30× |
 
 **What would falsify it:** an A/B where in-process inference produces a
 different `joint_logprob` beyond `1e-5` from the current served path on the same
@@ -141,7 +140,9 @@ happens to the actor, because it is bounded, testable and independent.
 ## 6. Honest ceiling statement
 
 Even with **D + A** fully implemented, the compounded Amdahl ceiling on this
-topology is **~2.5–3.5×**, taking 0.44 → roughly **1.1–1.5 matches/s**.
+topology is **~2.5×**, taking 0.44 → roughly **1.1 matches/s**. (1.70 for the
+learner times 1.47 for the STEP barrier; removing *all* collection would be
+2.08×, which is not a claim made here.)
 
 **That is still far below a serious training rate.** Reaching hundreds to
 thousands of matches/s requires changing what is computed per decision, not how
